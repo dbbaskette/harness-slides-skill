@@ -4,6 +4,10 @@ Approved direction: the user's October 7 request. Build a standalone engine from
 the slide tooling in tanzu-brand, with focused additions from the source review.
 Do not retain the image-generation fork as the engine.
 
+This historical extraction plan used a bundled Brand snapshot. The subsequent
+public-guidance bootstrap supersedes that packaging: Brand now resolves a separate
+installed runtime, and both skills refresh instructions per new task.
+
 ## Contract
 
 - Google Slides is the default; native editable PowerPoint is also supported.

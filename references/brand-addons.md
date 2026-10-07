@@ -16,10 +16,13 @@ Template manifests may specify `id`, `format`, `useWhen` terms, `priority`,
 `default`, `enabled` and a native source file/reference. Explicit user choice
 wins. Ambiguous matches require a decision; previews do not establish authority.
 
-`tanzu-brand` ships a pinned subset of this engine inside its existing shared
-package. Thin adapters supply its tokens/profile and preserve existing commands.
-The brand installer still works offline and avoids a second model or account.
-The standalone engine has its own shared installer for Codex, Claude Code and
-Cursor. A deployment may place one engine centrally and point several brand
-skills to it; retain a known version so offline reproducibility does not depend
-on a moving repository.
+`tanzu-brand` keeps private assets and thin adapters; it resolves this separately
+installed runtime. New tasks fetch public instructions, while existing work
+retains its guidance revision and installed runtime. Use the returned runtime
+for executable commands and set `HARNESS_SLIDES_ROOT` to it for Brand adapters.
+Instruction refresh never installs or executes repository scripts. The trusted
+standalone installer serves Codex, Claude Code and Cursor; runtime updates remain
+separate from guidance updates. No additional model or provider account is needed.
+
+The legacy `sync-brand-engine.mjs` utility is for older vendored integrations;
+it is not part of the current Tanzu Brand workflow.
