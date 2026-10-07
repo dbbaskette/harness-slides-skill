@@ -26,8 +26,21 @@ node scripts/harness-slides.mjs google snapshot --file-id COPY_ID --output snaps
 The file ID is between `/d/` and `/edit` in the Slides URL. `copy` creates a
 working copy and needs user authorization from the task. Inspect its native
 layouts, masters, elements and revision. Adapt existing objects where practical.
+Preserve native structure, inherited layout/master styles, notes, links and skipped
+status. Save full inventories privately and read compact summaries or selected
+objects. Imported PPTX IDs must be resolved again in Google. Edit mixed-style text
+by its run/paragraph roles; use native lists and preserve image aspect ratios.
 Scene builds use required revision preconditions and read back created/preserved
-objects; still compare text, styles and notes in native tools before delivery.
+objects. For other native edits, use scoped operations and `requiredRevisionId`,
+read back the changes and verify untargeted objects. Refresh on conflicts; inspect
+an uncertain write before retrying so objects are not duplicated.
+
+Duplicate a suitable rich exemplar when it helps; map every content slot to keep,
+replace or remove. Remove stale claims and portraits without inventing replacements.
+Do not rebuild from extracted text alone. If charts import as images, recreate
+editable backing data in the destination and relink charts; copied decks can retain
+links to the original spreadsheet. Verify accessible data, notes, styles and native
+editability as well as rendering.
 
 If native access is unavailable, use the authorized connector/browser or the
 Drive/PPTX path. Do not repeatedly log in to solve a disabled API, require a new

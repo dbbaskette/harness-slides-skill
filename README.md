@@ -183,19 +183,26 @@ brand. These counts cover instruction loading, excluding source documents,
 images, tool responses, and generated artifacts.
 
 <!-- CONTEXT-USAGE:START -->
-Measured with `cl100k_base`; cumulative whole-file instruction counts.
+Measured with `cl100k_base`; cumulative instruction counts, including a normalized
+representative guidance-start response. Bootstrap activation is shown separately.
 
 | Reading path | Tokens |
 | --- | ---: |
-| Discovery metadata | 40 |
+| Discovery metadata | 39 |
 | Installed bootstrap | 385 |
-| Bootstrap + current guidance entry | 1,137 |
-| Scoped PPTX edit + final review | 2,234 |
-| New PPTX deck + final review | 2,575 |
-| New Google deck + final review | 3,029 |
+| Bootstrap + current guidance entry | 1,078 |
+| Scoped PPTX edit + final review | 2,235 |
+| Scoped Google edit + final review | 2,430 |
+| New PPTX deck from native template + review | 2,676 |
+| New Google deck from native template + review | 3,311 |
+| New PPTX scene + contract + review | 2,913 |
+| New Google scene + contract + review | 3,618 |
 
-Intake, workspace and brand integration guides load only when needed; brand
-contracts and query results add task-dependent context.
+Intake, workspace and brand integration load only when needed. Native-template
+authoring skips the scene contract; scene routes include its actual helper output.
+Only the selected delivery format enters context. Brand contracts, source content,
+images, other helper results and conversation add separately. The JSON report
+also exposes direct-handoff paths without the standalone bootstrap/start response.
 <!-- CONTEXT-USAGE:END -->
 
 Run `npm run context:update` after changing guidance and `npm run context:check`
