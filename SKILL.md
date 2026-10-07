@@ -9,6 +9,22 @@ The AI owns story and design unless supplied. A user can provide a brief, source
 documents or an existing deck; never require them to design an outline or JSON.
 Default to native Google Slides, honoring explicit PowerPoint requests.
 
+## Agent entrypoint
+
+Users invoke `/harness-slides` in Claude Code, `$harness-slides` in Codex, or ask
+Cursor to use this skill. Interpret the accompanying request in plain language:
+create a deck, improve an existing deck, inspect a template, preview/edit locally,
+continue a workspace, restore a version, or render/review/export a deck.
+Use the selected task's helpers yourself; do not require users to type shell
+commands, prepare scene/patch JSON, or repeat choices already supplied.
+
+For a bare invocation, briefly offer: create a deck; improve an existing deck;
+open a preview; continue/restore saved work; inspect/review/export. Ask which
+they need and for the relevant brief, deck or workspace. With a supplied request,
+proceed directly and ask only for missing information that affects the result.
+Resolve local prerequisites when needed within the authorized scope; provider
+access and external changes retain their normal authorization requirements.
+
 For an existing deck, resolve editing freedom and target slides using
 [intake](references/intake.md). Honor choices already supplied. Preserve the
 source; work on a copy. Branding is supplied by a brand skill or template, not by
