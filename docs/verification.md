@@ -17,7 +17,7 @@ The clean macOS Tart suite is the final integration gate. Its wrapper reuses
 macos-test-suite, creates a disposable clone, installs dependencies and renderer
 tools inside the clone, exercises the actual browser and rendering paths,
 tests the shared installer and retains logs/artifacts. The base is not modified.
-Record the tested commit and result below once complete.
+The tested commit and result are recorded below.
 
 Google API behavior is tested with synthetic transport fixtures. No live Google
 account was used by this implementation's tests. Organizational OAuth/Slides
@@ -33,4 +33,21 @@ edits and validate the result before publishing a new file.
 
 ## Clean-machine result
 
-Pending execution.
+October 7, 2026: **PASS** on commit
+`1fc24655b39f7d30df63e999e6a25c77239203d2`.
+
+- Environment: macOS 27.0, Node 22.23.2, Python 3.9.6; disposable Tart clone.
+- Full suite: 26 passed, zero failures or skips. Real browser and native rendering
+  checks enabled; context counts, shared installation and dependency audit passed.
+- Three example slides rendered with LibreOffice/Poppler and manually inspected.
+  The table renderer now emits legal centered OOXML anchors, checked by a native
+  XML regression assertion. No visible clipping or overlapping content was found
+  in these examples. This does not certify arbitrary future decks.
+- Logs: `~/Library/Logs/MacOS Test Suite/harness-slides/`
+  `harness-slides-test-20261007121709-63343-8ebad873/`.
+- The owned clone was stopped/deleted; its VM directory was confirmed absent.
+  Base and signed-in VMs were not changed.
+
+Later documentation-only commits reuse this evidence for the unchanged runtime.
+The brand adapter has a separate full integration/installer suite in tanzu-brand;
+its results do not substitute for the engine checks above.
