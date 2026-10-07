@@ -20,7 +20,7 @@ export async function renderPptxScene(scene,output,{base=process.cwd()}={}) {
         slide.addShape(e.shape==='ellipse'?pptx.ShapeType.ellipse:pptx.ShapeType.rect,{...box,fill:e.fill?{color:hex(e.fill)}:{color:hex('background'),transparency:100},line:{transparency:100}});
         if(e.text)slide.addText(e.text,{...box,...style,objectName:`${e.id}_text`});
       } else if(e.type==='line')slide.addShape(pptx.ShapeType.line,{...box,line:{color:hex(e.color??'accent'),width:e.weight??2,...(e.arrow?{endArrowType:'triangle'}:{})}});
-      else if(e.type==='table')slide.addTable(e.rows.map((row,i)=>row.map(text=>({text,options:{bold:i===0,fill:hex(i===0?'muted':'background')}}))),{...box,...style,valign:'mid',border:{pt:0.5,color:'CCCCCC'},fill:hex('background'),autoPage:false,rowH:e.height/e.rows.length/72,colW:Array(e.rows[0].length).fill(e.width/e.rows[0].length/72)});
+      else if(e.type==='table')slide.addTable(e.rows.map((row,i)=>row.map(text=>({text,options:{bold:i===0,fill:hex(i===0?'muted':'background')}}))),{...box,...style,valign:'middle',border:{pt:0.5,color:'CCCCCC'},fill:hex('background'),autoPage:false,rowH:e.height/e.rows.length/72,colW:Array(e.rows[0].length).fill(e.width/e.rows[0].length/72)});
       else if(e.type==='image') {
         if(/^https?:/.test(e.src))throw new Error('Download authorized images to the workspace before PPTX rendering; no remote fetch during build');
         const path=resolve(base,e.src);await readFile(path);
