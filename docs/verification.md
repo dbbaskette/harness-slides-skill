@@ -55,3 +55,26 @@ brand commit `21103d9f53c5944c7c453f9efd7bd58bdffeed25`: 283 active tests passed
 (four optional tests skipped), plus 15/15 browser checks, source and release
 installer smoke, archive checksums and installed engine inspection. It used
 macOS 27.0/Node 22.23.2 and the same runtime pin; its clone was also removed.
+
+
+## Public guidance bootstrap — October 7, 2026
+
+The new installed bootstrap and guidance-only refresh passed the combined Brand
+clean-Mac integration gate. Scripts stay in a separately installed local runtime;
+new tasks fetch current public instructions and resumes retain their exact pins.
+Freshness, ancestor pins, compatibility, changed guidance/runtime detection,
+unsafe caches, concurrent refresh locks and installed discovery placement are
+covered by behavioral tests. Public main was also fetched using actual installed
+entrypoints without a GitHub account, and saved tasks resumed without refetching.
+
+Tested runtime: `6b964f075ddf23ed2fa93543ace7e8c81965ed6a`; macOS 27.0 /
+Node 22.23.2; **34/34 passed**, zero skips, including real browser editing and
+native PPTX rendering. Brand also built a native editable deck through the
+separately installed runtime.
+
+Combined logs: `~/Library/Logs/Tanzu Brand/Tart Tests/`
+`tanzu-brand-test-20261007135019-46797-595efb92/`.
+The owned clone was deleted; no base or signed-in VM changed. No live model or
+Google account was used. A prior browser-version setup failure was corrected in
+Brand's combined guest script; the full rerun passed. These local candidates
+remain unpublished. This record changes documentation only.

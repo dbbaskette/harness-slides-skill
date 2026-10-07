@@ -135,6 +135,25 @@ PowerPoint or Google Slides render before sharing the deck.
 | Google access is unavailable | Follow [Google setup](references/google-slides.md), or request a local PowerPoint deck. |
 | Installation finds an unrelated existing skill | Review the named location before moving anything; the installer preserves it. |
 
+## Guidance updates
+
+The installer registers a small local entrypoint. For new work, it quietly checks
+this public repository’s `main`, saves an exact guidance revision, and returns
+only paths and status. The agent reads the entry and relevant references, not
+the whole library. Git and network access are needed for first/new-task refreshes;
+no GitHub account is required.
+
+Existing decks or research reports keep their saved task and runtime. Resuming
+uses that pin without fetching. Explicitly adopting newer guidance starts a new
+task and requires rechecking affected reviews. A failed fetch or incompatible
+runtime is reported; it is never described as current.
+
+**Instructions update automatically; executable helpers do not.** Rerun the trusted
+shell installer from a current repository copy to update helpers or the entrypoint.
+Guidance snapshots contain no executable scripts. The installed helper supports
+`start`, `resume`, `cached`, and `pin` through `scripts/sync-guidance.mjs --help`.
+
+
 ## For maintainers
 
 Normal use happens through the agent. The helper CLI is available from this
@@ -169,10 +188,11 @@ Measured with `cl100k_base`; cumulative whole-file instruction counts.
 | Reading path | Tokens |
 | --- | ---: |
 | Discovery metadata | 40 |
-| Activated entrypoint | 740 |
-| Scoped PPTX edit + final review | 1,837 |
-| New PPTX deck + final review | 2,178 |
-| New Google deck + final review | 2,632 |
+| Installed bootstrap | 385 |
+| Bootstrap + current guidance entry | 1,137 |
+| Scoped PPTX edit + final review | 2,234 |
+| New PPTX deck + final review | 2,575 |
+| New Google deck + final review | 3,029 |
 
 Intake, workspace and brand integration guides load only when needed; brand
 contracts and query results add task-dependent context.

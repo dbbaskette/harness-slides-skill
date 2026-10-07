@@ -7,11 +7,11 @@ import { parseArgs } from 'node:util';
 import { randomUUID } from 'node:crypto';
 import { hash, digest } from './lib/common.mjs';
 const packageRoot=fileURLToPath(new URL('../',import.meta.url));
-const roots=['SKILL.md','LICENSE','NOTICE.md','package.json','package-lock.json','references','scripts','examples'];
+const roots=['SKILL.md','LICENSE','NOTICE.md','package.json','package-lock.json','bootstrap','guidance','references','scripts','examples'];
 async function files(root) {
   const out=new Map();
   async function visit(name){const path=join(root,name),s=await lstat(path);if(s.isSymbolicLink())throw new Error(`Package symlink: ${name}`);if(s.isDirectory()){for(const item of (await readdir(path)).sort())await visit(`${name}/${item}`);}else if(s.isFile())out.set(name,await readFile(path));else throw new Error('Unsupported package member');}
-  for(const name of roots)await visit(name);return out;
+  for(const name of roots)await visit(name);out.set('SKILL.md', await readFile(join(root, 'bootstrap/SKILL.md')));return out;
 }
 async function state(path){try{const s=await lstat(path);return s.isSymbolicLink()?{link:await readlink(path)}:{other:true};}catch(e){if(e.code==='ENOENT')return null;throw e;}}
 async function safeParent(path){await mkdir(path,{recursive:true});const resolved=await realpath(path);const stat=await lstat(resolved);if(!stat.isDirectory()||(stat.mode&0o022)!==0||typeof process.getuid==='function'&&stat.uid!==process.getuid())throw new Error(`Unsafe installer directory: ${path}`);return resolved;}

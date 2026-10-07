@@ -41,8 +41,8 @@ this engine. Apply its selected contract and assets; do not mix identities.
 | Final rendering and verification | [Review](references/review.md) |
 | Workspace browser and version controls | [Workspace](references/workspace.md) |
 
-Resolve this installed directory once; commands and references are relative to
-it. Write artifacts in the user's project. Keep the installed skill unchanged.
+The guidance snapshot contains instructions only. Resolve references here; run
+commands from the task's returned installed **runtime**, never this snapshot. Write artifacts in the user's project. Keep the installed skill unchanged.
 
 ```sh
 node scripts/harness-slides.mjs --help
