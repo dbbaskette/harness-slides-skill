@@ -50,4 +50,8 @@ October 7, 2026: **PASS** on commit
 
 Later documentation-only commits reuse this evidence for the unchanged runtime.
 The brand adapter has a separate full integration/installer suite in tanzu-brand;
-its results do not substitute for the engine checks above.
+its results do not substitute for the engine checks above. That suite passed on
+brand commit `21103d9f53c5944c7c453f9efd7bd58bdffeed25`: 283 active tests passed
+(four optional tests skipped), plus 15/15 browser checks, source and release
+installer smoke, archive checksums and installed engine inspection. It used
+macOS 27.0/Node 22.23.2 and the same runtime pin; its clone was also removed.
