@@ -1,0 +1,134 @@
+import { mkdir, readFile, writeFile, lstat, open, rm, readdir, copyFile } from 'node:fs/promises';
+import { join, resolve, basename } from 'node:path';
+import { constants } from 'node:fs';
+import { hash, digest, json, saveJson, regularInside } from './common.mjs';
+import { validateScene, renderSceneHtml, sceneFindings, coverage } from './scene.mjs';
+import { compileGoogleScene, applyGoogleScene, snapshotDeck, googleSession } from './google-slides.mjs';
+import { renderPptxScene } from './pptx-render.mjs';
+
+export async function loadWorkspace(root) {
+  root=resolve(root); const s=await lstat(root);
+  if(!s.isDirectory()||s.isSymbolicLink())throw new Error('Workspace must be a real directory');
+  const manifest=await json(await regularInside(root,'workspace.json'));
+  if(manifest.version!==1||manifest.tool!=='harness-slides'||!['google-slides','pptx'].includes(manifest.format))throw new Error('Not a Harness Slides workspace');
+  const versions=await history(root);
+  if(!versions.length)throw new Error('Workspace has no scene versions');
+  const current=versions.at(-1),scene=await json(await regularInside(root,`versions/${current.id}/scene.json`));
+  validateScene(scene);if(digest(scene)!==current.sceneDigest)throw new Error('Scene version changed outside the workspace; preserve it and recover from an intact version');
+  return {root,manifest,current,scene,versions};
+}
+export async function history(root) {
+  const dir=join(root,'versions'),names=(await readdir(dir)).filter(s=>/^v\d{6}$/.test(s)).sort();
+  const versions=[];
+  for(const id of names) {
+    const v=await json(await regularInside(root,`versions/${id}/version.json`));
+    if(v.id!==id||v.number!==versions.length+1)throw new Error('Version sequence is invalid');
+    versions.push(v);
+  }
+  return versions;
+}
+async function lock(root,action) {
+  const file=join(root,'.workspace-lock');
+  let handle;
+  try{handle=await open(file,'wx',0o600);}catch(e){if(e.code==='EEXIST')throw new Error('Workspace is busy or interrupted; inspect its lock before retrying');throw e;}
+  try{return await action();}finally{await handle.close();await rm(file);}
+}
+async function version(root,scene,number,note) {
+  const id=`v${String(number).padStart(6,'0')}`,dir=join(root,'versions',id);
+  validateScene(scene);await mkdir(dir);
+  const record={id,number,sceneDigest:digest(scene),note,createdAt:new Date().toISOString()};
+  try{await saveJson(join(dir,'scene.json'),scene);await writeFile(join(dir,'preview.html'),renderSceneHtml(scene),{flag:'wx',mode:0o600});await saveJson(join(dir,'version.json'),record);}
+  catch(error){await rm(dir,{recursive:true,force:true});throw error;}
+  return record;
+}
+export async function initWorkspace({root,scene,format='google-slides',template,source,requiredSources=[],brand}) {
+  validateScene(scene);root=resolve(root);
+  if(!['google-slides','pptx'].includes(format))throw new Error('Choose google-slides or pptx');
+  if(format==='google-slides'&&!template)throw new Error('Google workspaces need a native working-copy snapshot via --template');
+  if(!Array.isArray(requiredSources)||requiredSources.some(x=>typeof x!=='string'||!x.trim()))throw new Error('Required sources must be IDs');
+  await mkdir(root); // Exclusive: never overlay a user directory.
+  try {
+    await mkdir(join(root,'inputs'));await mkdir(join(root,'versions'));
+    const manifest={version:1,tool:'harness-slides',format,requiredSources,brand:brand??null};
+    if(template){manifest.template='inputs/template.json';const deck=await json(template);await saveJson(join(root,manifest.template),deck);manifest.templateDigest=digest(deck);}
+    if(source){const name=basename(source);if(!/^[\w .-]+\.pptx$/i.test(name))throw new Error('Source must be PPTX');manifest.source=`inputs/${name}`;await copyFile(source,join(root,manifest.source),constants.COPYFILE_EXCL);manifest.sourceSha256=hash(await readFile(join(root,manifest.source)));}
+    await saveJson(join(root,'workspace.json'),manifest);await version(root,scene,1,'Initial draft');
+    return {root,format,version:'v000001',status:'draft',next:'workspace build'};
+  }catch(error){await rm(root,{recursive:true,force:true});throw error;}
+}
+export async function saveScene({root,scene,expectedDigest,note='Scene edit'}) {
+  root=resolve(root);return lock(root,async()=>{
+    const w=await loadWorkspace(root);
+    if(w.current.sceneDigest!==expectedDigest)throw new Error('Scene changed since it was opened; reload before saving');
+    validateScene(scene);
+    if(digest(scene)===expectedDigest)return {unchanged:true,...w.current};
+    if(w.scene.mode==='redesign') {
+      if(scene.mode!==w.scene.mode||JSON.stringify(scene.slides.map(s=>s.id))!==JSON.stringify(w.scene.slides.map(s=>s.id)))throw new Error('Redesign must retain slide order/count; select full rework explicitly for structural changes');
+      const contents=s=>s.slides.map(p=>({title:p.title,notes:p.notes,sources:p.sources,content:p.elements.filter(e=>e.type==='text'||e.text||e.rows||e.series||e.src).map(e=>e.type==='table'?e.rows:e.type==='chart'?{series:e.series,source:e.source}:e.type==='image'?{src:e.src,alt:e.alt}:e.text)}));
+      if(JSON.stringify(contents(scene))!==JSON.stringify(contents(w.scene)))throw new Error('Redesign must retain content; use full rework for content edits');
+    }
+    return version(root,scene,w.current.number+1,note);
+  });
+}
+export async function restoreVersion({root,id,expectedDigest}) {
+  if(!/^v\d{6}$/.test(id??''))throw new Error('Choose a version ID');
+  const scene=await json(await regularInside(resolve(root),`versions/${id}/scene.json`));
+  return saveScene({root,scene,expectedDigest,note:`Restored ${id} as a new version`});
+}
+export async function buildWorkspace({root}) {
+  root=resolve(root);return lock(root,async()=>{
+    const w=await loadWorkspace(root),dir=join(root,'versions',w.current.id,'build');
+    const sourceCoverage=coverage(w.scene,w.manifest.requiredSources);
+    if(!sourceCoverage.complete)throw new Error(`Missing required evidence: ${sourceCoverage.missing.join(', ')}`);
+    let template;
+    if(w.manifest.template){template=await json(await regularInside(root,w.manifest.template));if(digest(template)!==w.manifest.templateDigest)throw new Error('Template snapshot changed; use a new workspace');}
+    if(w.manifest.source&&hash(await readFile(await regularInside(root,w.manifest.source)))!==w.manifest.sourceSha256)throw new Error('Original PPTX copy changed');
+    // Compile first, then reserve output. Failed builds delete only their own files.
+    const plan=w.manifest.format==='google-slides'?compileGoogleScene(w.scene,template):null;
+    await mkdir(dir);
+    try {
+      const artifacts={};
+      if(plan){await saveJson(join(dir,'google-requests.json'),{requests:plan.requests,writeControl:plan.writeControl});artifacts['google-requests.json']=hash(await readFile(join(dir,'google-requests.json')));}
+      else {await renderPptxScene(w.scene,join(dir,'deck.pptx'),{base:root});artifacts['deck.pptx']=hash(await readFile(join(dir,'deck.pptx')));}
+      const record={version:w.current.id,sceneDigest:w.current.sceneDigest,format:w.manifest.format,artifacts,sourceCoverage,findings:sceneFindings(w.scene),status:'unreviewed draft'};
+      await saveJson(join(dir,'build.json'),record);
+      return {root,build:dir,...record};
+    }catch(error){await rm(dir,{recursive:true,force:true});throw error;}
+  });
+}
+export async function verifiedBuild(root) {
+  const w=await loadWorkspace(root),dir=join(w.root,'versions',w.current.id,'build'),record=await json(await regularInside(w.root,`versions/${w.current.id}/build/build.json`));
+  if(record.sceneDigest!==w.current.sceneDigest||record.version!==w.current.id)throw new Error('Build does not match current scene');
+  for(const [name,sha] of Object.entries(record.artifacts))if(!/^[\w.-]+$/.test(name)||hash(await readFile(await regularInside(dir,name)))!==sha)throw new Error('Built artifact changed; build a new version and review it');
+  return {w,dir,record};
+}
+export async function applyWorkspace({root,dryRun=false},deps={}) {
+  const {w,dir,record}=await verifiedBuild(root);
+  if(w.manifest.format!=='google-slides')throw new Error('Apply is only for native Google Slides');
+  const deck=await json(await regularInside(w.root,w.manifest.template));
+  if(digest(deck)!==w.manifest.templateDigest)throw new Error('Template snapshot changed');
+  const plan=compileGoogleScene(w.scene,deck);
+  if(JSON.stringify(await json(join(dir,'google-requests.json')))!==JSON.stringify({requests:plan.requests,writeControl:plan.writeControl}))throw new Error('Compiled plan changed');
+  if(dryRun)return {presentationId:plan.presentationId,requests:plan.requests.length,status:'dry run; no Google access'};
+  return applyGoogleScene(w.scene,deck,await googleSession(deps));
+}
+export async function workspaceStatus(root) {
+  const w=await loadWorkspace(root),result={root:w.root,format:w.manifest.format,version:w.current.id,sceneDigest:w.current.sceneDigest,versions:w.versions.length,coverage:coverage(w.scene,w.manifest.requiredSources),ready:false,status:'draft'};
+  let checked;
+  try{checked=await verifiedBuild(root);}catch(error){result.next=error.message;return result;}
+  const reviewPath=`versions/${w.current.id}/build/review/review.json`;
+  try {
+    const review=await json(await regularInside(w.root,reviewPath));
+    if(review.source.type==='pptx'&&review.source.sha256!==checked.record.artifacts['deck.pptx'])throw new Error('Review covers a different deck');
+    if(review.source.type==='google-slides'){
+      result.status='native review recorded; live revision must be checked before delivery';
+      result.nativeRevision=review.source.nativeRevision;
+      // Offline status cannot assert that a live Google deck is still unchanged.
+      result.nativeReviewRecorded=review.visualReviewComplete;
+    } else result.ready=Boolean(review.visualReviewComplete)&&!review.pending.length;
+    result.pending=review.pending;
+    for(const slide of review.slides)if(hash(await readFile(await regularInside(join(checked.dir,'review'),slide.image)))!==slide.imageSha256)throw new Error('Review image changed');
+    if(result.ready)result.status='local deck reviewed; verify target editor fidelity';
+  }catch(error){result.ready=false;result.next=`Visual review required: ${error.message}`;}
+  return result;
+}

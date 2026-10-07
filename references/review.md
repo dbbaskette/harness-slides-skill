@@ -1,0 +1,43 @@
+# Render, inspect, repair
+
+Inspect each built/changed slide while its design context is fresh. A reviewer
+must actually view the rendered pixels; rendering alone is not an inspection.
+Fix clipping, overlaps, wrapping, awkward spacing, contrast and missing artwork.
+Check content, notes, links, diagram relationships and editability separately.
+
+For PPTX, rendering needs LibreOffice (`soffice`) and Poppler (`pdftoppm`,
+`pdfinfo`). Font availability and LibreOffice differences can affect fidelity;
+verify in the intended editor. The helper renders a PDF once and rasterizes
+changed slides. Fingerprints include related masters/assets; cached renders are
+reused only with matching renderer/font signatures and verified image hashes.
+
+```sh
+node scripts/harness-slides.mjs review --file deck-work/versions/v000001/build/deck.pptx --output deck-work/versions/v000001/build/review
+```
+
+For Google, prepare actual native previews or use a connector's full native
+preview manifest. Do not substitute scene HTML. A manifest needs presentationId,
+revision, renderer, expectedSlideCount and all slides `{id,title,hidden,image}`.
+The thumbnail command covers every API-visible slide; verify skipped/hidden
+status in the editor when relevant.
+
+```sh
+node scripts/harness-slides.mjs google previews --file-id ID --output ./native-previews
+node scripts/harness-slides.mjs review --previews ./native-previews/native-previews.json --output ./review
+```
+
+Open every final image at readable size. Review deck consistency and rhythm.
+After viewing, record real findings with the returned revision hash:
+
+```sh
+node scripts/harness-slides.mjs review --output ./review --mark 1,2 --revision HASH --note "Inspected at delivery size; findings and fixes..."
+```
+
+Use `--status unresolved` for remaining defects. Any deck/revision change clears
+final coverage. Do not mark unseen slides as reviewed. Workspace status stays a
+draft until its current artifact is reviewed; Google delivery also requires a
+fresh native revision check. HTML previews and structural PASS are not visual QA.
+
+Use `workspace repair --project DIR --slide ID` for a compact repair packet,
+including only the selected slide, findings and expected scene digest. After a
+repair, build/render affected slides and complete final coverage of the deck.

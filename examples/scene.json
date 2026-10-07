@@ -1,0 +1,42 @@
+{
+  "version": 2,
+  "mode": "new",
+  "title": "A clearer launch workflow",
+  "canvas": { "width": 960, "height": 540 },
+  "slides": [
+    {
+      "id": "slide_story",
+      "title": "From scattered input to one coherent story",
+      "sources": ["brief:workflow"],
+      "notes": "A fictional workflow example for demonstrating editable objects.",
+      "elements": [
+        {"id":"story_title","type":"text","role":"title","text":"From scattered input to one coherent story","x":48,"y":30,"width":864,"height":80,"bold":true},
+        {"id":"story_input","type":"shape","shape":"rect","text":"Source documents","fill":"muted","x":60,"y":200,"width":230,"height":120,"align":"center"},
+        {"id":"story_flow1","type":"line","x":300,"y":248,"width":35,"height":2,"arrow":true},
+        {"id":"story_edit","type":"shape","shape":"rect","text":"Editable slide design","fill":"accent","color":"background","x":350,"y":200,"width":260,"height":120,"align":"center","bold":true},
+        {"id":"story_flow2","type":"line","x":620,"y":248,"width":35,"height":2,"arrow":true},
+        {"id":"story_review","type":"shape","shape":"rect","text":"Visual review","fill":"muted","x":670,"y":200,"width":230,"height":120,"align":"center"},
+        {"id":"story_caption","type":"text","text":"One scene · native objects · reviewed delivery","x":60,"y":400,"width":840,"height":45,"fontSize":18,"align":"center"}
+      ]
+    },
+    {
+      "id": "slide_compare",
+      "title": "Choose the editing freedom that fits the task",
+      "sources": ["brief:scope"],
+      "elements": [
+        {"id":"compare_title","type":"text","role":"title","text":"Choose the editing freedom that fits the task","x":48,"y":30,"width":864,"height":80,"bold":true},
+        {"id":"compare_table","type":"table","x":60,"y":160,"width":840,"height":300,"fontSize":20,"rows":[["Mode","What changes"],["Polish","Typography, spacing and alignment"],["Redesign","Layout and visuals; retain content"],["Full rework","Story, wording and slide structure"]]}
+      ]
+    },
+    {
+      "id": "slide_evidence",
+      "title": "Keep chart data editable",
+      "sources": ["brief:example-data"],
+      "elements": [
+        {"id":"evidence_title","type":"text","role":"title","text":"Keep chart data editable","x":48,"y":30,"width":864,"height":80,"bold":true},
+        {"id":"evidence_chart","type":"chart","chartType":"bar","x":80,"y":150,"width":800,"height":290,"series":[{"name":"Illustrative review coverage","labels":["Initial draft","Revised draft","Final review"],"values":[20,65,100]}],"source":"brief:example-data"},
+        {"id":"evidence_note","type":"text","text":"Illustrative data only · not a measured product result","x":80,"y":460,"width":800,"height":30,"fontSize":16}
+      ]
+    }
+  ]
+}
