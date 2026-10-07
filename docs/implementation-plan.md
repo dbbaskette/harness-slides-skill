@@ -55,8 +55,8 @@ Anthropic's PPTX skill is not incorporated; its directory license is restrictive
 
 Engine slices implemented and clean-macOS verification passed on runtime commit
 `1fc24655b39f7d30df63e999e6a25c77239203d2`; see [verification](verification.md).
-The public repository is standalone at `dbbaskette/harness-slides`, with its local
-checkout at `~/Projects/harness-slides`. The prior image-generation fork remote
+The public repository is standalone at `dbbaskette/harness-slides-skill`, with its local
+checkout at `~/Projects/harness-slides-skill`. The prior image-generation fork remote
 was replaced; unfinished local adaptations remain in a recovery checkout.
 Tanzu Brand consumes a pinned snapshot through thin adapters and retains its own
 assets and audit rules. Live Google access is not established by fixture tests.

@@ -15,8 +15,8 @@ You need Node.js 20+ (and Python 3.9+ for PowerPoint inspection). Clone this rep
 then run the ordinary shell installer:
 
 ```sh
-git clone https://github.com/dbbaskette/harness-slides.git
-cd harness-slides
+git clone https://github.com/dbbaskette/harness-slides-skill.git
+cd harness-slides-skill
 bash scripts/Install-Harness-Slides.sh --dry-run
 bash scripts/Install-Harness-Slides.sh
 ```
