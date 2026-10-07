@@ -26,6 +26,17 @@ node scripts/harness-slides.mjs google previews --file-id ID --output ./native-p
 node scripts/harness-slides.mjs review --previews ./native-previews/native-previews.json --output ./review
 ```
 
+Keep text selectable, diagrams as editable shapes/connectors/labels, and tables
+as native cells. Embed PowerPoint chart data; retain required formulas/links.
+Google charts need accessible backing Sheets. In a disposable copy, change a
+title, move/relabel a diagram node, edit a table cell and change a chart value
+for the object types present. If verification is only structural or objects stay
+flattened, disclose the limitation; do not claim full editability.
+
+Compare delivered count/order, content, relationships, notes, links and hidden
+status with the source within the agreed scope. Review requested exports too.
+Master/theme/font changes require rechecking every affected slide. Reuse unchanged
+iteration evidence, then complete final coverage on the delivered revision.
 Open every final image at readable size. Review deck consistency and rhythm.
 After viewing, record real findings with the returned revision hash:
 

@@ -11,19 +11,13 @@ Default to native Google Slides, honoring explicit PowerPoint requests.
 
 ## Agent entrypoint
 
-Users invoke `/harness-slides` in Claude Code, `$harness-slides` in Codex, or ask
-Cursor to use this skill. Interpret the accompanying request in plain language:
-create a deck, improve an existing deck, inspect a template, preview/edit locally,
-continue a workspace, restore a version, or render/review/export a deck.
-Use the selected task's helpers yourself; do not require users to type shell
-commands, prepare scene/patch JSON, or repeat choices already supplied.
-
-For a bare invocation, briefly offer: create a deck; improve an existing deck;
-open a preview; continue/restore saved work; inspect/review/export. Ask which
-they need and for the relevant brief, deck or workspace. With a supplied request,
-proceed directly and ask only for missing information that affects the result.
-Resolve local prerequisites when needed within the authorized scope; provider
-access and external changes retain their normal authorization requirements.
+Accept the accompanying plain-language request and operate the needed helpers
+from the returned runtime. The AI prepares scenes and patches; never require
+users to type commands or design an outline/JSON. A bare invocation should offer
+create, edit, preview, resume/restore or review/export and ask for the relevant
+brief, deck or workspace. Ask only for missing material decisions. Resolve local
+prerequisites within scope; provider access and external changes retain their
+normal authorization requirements.
 
 For an existing deck, resolve editing freedom and target slides using
 [intake](references/intake.md). Honor choices already supplied. Preserve the
@@ -34,10 +28,10 @@ this engine. Apply its selected contract and assets; do not mix identities.
 
 | Task | Read |
 | --- | --- |
-| New deck, redesign or full rework | [Design](references/design.md), then [authoring](references/authoring.md) |
-| Polish, content-preserving patch or selected-slide edit | [Editing](references/editing.md) |
+| New deck, redesign or full rework | [Design](references/design.md), then [choose a method](references/authoring.md); load only that method/format |
+| Polish, content-preserving patch or selected-slide edit | [PPTX editing](references/editing.md) or [Google operations](references/google-slides.md), matching the destination |
 | Native Google access/operations | [Google Slides](references/google-slides.md) |
-| Template or brand extension | [Brand add-ons](references/brand-addons.md) |
+| Template or brand extension | [Brand add-ons](references/brand-addons.md); [template reuse](references/templates.md) only for inspection/composition |
 | Final rendering and verification | [Review](references/review.md) |
 | Workspace browser and version controls | [Workspace](references/workspace.md) |
 
