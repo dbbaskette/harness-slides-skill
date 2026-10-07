@@ -1,95 +1,167 @@
 # Harness Slides
 
-Create and improve **editable Google Slides and PowerPoint decks** with Codex,
-Claude Code, Cursor or another coding agent. Give the AI a brief, source documents
-or an existing deck. It develops the story and design; you do not need to write
-a slide outline or JSON file.
+Turn a brief, source documents, or an existing presentation into an **editable
+Google Slides or PowerPoint deck** with your coding agent. Describe what you
+need; the agent handles the story, design, builds, and slide review.
 
-For an existing deck, choose brand-only, polish, redesign while retaining
-content, or full rework. Target the whole deck or selected slides. A brand add-on
-such as Tanzu Brand supplies its identity, templates, typography and icons.
+Use `/harness-slides` in Claude Code, `$harness-slides` in Codex, or ask Cursor
+to use the skill.
 
-## Install
+## 1. Install once
 
-You need Node.js 20+ (and Python 3.9+ for PowerPoint inspection). Clone this repo,
-then run the ordinary shell installer:
+You need **Git**, **Node.js 20 or newer**, and **Codex, Claude Code, or Cursor**.
+PowerPoint inspection also needs **Python 3.9 or newer**.
+
+Run these commands in your terminal:
 
 ```sh
 git clone https://github.com/dbbaskette/harness-slides-skill.git
 cd harness-slides-skill
-bash scripts/Install-Harness-Slides.sh --dry-run
 bash scripts/Install-Harness-Slides.sh
 ```
 
-It installs one shared package with discovery links for Codex, Claude Code and
-Cursor. Existing unrelated skills are preserved. For editable PowerPoint
-authoring, run the dependency command printed by the installer. Google
-operations and inspection/review helpers do not load these render libraries.
+Installation succeeds when the output contains `"status": "installed"`. The
+installer registers the skill with all three agents and preserves unrelated
+skills. To preview the changes first, add `--dry-run` to the installer command.
 
-Then ask your agent, for example:
+## 2. Open your project
 
-> Use harness-slides to turn these documents into a 10-minute launch deck.
-> Use our brand template, preserve the evidence, and visually review every slide.
+Open **the folder where you want your deck saved** in your coding agent, then
+start a new session so it can discover the installed skill. This can be any
+project folder.
 
-Google Slides is the default. [Google access](references/google-slides.md)
-explains connector/browser, gcloud and Drive fallback options. Google login is
-only needed for Google operations; the local workflow works without an account.
+Put your brief or source documents in that folder, or attach them if your agent
+supports attachments. For the example below, save your brief as `brief.md`.
 
-## What it provides
+## 3. Ask for your first deck
 
-- Native editable text, shapes, tables and diagrams; PowerPoint chart data and
-  notes; linked Sheets charts for Google Slides.
-- Template inspection and native slide reuse, working copies, scoped changes,
-  evidence coverage and preservation checks.
-- A local preview studio for selecting objects and editing text/geometry.
-- Durable versions and restore, stale-edit protection and compact repair packets.
-- Per-slide rendering/review records tied to the exact artifact and image hashes.
+Choose the prompt for your agent and replace the filename and audience with
+your own:
 
-HTML previews share the scene's geometry but approximate native text metrics.
-They are drafts. The final PowerPoint/Google render needs visual inspection;
-unsupported conversions stop rather than flatten a slide into an image.
+**Claude Code**
 
-## Commands
+```text
+/harness-slides Create an editable PowerPoint deck from brief.md for a
+10-minute customer presentation. Use only this brief, and visually review
+every slide before handing it back.
+```
 
-Run `node scripts/harness-slides.mjs --help` for complete options. The agent owns
-scene/patch files; these commands also make its work inspectable and repeatable.
+**Codex**
 
-| Command | Purpose |
+```text
+$harness-slides Create an editable PowerPoint deck from brief.md for a
+10-minute customer presentation. Use only this brief, and visually review
+every slide before handing it back.
+```
+
+**Cursor**
+
+```text
+Use the harness-slides skill to create an editable PowerPoint deck from
+brief.md for a 10-minute customer presentation. Use only this brief, and
+visually review every slide before handing it back.
+```
+
+The agent reads your material, asks for any important missing details, builds
+the deck, and reviews the rendered slides. It returns a link to the deck and
+explains any checks it could not complete. You can keep asking for changes in
+the same conversation.
+
+**No brief ready yet?** Try the bundled example:
+
+```text
+/harness-slides Build the bundled PowerPoint example in ./example-work
+and open its local preview studio.
+```
+
+Use `$harness-slides` in Codex, or ask Cursor to use the skill. The agent handles
+the setup and returns a preview link. This example is a draft for trying the
+workflow; ask for native rendering and visual review before using it as a
+finished presentation.
+
+## Choose your output and style
+
+- **PowerPoint:** say “editable PowerPoint” or “.pptx” in your request. The agent
+  prepares local authoring dependencies when needed. No Google account is required.
+- **Google Slides:** say “Google Slides.” This is the default if you do not choose
+  a format. The agent needs authorized access to your Google presentation; see
+  [Google setup](references/google-slides.md) if access is unavailable.
+- **Your branding:** supply a company template or name an installed brand skill,
+  such as Tanzu Brand. Harness Slides uses the identity you provide.
+
+## Improve an existing deck
+
+Supply the deck and say what the agent may change. For example:
+
+```text
+/harness-slides Polish launch.pptx. Improve spacing, alignment, and typography
+on slides 3–6. Keep the wording, slide order, and speaker notes. Work on a copy
+and visually review the changed slides.
+```
+
+You can ask for branding only, visual polish, a redesign that keeps the content,
+or a full rework of the story and structure. Name any slides, claims, or artwork
+that must stay unchanged. Use your agent's invocation syntax as shown above.
+
+## Preview, revise, and continue later
+
+Use the same entrypoint for the rest of the workflow:
+
+| What you need | What to ask |
 | --- | --- |
-| `doctor` | Check local tools; Google probes are optional |
-| `workspace init`, `build`, `status` | Create a deck workspace and native output |
-| `studio --project DIR` | Open the printed local preview/editing URL |
-| `workspace history`, `restore`, `save` | Durable versions with conflict checks |
-| `workspace repair --slide ID` | Compact context for an individual slide repair |
-| `pptx inspect`, `patch`, `compare` | Scoped edits and source preservation |
-| `pptx compose`, `template inspect`, `choose` | Reuse and route real templates |
-| `layouts --query WORDS --limit 3` | Query focused composition patterns |
-| `google copy`, `snapshot`, `previews` | Working copies and native Google review |
-| `drive export`, `import` | PPTX conversion fallback |
-| `review` | Render/cache slides and record actual visual findings |
-| `icons copy --plan FILE` | Copy native icon geometry from an add-on's library |
+| See the available workflows | Invoke `/harness-slides` or `$harness-slides` without a request, or ask Cursor what the skill can do. |
+| Open the local editor | “Open the preview studio for ./deck-work.” |
+| Revise a slide | “Make slide 4 easier to read. Keep its claims and chart data.” |
+| Continue later | “Continue the deck in ./deck-work and fix the remaining review findings.” |
+| Recover earlier work | “Show the saved versions of ./deck-work so I can choose one to restore.” |
+| Inspect a template | “Inspect company-template.pptx and suggest layouts for this brief.” |
+| Review before sharing | “Render and visually review the final deck, fix any issues, and return the editable file.” |
 
-Try a local example after `npm ci --ignore-scripts`:
+Replace `./deck-work` with the workspace path returned by your agent. To continue
+later, reopen the same project and name that workspace.
+
+The local studio lets you select objects, edit text or geometry, and save a new
+version. Its browser preview approximates the final layout. Review the actual
+PowerPoint or Google Slides render before sharing the deck.
+
+## If something gets stuck
+
+| Problem | Next step |
+| --- | --- |
+| The agent cannot find the skill | Confirm installation returned `"status": "installed"`, then start a new agent session. |
+| The invocation is not recognized | Use `/harness-slides` in Claude Code, `$harness-slides` in Codex, or “Use the harness-slides skill” in Cursor. |
+| You typed the command in a terminal | Skill invocations belong in your agent's chat. The installer does not add a terminal command to `PATH`. |
+| PowerPoint dependencies or rendering tools are missing | Ask the agent to identify and prepare the missing local tools. The installer also prints a command for manual authoring dependency setup. |
+| Google access is unavailable | Follow [Google setup](references/google-slides.md), or request a local PowerPoint deck. |
+| Installation finds an unrelated existing skill | Review the named location before moving anything; the installer preserves it. |
+
+## For maintainers
+
+Normal use happens through the agent. The helper CLI is available from this
+checkout or the installed skill directory:
 
 ```sh
-node scripts/harness-slides.mjs workspace init --project ./example-work --file examples/scene.json --format pptx
-node scripts/harness-slides.mjs workspace build --project ./example-work
-node scripts/harness-slides.mjs studio --project ./example-work
+node scripts/harness-slides.mjs --help
 ```
 
-## How context stays small
+The agent owns scene and patch JSON. Helper commands cover workspaces, previews,
+version history, template inspection, native edits, Google access, and review.
+See [workspace controls](references/workspace.md), [editable authoring](references/authoring.md),
+and [native editing](references/editing.md) for the relevant command examples.
 
-```mermaid
-flowchart TD
-  A[Skill name and description] --> B[Small shared entrypoint]
-  B --> C[New deck / redesign: design + authoring]
-  B --> D[Scoped edit: editing]
-  B --> E[Review: rendered-slide checks]
-  C --> F[One output format]
-  D --> F
-  F --> G[Optional selected brand contract]
-  G --> H[Selected layouts, icons, objects and repair packets]
-```
+`npm test` checks the engine, preservation, Google fixtures, installer, and
+studio. `npm run ci:local` uses the shared Tart/macOS suite with a disposable
+clone, real browser interaction, and LibreOffice rendering. Tests require no
+live Google or model account. See [verification](docs/verification.md) for recorded
+results and limits, and the [implementation plan](docs/implementation-plan.md)
+for architecture and provenance.
+
+<details>
+<summary>Instruction context usage</summary>
+
+The skill loads only guidance for the selected task, output format, and optional
+brand. These counts cover instruction loading, excluding source documents,
+images, tool responses, and generated artifacts.
 
 <!-- CONTEXT-USAGE:START -->
 Measured with `cl100k_base`; cumulative whole-file instruction counts.
@@ -97,25 +169,16 @@ Measured with `cl100k_base`; cumulative whole-file instruction counts.
 | Reading path | Tokens |
 | --- | ---: |
 | Discovery metadata | 40 |
-| Activated entrypoint | 545 |
-| Scoped PPTX edit + final review | 1,642 |
-| New PPTX deck + final review | 1,983 |
-| New Google deck + final review | 2,437 |
+| Activated entrypoint | 740 |
+| Scoped PPTX edit + final review | 1,837 |
+| New PPTX deck + final review | 2,178 |
+| New Google deck + final review | 2,632 |
 
 Intake, workspace and brand integration guides load only when needed; brand
 contracts and query results add task-dependent context.
 <!-- CONTEXT-USAGE:END -->
 
-These are instruction-loading counts, not total conversation usage. Source
-documents, tool responses and rendered images vary by task. Runtime code/assets
-are executed or queried, not automatically loaded into model context. Maintainers
-run `npm run context:update` after guidance changes; `context:check` catches drift.
+Run `npm run context:update` after changing guidance and `npm run context:check`
+to check the recorded counts.
 
-## Development and verification
-
-`npm test` runs the engine, preservation, Google fixtures, installer and studio
-checks. Use `npm run ci:local` for the shared Tart/macOS test suite, including real
-browser interaction and LibreOffice rendering in a disposable clone. See
-[verification](docs/verification.md) for scope and results. No live Google or model
-account is required by tests. [Implementation plan](docs/implementation-plan.md)
-records the separation and source-reviewed patterns.
+</details>
