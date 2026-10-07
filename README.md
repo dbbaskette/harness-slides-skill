@@ -61,6 +61,7 @@ scene/patch files; these commands also make its work inspectable and repeatable.
 | `workspace repair --slide ID` | Compact context for an individual slide repair |
 | `pptx inspect`, `patch`, `compare` | Scoped edits and source preservation |
 | `pptx compose`, `template inspect`, `choose` | Reuse and route real templates |
+| `layouts --query WORDS --limit 3` | Query focused composition patterns |
 | `google copy`, `snapshot`, `previews` | Working copies and native Google review |
 | `drive export`, `import` | PPTX conversion fallback |
 | `review` | Render/cache slides and record actual visual findings |
@@ -95,9 +96,9 @@ Measured with `cl100k_base`; cumulative whole-file instruction counts.
 | --- | ---: |
 | Discovery metadata | 40 |
 | Activated entrypoint | 545 |
-| Scoped PPTX edit + final review | 1,629 |
-| New PPTX deck + final review | 1,937 |
-| New Google deck + final review | 2,391 |
+| Scoped PPTX edit + final review | 1,642 |
+| New PPTX deck + final review | 1,983 |
+| New Google deck + final review | 2,437 |
 
 Intake, workspace and brand integration guides load only when needed; brand
 contracts and query results add task-dependent context.

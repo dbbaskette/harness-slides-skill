@@ -3,6 +3,9 @@ import copy
 import hashlib
 import json
 import sys
+import re
+import html
+import xml.parsers.expat
 import xml.etree.ElementTree as E
 from pathlib import Path
 import importlib.util
@@ -14,11 +17,86 @@ spec.loader.exec_module(tools)
 NS, EMU = tools.NS, tools.EMU
 
 
+def rewrite_slide(data, operations):
+    """Replace scoped XML text/attributes without reserializing namespaces or runs."""
+    data.decode('utf-8')  # Reject unsupported encodings before publishing output.
+    parser = xml.parsers.expat.ParserCreate(namespace_separator='}')
+    stack, shapes = [], {}
+    active = None
+    spans = []
+    tag_pattern = re.compile(rb'<(?:"[^"]*"|\x27[^\x27]*\x27|[^\x27">])*>')
+
+    def start(name, attrs):
+        nonlocal active
+        local = name.rsplit('}', 1)[-1]
+        stack.append(local)
+        index = parser.CurrentByteIndex
+        match = tag_pattern.match(data, index)
+        if match is None:
+            raise ValueError('Invalid native XML tag')
+        if len(stack) >= 2 and stack[-2] == 'spTree':
+            active = dict(id=None, texts=[], props=None)
+        if active is not None and local == 'cNvPr' and active['id'] is None:
+            active['id'] = attrs.get('id')
+            active['props'] = (index, match.end())
+        if active is not None and local == 't':
+            raw = data[index:match.end()]
+            span = dict(start=index, body=match.end(), end=None, empty=raw.rstrip().endswith(b'/>'), raw=raw)
+            active['texts'].append(span)
+            spans.append(span)
+
+    def end(name):
+        nonlocal active
+        local = name.rsplit('}', 1)[-1]
+        if local == 't' and spans:
+            spans.pop()['end'] = parser.CurrentByteIndex
+        if len(stack) >= 2 and stack[-2] == 'spTree' and active is not None:
+            if active['id']:
+                shapes[active['id']] = active
+            active = None
+        stack.pop()
+
+    parser.StartElementHandler, parser.EndElementHandler = start, end
+    parser.Parse(data, True)
+    changes = []
+    for op in operations:
+        shape = shapes[str(op['object'])]
+        runs = op.get('runs', [{'index': 0, 'text': op['text']}] if 'text' in op else [])
+        for run in runs:
+            span = shape['texts'][run['index']]
+            value = html.escape(run['text'], quote=False).encode('utf-8')
+            if span['empty']:
+                prefix = re.match(rb'<([^\s/>]+)', span['raw'])[1]
+                replacement = re.sub(rb'/\s*>$', b'>', span['raw']) + value + b'</' + prefix + b'>'
+                changes.append((span['start'], span['body'], replacement))
+            else:
+                changes.append((span['body'], span['end'], value))
+        if any(field in op for field in ('alt', 'title')):
+            begin, finish = shape['props']
+            raw = data[begin:finish]
+            for field, attr in [('alt', 'descr'), ('title', 'title')]:
+                if field not in op:
+                    continue
+                value = html.escape(op[field], quote=True).replace('\n', '&#10;').replace('\r', '&#13;').replace('\t', '&#9;').encode('utf-8')
+                attribute = attr.encode() + b'="' + value + b'"'
+                pattern = re.compile(rb'\s' + attr.encode() + rb'\s*=\s*(?:"[^"]*"|\x27[^\x27]*\x27)')
+                if pattern.search(raw):
+                    raw = pattern.sub(lambda _: b' ' + attribute, raw)
+                else:
+                    raw = re.sub(rb'(/?>)$', lambda m: b' ' + attribute + m[1], raw)
+            changes.append((begin, finish, raw))
+    for begin, finish, value in sorted(changes, reverse=True):
+        data = data[:begin] + value + data[finish:]
+    return data
+
+
 def digest(node):
     return hashlib.sha256(E.tostring(node)).hexdigest() if node is not None else None
 
 
 def shape_record(shape):
+    if shape.tag.rsplit('}', 1)[-1] not in ('sp','pic','graphicFrame','grpSp','cxnSp'):
+        return None
     props = shape.find('.//p:cNvPr', NS)
     if props is None:
         return None
@@ -110,7 +188,7 @@ def patch(source, request, output):
     pkg, data = tools.load(source)
     files = {name: pkg.zip.read(name) for name in pkg.names}
     pages = {s['id']: s for s in before['slides']}
-    allowed, roots, touched = [], {}, set()
+    allowed, roots, touched, part_ops = [], {}, set(), {}
     for op in ops:
         slide = pages.get(str(op.get('slide')))
         if slide is None:
@@ -156,8 +234,9 @@ def patch(source, request, output):
         if not fields:
             raise ValueError('Patch contains no supported changes')
         allowed.append(dict(slide=slide['id'], object=record['id'], fields=fields))
+        part_ops.setdefault(part, []).append(op)
     for part, root in roots.items():
-        files[part] = tools.xml_bytes(root)
+        files[part] = rewrite_slide(files[part], part_ops[part])
     # Build off to the side, compare before publishing, and never overwrite output.
     import tempfile
     with tempfile.TemporaryDirectory(prefix='harness-patch-') as tmp:

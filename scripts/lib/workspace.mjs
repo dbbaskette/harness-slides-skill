@@ -1,5 +1,5 @@
 import { mkdir, readFile, writeFile, lstat, open, rm, readdir, copyFile } from 'node:fs/promises';
-import { join, resolve, basename } from 'node:path';
+import { join, resolve, basename, extname } from 'node:path';
 import { constants } from 'node:fs';
 import { hash, digest, json, saveJson, regularInside } from './common.mjs';
 import { validateScene, renderSceneHtml, sceneFindings, coverage } from './scene.mjs';
@@ -41,8 +41,8 @@ async function version(root,scene,number,note) {
   catch(error){await rm(dir,{recursive:true,force:true});throw error;}
   return record;
 }
-export async function initWorkspace({root,scene,format='google-slides',template,source,requiredSources=[],brand}) {
-  validateScene(scene);root=resolve(root);
+export async function initWorkspace({root,scene,format='google-slides',template,source,requiredSources=[],brand,base=process.cwd()}) {
+  validateScene(scene);root=resolve(root);scene=structuredClone(scene);
   if(!['google-slides','pptx'].includes(format))throw new Error('Choose google-slides or pptx');
   if(format==='google-slides'&&!template)throw new Error('Google workspaces need a native working-copy snapshot via --template');
   if(!Array.isArray(requiredSources)||requiredSources.some(x=>typeof x!=='string'||!x.trim()))throw new Error('Required sources must be IDs');
@@ -50,6 +50,15 @@ export async function initWorkspace({root,scene,format='google-slides',template,
   try {
     await mkdir(join(root,'inputs'));await mkdir(join(root,'versions'));
     const manifest={version:1,tool:'harness-slides',format,requiredSources,brand:brand??null};
+    manifest.assets={};
+    for(const e of scene.slides.flatMap(s=>s.elements).filter(e=>e.type==='image'&&!/^https:\/\//.test(e.src))) {
+      const path=resolve(base,e.src),s=await lstat(path),extension=extname(path).toLowerCase();
+      if(!s.isFile()||s.isSymbolicLink()||s.size>20*1024*1024||!['.png','.jpg','.jpeg','.svg'].includes(extension))throw new Error('Use bounded PNG/JPEG/SVG image files');
+      const bytes=await readFile(path),sha=hash(bytes),name=`inputs/images/${sha}${extension}`;
+      await mkdir(join(root,'inputs','images'),{recursive:true});
+      if(!manifest.assets[name])await writeFile(join(root,name),bytes,{flag:'wx',mode:0o600});
+      manifest.assets[name]=sha;e.src=name;
+    }
     if(template){manifest.template='inputs/template.json';const deck=await json(template);await saveJson(join(root,manifest.template),deck);manifest.templateDigest=digest(deck);}
     if(source){const name=basename(source);if(!/^[\w .-]+\.pptx$/i.test(name))throw new Error('Source must be PPTX');manifest.source=`inputs/${name}`;await copyFile(source,join(root,manifest.source),constants.COPYFILE_EXCL);manifest.sourceSha256=hash(await readFile(join(root,manifest.source)));}
     await saveJson(join(root,'workspace.json'),manifest);await version(root,scene,1,'Initial draft');
@@ -83,6 +92,7 @@ export async function buildWorkspace({root}) {
     let template;
     if(w.manifest.template){template=await json(await regularInside(root,w.manifest.template));if(digest(template)!==w.manifest.templateDigest)throw new Error('Template snapshot changed; use a new workspace');}
     if(w.manifest.source&&hash(await readFile(await regularInside(root,w.manifest.source)))!==w.manifest.sourceSha256)throw new Error('Original PPTX copy changed');
+    for(const [file,sha] of Object.entries(w.manifest.assets??{}))if(hash(await readFile(await regularInside(root,file)))!==sha)throw new Error('Workspace asset changed; prepare a new immutable input');
     // Compile first, then reserve output. Failed builds delete only their own files.
     const plan=w.manifest.format==='google-slides'?compileGoogleScene(w.scene,template):null;
     await mkdir(dir);

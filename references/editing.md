@@ -43,7 +43,8 @@ their pixels are editable geometry; inspect native masters/layouts.
 reuse actual slides and related chart parts. The plan contains `root`,
 `sources:[{name,file}]` and `slides:[{source,number}]` (one-based numbers).
 Animations, media relations and complex layouts need native inspection; this
-library is not an in-place preservation guarantee. Inspect and render output.
+library is not an in-place preservation guarantee. Unused native source parts
+may remain, so use sanitized templates. Inspect and render output.
 
 For Google, use full snapshots, scoped operations and `requiredRevisionId`.
 Read back native objects and verify unselected content after a write. Refresh on

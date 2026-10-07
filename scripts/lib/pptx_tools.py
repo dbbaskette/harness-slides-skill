@@ -253,8 +253,8 @@ def brand_previews(archive, sha256, entries, output):
     result = {}
     for entry in entries:
         name = entry['preview']
-        if not re.fullmatch(r'references/brands/previews/(tanzu|vmware|broadcom)-(light|dark)-(slide-)?[0-9]{3}\.png', name):
-            raise ValueError('Unknown brand preview path')
+        if not re.fullmatch(r'references/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_-]+\.png', name):
+            raise ValueError('Unknown template preview path')
         info = pkg.zip.getinfo(name)
         if info.file_size > 2 * 1024 * 1024:
             raise ValueError('Brand preview exceeds size limit')

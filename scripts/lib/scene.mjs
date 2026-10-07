@@ -71,11 +71,16 @@ export function validateScene(scene) {
 }
 export function sceneFindings(scene) {
   validateScene(scene); const findings=[];
+  const theme=themeFor(scene),luminance=hex=>{const values=[0,1,2].map(i=>parseInt(hex.slice(1+i*2,3+i*2),16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4);return values[0]*.2126+values[1]*.7152+values[2]*.0722;};
   for (const s of scene.slides) {
     const text=s.elements.filter(e=>e.type==='text').map(e=>e.text).join(' '), words=text.trim().split(/\s+/).length;
     if (words>90) findings.push({slide:s.id,severity:'warn',code:'density',detail:`${words} visible text words; inspect reading effort`});
     if (s.elements.every(e=>e.type==='text')) findings.push({slide:s.id,severity:'warn',code:'text-only',detail:'Consider a visual relationship or evidence when it serves the message'});
     for (const e of s.elements) if (e.fontSize<14) findings.push({slide:s.id,object:e.id,severity:'warn',code:'small-text',detail:'Inspect at presentation size'});
+    for (const e of s.elements.filter(e=>e.type==='text'||e.text)) {
+      const ink=luminance(color(e.color??'text',theme)),fill=luminance(color(e.fill??'background',theme)),ratio=(Math.max(ink,fill)+.05)/(Math.min(ink,fill)+.05),font=e.fontSize??(e.role==='title'?theme.titleSize:theme.bodySize),minimum=font>=18||font>=14&&e.bold?3:4.5;
+      if(ratio<minimum)findings.push({slide:s.id,object:e.id,severity:'warn',code:'contrast',detail:`Declared foreground/background contrast ${ratio.toFixed(2)}; inspect actual background and fix readability`});
+    }
   }
   return findings;
 }

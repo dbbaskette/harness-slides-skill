@@ -21,6 +21,9 @@ test('redesign retains text and slide structure, while geometry edits are allowe
 test('evidence omissions block builds',async t=>{
   const dir=await temporary(t),root=join(dir,'workspace');await initWorkspace({root,scene:await sceneFixture(),format:'pptx',requiredSources:['required:evidence']});await assert.rejects(()=>buildWorkspace({root}),/Missing required evidence/);
 });
+test('local images become immutable copied inputs and render through the studio',async t=>{
+  const dir=await temporary(t),root=join(dir,'workspace'),scene=await sceneFixture(),png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a1ZkAAAAASUVORK5CYII=','base64');await writeFile(join(dir,'asset.png'),png);scene.slides[0].elements.push({id:'input_image',type:'image',src:'asset.png',alt:'Synthetic image',x:80,y:130,width:40,height:40});await initWorkspace({root,scene,format:'pptx',base:dir});const w=await loadWorkspace(root),image=w.scene.slides[0].elements.at(-1);assert.ok(image.src.startsWith('inputs/images/'));assert.equal(scene.slides[0].elements.at(-1).src,'asset.png');const studio=await startStudio({root});t.after(()=>studio.close());const response=await fetch(studio.url+image.src);assert.equal(response.status,200);assert.deepEqual(Buffer.from(await response.arrayBuffer()),png);
+});
 test('studio supports object edits and rejects cross-origin, out-of-bounds and stale saves',async t=>{
   const dir=await temporary(t),root=join(dir,'workspace');await initWorkspace({root,scene:await sceneFixture(),format:'pptx'});const studio=await startStudio({root});t.after(()=>studio.close());const base=studio.url.slice(0,-1),origin=new URL(base).origin;
   const state=await(await fetch(base+'/state')).json(),request={id:'story_title',fields:{x:52},expectedDigest:state.current.sceneDigest};

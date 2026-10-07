@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { parseArgs, promisify } from 'node:util';
 import { readFile, writeFile, mkdir, rm } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { join, resolve, dirname } from 'node:path';
 import { execFile } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { json, saveJson, digest } from './lib/common.mjs';
@@ -15,6 +15,7 @@ import { request, checkDriveAccess, probeGooglePresentation, exportDeck, importD
 import { renderPptxScene, composePptx } from './lib/pptx-render.mjs';
 import { install } from './install.mjs';
 import { chooseTemplate } from './lib/template-routing.mjs';
+import { searchRecipes } from './lib/layouts.mjs';
 const exec=promisify(execFile);
 export const help=`Harness Slides · brand-neutral editable decks
 Usage: node scripts/harness-slides.mjs COMMAND ACTION [options]
@@ -34,6 +35,7 @@ Usage: node scripts/harness-slides.mjs COMMAND ACTION [options]
   pptx compose --plan composition.json --output new.pptx
   template inspect --file template.pptx --output contract.json
   template choose --file manifest.json [--id ID] [--query WORDS] [--format google-slides|pptx]
+  layouts [--query WORDS] [--id ID] [--limit N]
   google snapshot --file-id ID --output snapshot.json
   google copy --file-id ID --name TITLE
   google previews --file-id ID --output NEW_DIR
@@ -70,16 +72,23 @@ export async function nativePreviews({fileId,output},deps={}) {
 }
 export async function main(argv=process.argv.slice(2)) {
   const {values:v,positionals:p}=parseArgs({args:argv,allowPositionals:true,options:Object.fromEntries([
-    'file','after','allow','plan','output','project','format','template','source','required','expected','note','version','slide','object','previews','mark','revision','status','port','file-id','folder-id','name','home','shared','query','id','soffice','pdftoppm','pdfinfo'
+    'file','after','allow','plan','output','project','format','template','source','required','expected','note','version','slide','object','previews','mark','revision','status','port','file-id','folder-id','name','home','shared','query','id','limit','soffice','pdftoppm','pdfinfo'
   ].map(k=>[k,{type:'string'}]).concat(['help','json','dry-run','refresh','google-check'].map(k=>[k,{type:'boolean'}])))});
   const [command,action,...extra]=p;
   if(!command||v.help||command==='help'){console.log(help);return;}
   if(extra.length)throw new Error('Too many actions');
+  const single=['studio','review','doctor','install','layouts'];
+  if(single.includes(command)&&action)throw new Error('This command has no action argument');
+  const allowed={scene:{contract:[],validate:['file','required']},workspace:{init:['project','file','format','template','source','required'],save:['project','file','expected','note'],restore:['project','version','expected'],build:['project'],history:['project'],status:['project'],repair:['project','slide'],apply:['project','dry-run']},pptx:{inspect:['file','slide','object','json'],patch:['file','plan','output'],compare:['file','after','allow'],render:['file','output'],compose:['plan','output']},template:{inspect:['file','output'],choose:['file','id','query','format']},google:{snapshot:['file-id','output'],copy:['file-id','name'],previews:['file-id','output']},drive:{check:[],export:['file-id','output'],import:['file','name','folder-id']},icons:{copy:['plan']},studio:['project','port'],review:['file','previews','output','refresh','mark','revision','note','status','soffice','pdftoppm','pdfinfo'],doctor:['google-check','file-id'],install:['dry-run','home','shared'],layouts:['query','id','limit']}[command];
+  const flags=Array.isArray(allowed)?allowed:allowed?.[action];
+  if(!flags)throw new Error('Unknown command/action; run --help');
+  for(const key of Object.keys(v))if(!flags.includes(key))throw new Error(`--${key} is not valid for this command`);
+  if(command==='review'&&v.mark&&(v.file||v.previews||v.refresh))throw new Error('Prepare and mark are separate operations');
   let result;
   if(command==='scene'&&action==='contract'){console.log(contract);return;}
   if(command==='scene'&&action==='validate'){const s=await json(v.file);result={coverage:coverage(s,v.required?await json(v.required):[]),findings:sceneFindings(s)};}
   else if(command==='workspace') {
-    if(action==='init')result=await initWorkspace({root:v.project,scene:await json(v.file),format:v.format,template:v.template,source:v.source,requiredSources:v.required?await json(v.required):[]});
+    if(action==='init')result=await initWorkspace({root:v.project,scene:await json(v.file),format:v.format,template:v.template,source:v.source,requiredSources:v.required?await json(v.required):[],base:dirname(resolve(v.file))});
     else if(action==='save')result=await saveScene({root:v.project,scene:await json(v.file),expectedDigest:v.expected,note:v.note});
     else if(action==='restore')result=await restoreVersion({root:v.project,id:v.version,expectedDigest:v.expected});
     else if(action==='build')result=await buildWorkspace({root:v.project});
@@ -104,7 +113,8 @@ export async function main(argv=process.argv.slice(2)) {
     if(action==='snapshot'){const deck=await snapshotDeck(v['file-id'],await googleSession());await saveJson(v.output,deck);result={output:v.output,slides:deck.slides.length,revision:deck.revisionId};}
     else if(action==='copy')result=await copyGoogleDeck(v['file-id'],v.name,await googleSession());
     else if(action==='previews')result=await nativePreviews({fileId:v['file-id'],output:v.output});else throw new Error('Unknown Google action');
-  } else if(command==='drive') {
+  } else if(command==='layouts')result=searchRecipes({query:v.query,id:v.id,limit:v.limit?Number(v.limit):3});
+  else if(command==='drive') {
     if(action==='check')result=await checkDriveAccess();else if(action==='export')result=await exportDeck({fileId:v['file-id'],output:v.output});else if(action==='import')result=await importDeck({file:v.file,name:v.name,folderId:v['folder-id']});else throw new Error('Unknown Drive action');
   } else if(command==='review')result=v.mark?await markReview({output:v.output,revision:v.revision,numbers:v.mark.split(',').map(Number),note:v.note,status:v.status}):await prepareReview({file:v.file,previews:v.previews,output:v.output,refresh:v.refresh,soffice:v.soffice,pdftoppm:v.pdftoppm,pdfinfo:v.pdfinfo});
   else if(command==='icons'&&action==='copy')result=await pptxTool('icon-copy',[JSON.stringify(await json(v.plan))]);

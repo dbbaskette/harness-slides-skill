@@ -19,6 +19,8 @@ export async function gcloudToken(run = exec) {
 }
 
 export async function request(url, options, { tokenProvider = gcloudToken, fetcher = fetch } = {}) {
+  const endpoint = new URL(url);
+  if (endpoint.protocol !== 'https:' || !['www.googleapis.com','slides.googleapis.com'].includes(endpoint.hostname)) throw new Error('OAuth requests must target a known Google API host');
   const token = await tokenProvider();
   if (!token) throw new Error('No gcloud access token is available. Run gcloud auth login --enable-gdrive-access --force.');
   const response = await fetcher(url, {

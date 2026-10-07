@@ -17,7 +17,7 @@ async function state(path){try{const s=await lstat(path);return s.isSymbolicLink
 async function safeParent(path){await mkdir(path,{recursive:true});const resolved=await realpath(path);const stat=await lstat(resolved);if(!stat.isDirectory()||(stat.mode&0o022)!==0||typeof process.getuid==='function'&&stat.uid!==process.getuid())throw new Error(`Unsafe installer directory: ${path}`);return resolved;}
 export async function install({source=packageRoot,shared=process.platform==='darwin'?join(homedir(),'Library','Application Support','Harness Slides'):join(homedir(),'.local','share','harness-slides'),targets,home=homedir(),dryRun=false}={}) {
   source=resolve(source);shared=resolve(shared);
-  targets??=['.codex/skills','.claude/skills','.cursor/skills'].map(path=>join(home,path,'harness-slides'));
+  targets??=['.agents/skills','.claude/skills','.cursor/skills'].map(path=>join(home,path,'harness-slides'));
   targets=targets.map(p=>resolve(p));
   if(new Set(targets).size!==targets.length||targets.some(p=>p===shared||p.startsWith(shared+'/')||shared.startsWith(p+'/')))throw new Error('Install destinations overlap');
   const payload=await files(source),checks=Object.fromEntries([...payload].map(([name,bytes])=>[name,hash(bytes)])),contentDigest=digest(checks),version=JSON.parse(payload.get('package.json')).version;

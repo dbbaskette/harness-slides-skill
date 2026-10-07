@@ -6,6 +6,7 @@ const rgb = hex => Object.fromEntries(['red','green','blue'].map((k,i)=>[k,parse
 const size=(w,h)=>({width:{magnitude:w,unit:'PT'},height:{magnitude:h,unit:'PT'}});
 const transform=(x,y)=>({scaleX:1,scaleY:1,shearX:0,shearY:0,translateX:x,translateY:y,unit:'PT'});
 const idsIn=value=>{const ids=new Set();const visit=v=>{if(!v||typeof v!=='object')return;if(v.objectId)ids.add(v.objectId);for(const x of Object.values(v))if(typeof x==='object')Array.isArray(x)?x.forEach(visit):visit(x);};visit(value);return ids;};
+const canonical=value=>value===undefined?null:Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(k=>[k,canonical(value[k])])):value;
 export async function googleSession(deps={}) {
   if (deps.tokenProvider) return deps;
   const token=await gcloudToken(); return {...deps,tokenProvider:async()=>token};
@@ -83,8 +84,8 @@ export async function applyGoogleScene(scene,deck,deps={}) {
   try{await(await request(`https://slides.googleapis.com/v1/presentations/${plan.presentationId}:batchUpdate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requests:plan.requests,writeControl:plan.writeControl})},deps)).json();}
   catch(error){throw new Error(`${error.message} Outcome may be uncertain. Inspect Slides before retrying; no automatic retry.`);}
   const after=await snapshotDeck(plan.presentationId,deps),afterIds=idsIn(after);
-  for(const s of scene.slides)for(const e of s.elements)if(!afterIds.has(e.id))throw new Error('Update sent but object readback incomplete; inspect native deck');
+  for(const s of scene.slides)for(const e of s.elements){const item=after.slides.find(x=>x.objectId===s.id)?.pageElements?.find(x=>x.objectId===e.id),kind=({text:'shape',shape:'shape',line:'line',table:'table',image:'image',chart:'sheetsChart'})[e.type];if(!item?.[kind])throw new Error('Update sent but native object type readback incomplete; inspect native deck');}
   const replaced=new Set(scene.slides.flatMap(s=>s.replace??[]));
-  for(const s of deck.slides)for(const e of s.pageElements??[])if(!replaced.has(e.objectId)&&!afterIds.has(e.objectId))throw new Error('Update sent but preserved object missing; inspect native deck');
+  for(const s of deck.slides){const page=after.slides.find(x=>x.objectId===s.objectId);if(!page||digest(canonical(s.slideProperties))!==digest(canonical(page.slideProperties)))throw new Error('Update sent but slide metadata preservation failed; inspect native deck');for(const e of s.pageElements??[])if(!replaced.has(e.objectId)){const item=page.pageElements?.find(x=>x.objectId===e.objectId);if(!item||digest(canonical(e))!==digest(canonical(item)))throw new Error('Update sent but preserved content/style changed; inspect native deck');}}
   return {presentationId:after.presentationId,revisionId:after.revisionId,url:`https://docs.google.com/presentation/d/${after.presentationId}/edit`,status:'native objects read back; visual review required'};
 }

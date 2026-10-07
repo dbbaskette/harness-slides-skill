@@ -49,7 +49,7 @@ export async function composePptx({root,sources,slides,output}) {
   // Automizer writes directly; reserve a private directory and publish exclusively.
   const {mkdtemp,rm}=await import('node:fs/promises'),{tmpdir}=await import('node:os'),{join}=await import('node:path');
   const dir=await mkdtemp(join(tmpdir(),'harness-compose-'));
-  try{a.outputDir=dir+'/';await a.write('composed.pptx');await writeFile(output,await readFile(join(dir,'composed.pptx')),{flag:'wx',mode:0o600});}
+  try{a.outputDir=dir+'/';await a.write('composed.pptx');await pptxTool('inspect',[join(dir,'composed.pptx')]);await writeFile(output,await readFile(join(dir,'composed.pptx')),{flag:'wx',mode:0o600});}
   finally{await rm(dir,{recursive:true,force:true});}
   return {output,status:'native template composition; target-rendered review required',limitations:['Animations and complex layouts require native inspection']};
 }

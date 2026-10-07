@@ -20,6 +20,10 @@ functional icon library, checking each redesigned slide for a useful visual
 concept; skip icons that add decoration or crowding. A brand-only pass preserves
 composition. Keep the same icon treatment for the same concept.
 
+Query concise generic patterns with `layouts --query "comparison" --limit 3`.
+If a brand add-on offers verified native layouts, prefer those and use these
+patterns as composition guidance. Do not load the whole layout catalog.
+
 Keep chart data editable. Label units, periods, series and sources; use zero
 baselines for bars and consistent scales for comparisons. Avoid 3D decoration.
 Retain qualifications next to the finding. Never turn sample data into a claim.

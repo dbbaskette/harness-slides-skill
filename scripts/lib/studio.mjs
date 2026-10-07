@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { loadWorkspace, saveScene, restoreVersion, buildWorkspace, workspaceStatus } from './workspace.mjs';
 import { renderSceneHtml } from './scene.mjs';
-import { escape } from './common.mjs';
+import { escape, regularInside } from './common.mjs';
 const shell = token => `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Harness Slides Studio</title><style>body{font:15px system-ui;margin:0;color:#222;background:#f4f5f7}header{padding:16px;background:white;border-bottom:1px solid #ddd}main{display:grid;grid-template-columns:minmax(240px,320px) 1fr;height:calc(100vh - 90px)}aside{padding:16px;overflow:auto}iframe{border:0;width:100%;height:100%}label{display:block;margin:12px 0 4px}input,textarea,select,button{box-sizing:border-box;max-width:100%;font:inherit;padding:7px}input,textarea{width:100%}button{margin:6px 4px 0 0}#message{white-space:pre-wrap;color:#333}#selection{font-weight:bold}</style><header><strong>Harness Slides</strong> · editable workspace <span id="version"></span><div>Scene preview is a draft. Inspect native target renders before delivery.</div></header><main><aside><p id="selection">Select an object in the preview</p><form id="editor"><label for="text">Text</label><textarea id="text" rows="4"></textarea><label for="x">X (points)</label><input id="x" type="number" step="0.1"><label for="y">Y (points)</label><input id="y" type="number" step="0.1"><label for="width">Width</label><input id="width" type="number" step="0.1"><label for="height">Height</label><input id="height" type="number" step="0.1"><button>Save new version</button></form><button id="build">Build native output</button><label for="history">Version history</label><select id="history"></select><button id="restore">Restore as new version</button><pre id="message" role="status"></pre></aside><iframe id="preview" title="Slide preview" sandbox="allow-scripts"></iframe></main><script>
 const base='/${token}',frame=document.querySelector('#preview');let state,selected;
 async function call(path,data){const r=await fetch(base+path,{method:data?'POST':'GET',headers:data?{'Content-Type':'application/json'}:{},body:data?JSON.stringify(data):undefined});const value=await r.json();if(!r.ok)throw new Error(value.error);return value;}
@@ -28,6 +28,11 @@ export async function startStudio({root,port=0}) {
       if(req.method==='GET'&&['','/'].includes(path))return send(200,shell(token),'text/html; charset=utf-8');
       if(req.method==='GET'&&path==='/state'){const {scene,current,versions,manifest}=await loadWorkspace(root);return send(200,{scene,current,versions,format:manifest.format});}
       if(req.method==='GET'&&path==='/status')return send(200,await workspaceStatus(root));
+      if(req.method==='GET'&&/^\/inputs\/images\/[a-f0-9]{64}\.(png|jpg|jpeg|svg)$/.test(path)) {
+        const w=await loadWorkspace(root),name=path.slice(1);
+        if(!w.manifest.assets?.[name])return send(404,{error:'Unknown image'});
+        return send(200,await readFile(await regularInside(root,name)),path.endsWith('.svg')?'image/svg+xml':path.endsWith('.png')?'image/png':'image/jpeg');
+      }
       if(req.method==='GET'&&path==='/preview'){
         const {scene}=await loadWorkspace(root);const html=renderSceneHtml(scene)+`<script>document.addEventListener('click',event=>{const node=event.target.closest('[data-object-id]');if(node){document.querySelectorAll('.object').forEach(e=>e.style.outline='');node.style.outline='2px solid #E9692C';parent.postMessage({object:node.dataset.objectId},'*');}});</script>`;
         return send(200,html,'text/html; charset=utf-8');
@@ -43,7 +48,7 @@ export async function startStudio({root,port=0}) {
         if(!data.fields||Object.keys(data.fields).some(k=>!['text','x','y','width','height'].includes(k)))throw new Error('Edit text and geometry only');
         Object.assign(e,data.fields);return send(200,await saveScene({root,scene,expectedDigest:data.expectedDigest,note:`Edited ${e.id}`}));
       }
-      if(path==='/restore')return send(200,await restoreVersion({root,...data}));
+      if(path==='/restore')return send(200,await restoreVersion({...data,root}));
       if(path==='/build')return send(200,await buildWorkspace({root}));
       return send(404,{error:'Unknown operation'});
     }catch(error){return send(400,{error:error.message});}

@@ -39,6 +39,8 @@ test('guarded PPTX patch retains unselected parts, shape style/geometry, chart d
   assert.equal((await pptxTool('compare',[source,output])).preserved,false);
   await assert.rejects(()=>pptxTool('patch',[output,plan,join(dir,'stale.pptx')]),/Source changed/);
   await assert.rejects(()=>pptxTool('patch',[source,plan,source]),/source in place/);
+  // Namespace declarations and all unedited bytes in the selected slide survive.
+  const {stdout:oldXml}=await exec('unzip',['-p',source,slide.part]);const {stdout:newXml}=await exec('unzip',['-p',output,slide.part]);assert.equal(newXml,oldXml.replace('From scattered input to one coherent story','A more focused story'));
 });
 test('native template composition retains editable charts and native object text',async t=>{
   const dir=await temporary(t),source=join(dir,'source.pptx'),output=join(dir,'composed.pptx');await renderPptxScene(await json(example),source);
