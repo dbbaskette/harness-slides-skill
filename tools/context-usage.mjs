@@ -25,7 +25,8 @@ export async function measureContext() {
   const contents = Object.fromEntries(await Promise.all(paths.map(async path => [path, await readFile(new URL(path, root), 'utf8')])));
   const files = Object.fromEntries(paths.map(path => [path, count(contents[path])]));
   // Representative start response shape, normalized paths; no fetch or account access.
-  const guidanceResult = JSON.stringify({ freshness: 'current-at-start', revision: createHash('sha256').update('sample guidance revision').digest('hex').slice(0, 40), task: createHash('sha256').update('sample guidance task').digest('hex').slice(0, 32), guidance: '<guidance>/SKILL.md', runtime: '<runtime>', runtimeVersion:'0.6.0', runtimeDigest:createHash('sha256').update('sample runtime identity').digest('hex') }, null, 2) + '\n';
+  const pkg = JSON.parse(await readFile(new URL('package.json', root), 'utf8'));
+  const guidanceResult = JSON.stringify({ freshness: 'current-at-start', revision: createHash('sha256').update('sample guidance revision').digest('hex').slice(0, 40), task: createHash('sha256').update('sample guidance task').digest('hex').slice(0, 32), guidance: '<guidance>/SKILL.md', runtime: '<runtime>', runtimeVersion:pkg.version, runtimeDigest:createHash('sha256').update('sample runtime identity').digest('hex') }, null, 2) + '\n';
   const outputs = { guidanceStart: guidanceResult };
   outputs.sceneContract = (await exec(process.execPath, [fileURLToPath(new URL('scripts/harness-slides.mjs', root)), 'scene', 'contract'], { timeout: 30000 })).stdout;
   outputs.comparisonContract = (await exec(process.execPath, [fileURLToPath(new URL('scripts/harness-slides.mjs', root)), 'deck', 'contract','--id','comparison'], {timeout:30000})).stdout;
