@@ -1,0 +1,48 @@
+{
+  "date": "2026-10-07",
+  "tokenizer": "cl100k_base",
+  "baseline": "Working tree immediately before the image feature; includes existing per-slide guidance and DNS diagnostics.",
+  "baselineInputDigest": "36db833cc597dcb65719725922d399caff2fac639dcd84cdd7112f704ae245b5",
+  "afterInputDigest": "989ad6f4b422a1949cf643ac81d3478ecdb49d150f19f76cee336d4e81f1b205",
+  "runtimeContentDigest": "5d0ce4b144c0b3aad5765a683df742b4ed1112edd399b9532a6f394d7ef1d023",
+  "baselineRoutes": {
+    "Discovery metadata": 39,
+    "Installed bootstrap": 430,
+    "Bootstrap + current guidance entry": 1173,
+    "Scoped PPTX edit + final review": 2456,
+    "Scoped Google edit + final review": 2651,
+    "New PPTX deck from native template + review": 3352,
+    "New Google deck from native template + review": 3987,
+    "New PPTX scene + contract + review": 3539,
+    "New Google scene + contract + review": 4244
+  },
+  "afterRoutes": {
+    "Discovery metadata": 39,
+    "Installed bootstrap": 430,
+    "Bootstrap + current guidance entry": 1189,
+    "Scoped PPTX edit + final review": 2472,
+    "Scoped Google edit + final review": 2667,
+    "New PPTX deck from native template + review": 3368,
+    "New Google deck from native template + review": 4003,
+    "New PPTX scene + contract + review": 3555,
+    "New Google scene + contract + review": 4260,
+    "Optional image guidance + download result": 2123
+  },
+  "changes": {
+    "discovery": 0,
+    "bootstrap": 0,
+    "ordinaryTaskInstructions": 16,
+    "conditionalImageInstructions": 753,
+    "representativeImageResult": 97,
+    "conditionalTotal": 850
+  },
+  "excluded": [
+    "Source documents",
+    "Image pixels and vision inspection",
+    "Provider code and dependency files",
+    "Raw provider text, URLs, logs, cookies and private receipts",
+    "Conversation history",
+    "Other helper responses"
+  ],
+  "sample": "One normalized compact downloaded-image JSON response; absolute path length and hash tokenization vary in actual use."
+}

@@ -5,6 +5,13 @@ must actually view the rendered pixels; rendering alone is not an inspection.
 Fix clipping, overlaps, wrapping, awkward spacing, contrast and missing artwork.
 Check content, notes, links, diagram relationships and editability separately.
 
+For new decks, redesigns and full reworks, check each slide's composition against
+its own takeaway, relationships and evidence. Reconsider inherited lists or
+grids when a diagram, image, meaningful icon, color grouping, chart or plain text
+would communicate that slide better. Numbers must convey useful order or
+reference. Assets should explain the content, and grouping should clarify real
+relationships. Repair within the agreed editing scope.
+
 For PPTX, rendering needs LibreOffice (`soffice`) and Poppler (`pdftoppm`,
 `pdfinfo`). Font availability and LibreOffice differences can affect fidelity;
 verify in the intended editor. The helper renders a PDF once and rasterizes
@@ -37,7 +44,10 @@ Compare delivered count/order, content, relationships, notes, links and hidden
 status with the source within the agreed scope. Review requested exports too.
 Master/theme/font changes require rechecking every affected slide. Reuse unchanged
 iteration evidence, then complete final coverage on the delivered revision.
-Open every final image at readable size. Review deck consistency and rhythm.
+Open every final image at readable size. Then review deck consistency and rhythm:
+keep theme and narrative coherent while checking that repeated formats are
+justified by similar content, rather than copied from the first slide. Do not
+change a suitable composition merely to manufacture variety.
 After viewing, record real findings with the returned revision hash:
 
 ```sh

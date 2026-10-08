@@ -1,0 +1,354 @@
+{
+  "schema": 1,
+  "title": "Content chooses the composition · synthetic examples",
+  "assets": {
+    "latency": {
+      "src": "assets/latency-distribution.svg",
+      "alt": "Illustrative curve showing a long latency tail; synthetic data"
+    }
+  },
+  "slides": [
+    {
+      "id": "claim_slide",
+      "title": "Each slide deserves its own design",
+      "sources": [
+        "brief:synthetic-example"
+      ],
+      "intent": {
+        "takeaway": "Each slide deserves its own design",
+        "relationship": "claim",
+        "rationale": "statement expresses this slide's claim relationship.",
+        "evidence": [
+          "brief:synthetic-example"
+        ]
+      },
+      "component": {
+        "kind": "statement",
+        "text": "Choose the visual relationship from the content.",
+        "support": "Carry the palette, typography and story through the deck."
+      }
+    },
+    {
+      "id": "compare_slide",
+      "title": "A shared theme permits different structures",
+      "sources": [
+        "brief:synthetic-example"
+      ],
+      "intent": {
+        "takeaway": "A shared theme permits different structures",
+        "relationship": "comparison",
+        "rationale": "comparison expresses this slide's comparison relationship.",
+        "evidence": [
+          "brief:synthetic-example"
+        ]
+      },
+      "component": {
+        "kind": "comparison",
+        "columns": [
+          {
+            "label": "Identity stays consistent",
+            "text": "Palette, typography, protected artwork and safe regions."
+          },
+          {
+            "label": "Composition follows content",
+            "text": "Compare choices, show change, map a system or explain evidence."
+          }
+        ]
+      }
+    },
+    {
+      "id": "category_slide",
+      "title": "Different content calls for different tools",
+      "sources": [
+        "brief:synthetic-example"
+      ],
+      "intent": {
+        "takeaway": "Different content calls for different tools",
+        "relationship": "categories",
+        "rationale": "categories expresses this slide's categories relationship.",
+        "evidence": [
+          "brief:synthetic-example"
+        ]
+      },
+      "component": {
+        "kind": "categories",
+        "items": [
+          {
+            "label": "Data",
+            "text": "Native charts and editable tables."
+          },
+          {
+            "label": "Relationships",
+            "text": "Connected shapes and comparisons."
+          },
+          {
+            "label": "Visual evidence",
+            "text": "Images with useful annotations."
+          }
+        ]
+      }
+    },
+    {
+      "id": "process_slide",
+      "title": "Build and inspect before delivery",
+      "sources": [
+        "brief:synthetic-example"
+      ],
+      "intent": {
+        "takeaway": "Build and inspect before delivery",
+        "relationship": "sequence",
+        "rationale": "process expresses this slide's sequence relationship.",
+        "evidence": [
+          "brief:synthetic-example"
+        ]
+      },
+      "component": {
+        "kind": "process",
+        "steps": [
+          {
+            "label": "Understand",
+            "text": "Identify the takeaway and evidence."
+          },
+          {
+            "label": "Compose",
+            "text": "Choose geometry for this slide."
+          },
+          {
+            "label": "Inspect",
+            "text": "Render in the target editor."
+          }
+        ]
+      }
+    },
+    {
+      "id": "timeline_slide",
+      "title": "Review is part of the workflow",
+      "sources": [
+        "brief:synthetic-example"
+      ],
+      "intent": {
+        "takeaway": "Review is part of the workflow",
+        "relationship": "time",
+        "rationale": "timeline expresses this slide's time relationship.",
+        "evidence": [
+          "brief:synthetic-example"
+        ]
+      },
+      "component": {
+        "kind": "timeline",
+        "events": [
+          {
+            "date": "Day 1",
+            "label": "Brief",
+            "text": "Select identity and delivery."
+          },
+          {
+            "date": "Day 2",
+            "label": "Draft",
+            "text": "Compile editable content."
+          },
+          {
+            "date": "Day 3",
+            "label": "Review",
+            "text": "Fix visible defects."
+          }
+        ]
+      }
+    },
+    {
+      "id": "system_slide",
+      "title": "One brand contract supports several outputs",
+      "sources": [
+        "brief:synthetic-example"
+      ],
+      "intent": {
+        "takeaway": "One brand contract supports several outputs",
+        "relationship": "system",
+        "rationale": "architecture expresses this slide's system relationship.",
+        "evidence": [
+          "brief:synthetic-example"
+        ]
+      },
+      "component": {
+        "kind": "architecture",
+        "nodes": [
+          {
+            "id": "brand_node",
+            "label": "Brand contract",
+            "text": "Design and language views",
+            "tier": 0
+          },
+          {
+            "id": "slides_node",
+            "label": "Slides",
+            "text": "Native editable objects",
+            "tier": 1
+          },
+          {
+            "id": "blog_node",
+            "label": "Blog",
+            "text": "Existing author voice",
+            "tier": 1
+          }
+        ],
+        "edges": [
+          {
+            "from": "brand_node",
+            "to": "slides_node"
+          },
+          {
+            "from": "brand_node",
+            "to": "blog_node"
+          }
+        ]
+      }
+    },
+    {
+      "id": "metric_slide",
+      "title": "Measure improvement without dropping context",
+      "sources": [
+        "brief:synthetic-example"
+      ],
+      "intent": {
+        "takeaway": "Measure improvement without dropping context",
+        "relationship": "quantity",
+        "rationale": "metric expresses this slide's quantity relationship.",
+        "evidence": [
+          "brief:synthetic-example"
+        ]
+      },
+      "component": {
+        "kind": "metric",
+        "value": "32%",
+        "label": "Illustrative time reduction",
+        "context": "A metric needs its baseline, scope and interpretation.",
+        "qualifier": "Synthetic example only; not a measured product result."
+      }
+    },
+    {
+      "id": "table_slide",
+      "title": "Keep the comparison editable",
+      "sources": [
+        "brief:synthetic-example"
+      ],
+      "intent": {
+        "takeaway": "Keep the comparison editable",
+        "relationship": "reference",
+        "rationale": "table expresses this slide's reference relationship.",
+        "evidence": [
+          "brief:synthetic-example"
+        ]
+      },
+      "component": {
+        "kind": "table",
+        "rows": [
+          [
+            "Capability",
+            "PowerPoint",
+            "Google Slides"
+          ],
+          [
+            "Charts",
+            "Embedded data",
+            "Linked Sheets"
+          ],
+          [
+            "Images",
+            "Local assets",
+            "Public HTTPS"
+          ],
+          [
+            "Review",
+            "Native render",
+            "Native thumbnails"
+          ]
+        ],
+        "caption": "Synthetic capability example; provider constraints remain explicit."
+      }
+    },
+    {
+      "id": "chart_slide",
+      "title": "Negative values must remain visible",
+      "sources": [
+        "brief:synthetic-example"
+      ],
+      "intent": {
+        "takeaway": "Negative values must remain visible",
+        "relationship": "quantity",
+        "rationale": "chart expresses this slide's quantity relationship.",
+        "evidence": [
+          "brief:synthetic-example"
+        ]
+      },
+      "component": {
+        "kind": "chart",
+        "chartType": "bar",
+        "series": [
+          {
+            "name": "Illustrative change",
+            "labels": [
+              "A",
+              "B",
+              "C"
+            ],
+            "values": [
+              12,
+              -8,
+              20
+            ]
+          }
+        ],
+        "source": "brief:synthetic-example",
+        "caption": "Synthetic data; units are illustrative percentage points."
+      }
+    },
+    {
+      "id": "quote_slide",
+      "title": "Keep testimony and attribution together",
+      "sources": [
+        "brief:synthetic-example"
+      ],
+      "intent": {
+        "takeaway": "Keep testimony and attribution together",
+        "relationship": "testimony",
+        "rationale": "quote expresses this slide's testimony relationship.",
+        "evidence": [
+          "brief:synthetic-example"
+        ]
+      },
+      "component": {
+        "kind": "quote",
+        "text": "Each slide should be considered on its own.",
+        "attribution": "Product design requirement",
+        "context": "A common identity supports a distinct composition for each message."
+      }
+    },
+    {
+      "id": "image_slide",
+      "title": "Use images to explain evidence",
+      "sources": [
+        "brief:synthetic-example"
+      ],
+      "intent": {
+        "takeaway": "Use images to explain evidence",
+        "relationship": "image",
+        "rationale": "image expresses this slide's image relationship.",
+        "evidence": [
+          "brief:synthetic-example"
+        ]
+      },
+      "component": {
+        "kind": "image",
+        "asset": "latency",
+        "caption": "Illustration for testing image placement; not measured data.",
+        "callouts": [
+          {
+            "label": "Long tail",
+            "x": 0.64,
+            "y": 0.43
+          }
+        ]
+      }
+    }
+  ]
+}

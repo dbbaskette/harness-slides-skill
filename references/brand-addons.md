@@ -26,3 +26,19 @@ separate from guidance updates. No additional model or provider account is neede
 
 The legacy `sync-brand-engine.mjs` utility is for older vendored integrations;
 it is not part of the current Tanzu Brand workflow.
+
+## Resolved design and language handoff
+
+A selected add-on can export schema-1 `brand-contract.json`, plus separate
+`DESIGN.md` and `VOICE.md` views. Design contains resolved roles and protected
+native template authority; language contains organization naming rules separately
+from the selected author's voice and its confirmed/provisional state. Unspecified
+company tone stays unspecified. A blog contract excludes slide geometry.
+
+Tanzu Brand exposes `contract export --medium slides|blog --output NEW_DIR`, with
+optional brand/variant, delivery and an explicitly selected portable voice
+profile (`id`, `guide`, `status:provisional|confirmed`, optional `revision`). This
+reuses canonical sources, not a second editable token set. `contract check --file`
+verifies local source hashes. Pin the exported contract for the task; authority
+drift requires a fresh explicit handoff. Do not silently restyle an existing task.
+Read only the relevant view and query components conditionally.

@@ -21,3 +21,16 @@ copied. Source-reviewed ideas informed our original implementation:
 
 The nexu-io/codex-slides image-generation fork is not part of this implementation.
 Anthropic's service-licensed PPTX skill is not incorporated.
+
+## Optional Gemini Web images
+
+The on-demand image worker in `scripts/images/worker.py` is licensed under
+AGPL-3.0-only; see `scripts/images/LICENSE`. It installs
+[HanaokaYuzu/Gemini-API](https://github.com/HanaokaYuzu/Gemini-API) separately at
+revision `8c5b1dcbf54ecf093551cc20bd25cef438190ba8`, which carries the GNU Affero
+General Public License v3. Its original source and license remain in that
+installation; no upstream library source is vendored here. The rest of this
+repository retains its stated MIT license. The worker's cookie export and
+single-attempt strategy adapt the owner's Gemini Web Bridge implementation.
+Pillow (MIT-CMU) and Playwright (Apache-2.0) are optional installed dependencies
+with their own notices. These dependencies are installed only for image setup.

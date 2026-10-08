@@ -1,0 +1,492 @@
+{
+  "tokenizer": "cl100k_base",
+  "inputDigest": "989ad6f4b422a1949cf643ac81d3478ecdb49d150f19f76cee336d4e81f1b205",
+  "files": {
+    "bootstrap/SKILL.md": 430,
+    "SKILL.md": 759,
+    "references/authoring-google.md": 212,
+    "references/authoring-pptx.md": 142,
+    "references/authoring.md": 226,
+    "references/brand-addons.md": 340,
+    "references/design.md": 837,
+    "references/editing.md": 440,
+    "references/google-slides.md": 635,
+    "references/images.md": 753,
+    "references/intake.md": 351,
+    "references/review.md": 759,
+    "references/templates.md": 273,
+    "references/workspace.md": 308
+  },
+  "samples": {
+    "guidanceStart": 84,
+    "sceneContract": 318,
+    "imageDownload": 97
+  },
+  "readingPaths": {
+    "scopedPptx": {
+      "files": [
+        {
+          "path": "SKILL.md",
+          "tokens": 759
+        },
+        {
+          "path": "references/editing.md",
+          "tokens": 440
+        },
+        {
+          "path": "references/review.md",
+          "tokens": 759
+        }
+      ],
+      "helpers": [],
+      "total": 1958
+    },
+    "scopedGoogle": {
+      "files": [
+        {
+          "path": "SKILL.md",
+          "tokens": 759
+        },
+        {
+          "path": "references/google-slides.md",
+          "tokens": 635
+        },
+        {
+          "path": "references/review.md",
+          "tokens": 759
+        }
+      ],
+      "helpers": [],
+      "total": 2153
+    },
+    "newPptxNative": {
+      "files": [
+        {
+          "path": "SKILL.md",
+          "tokens": 759
+        },
+        {
+          "path": "references/design.md",
+          "tokens": 837
+        },
+        {
+          "path": "references/authoring.md",
+          "tokens": 226
+        },
+        {
+          "path": "references/templates.md",
+          "tokens": 273
+        },
+        {
+          "path": "references/review.md",
+          "tokens": 759
+        }
+      ],
+      "helpers": [],
+      "total": 2854
+    },
+    "newGoogleNative": {
+      "files": [
+        {
+          "path": "SKILL.md",
+          "tokens": 759
+        },
+        {
+          "path": "references/design.md",
+          "tokens": 837
+        },
+        {
+          "path": "references/authoring.md",
+          "tokens": 226
+        },
+        {
+          "path": "references/templates.md",
+          "tokens": 273
+        },
+        {
+          "path": "references/google-slides.md",
+          "tokens": 635
+        },
+        {
+          "path": "references/review.md",
+          "tokens": 759
+        }
+      ],
+      "helpers": [],
+      "total": 3489
+    },
+    "newPptxScene": {
+      "files": [
+        {
+          "path": "SKILL.md",
+          "tokens": 759
+        },
+        {
+          "path": "references/design.md",
+          "tokens": 837
+        },
+        {
+          "path": "references/authoring.md",
+          "tokens": 226
+        },
+        {
+          "path": "references/authoring-pptx.md",
+          "tokens": 142
+        },
+        {
+          "path": "references/review.md",
+          "tokens": 759
+        }
+      ],
+      "helpers": [
+        {
+          "name": "sceneContract",
+          "tokens": 318
+        }
+      ],
+      "total": 3041
+    },
+    "newGoogleScene": {
+      "files": [
+        {
+          "path": "SKILL.md",
+          "tokens": 759
+        },
+        {
+          "path": "references/design.md",
+          "tokens": 837
+        },
+        {
+          "path": "references/authoring.md",
+          "tokens": 226
+        },
+        {
+          "path": "references/authoring-google.md",
+          "tokens": 212
+        },
+        {
+          "path": "references/google-slides.md",
+          "tokens": 635
+        },
+        {
+          "path": "references/review.md",
+          "tokens": 759
+        }
+      ],
+      "helpers": [
+        {
+          "name": "sceneContract",
+          "tokens": 318
+        }
+      ],
+      "total": 3746
+    },
+    "intake": {
+      "files": [
+        {
+          "path": "SKILL.md",
+          "tokens": 759
+        },
+        {
+          "path": "references/intake.md",
+          "tokens": 351
+        }
+      ],
+      "helpers": [],
+      "total": 1110
+    },
+    "customImages": {
+      "files": [
+        {
+          "path": "SKILL.md",
+          "tokens": 759
+        },
+        {
+          "path": "references/images.md",
+          "tokens": 753
+        }
+      ],
+      "helpers": [
+        {
+          "name": "imageDownload",
+          "tokens": 97
+        }
+      ],
+      "total": 1609
+    }
+  },
+  "standalone": {
+    "scopedPptx": {
+      "files": [
+        {
+          "path": "bootstrap/SKILL.md",
+          "tokens": 430
+        },
+        {
+          "path": "SKILL.md",
+          "tokens": 759
+        },
+        {
+          "path": "references/editing.md",
+          "tokens": 440
+        },
+        {
+          "path": "references/review.md",
+          "tokens": 759
+        }
+      ],
+      "helpers": [
+        {
+          "name": "guidanceStart",
+          "tokens": 84
+        }
+      ],
+      "total": 2472
+    },
+    "scopedGoogle": {
+      "files": [
+        {
+          "path": "bootstrap/SKILL.md",
+          "tokens": 430
+        },
+        {
+          "path": "SKILL.md",
+          "tokens": 759
+        },
+        {
+          "path": "references/google-slides.md",
+          "tokens": 635
+        },
+        {
+          "path": "references/review.md",
+          "tokens": 759
+        }
+      ],
+      "helpers": [
+        {
+          "name": "guidanceStart",
+          "tokens": 84
+        }
+      ],
+      "total": 2667
+    },
+    "newPptxNative": {
+      "files": [
+        {
+          "path": "bootstrap/SKILL.md",
+          "tokens": 430
+        },
+        {
+          "path": "SKILL.md",
+          "tokens": 759
+        },
+        {
+          "path": "references/design.md",
+          "tokens": 837
+        },
+        {
+          "path": "references/authoring.md",
+          "tokens": 226
+        },
+        {
+          "path": "references/templates.md",
+          "tokens": 273
+        },
+        {
+          "path": "references/review.md",
+          "tokens": 759
+        }
+      ],
+      "helpers": [
+        {
+          "name": "guidanceStart",
+          "tokens": 84
+        }
+      ],
+      "total": 3368
+    },
+    "newGoogleNative": {
+      "files": [
+        {
+          "path": "bootstrap/SKILL.md",
+          "tokens": 430
+        },
+        {
+          "path": "SKILL.md",
+          "tokens": 759
+        },
+        {
+          "path": "references/design.md",
+          "tokens": 837
+        },
+        {
+          "path": "references/authoring.md",
+          "tokens": 226
+        },
+        {
+          "path": "references/templates.md",
+          "tokens": 273
+        },
+        {
+          "path": "references/google-slides.md",
+          "tokens": 635
+        },
+        {
+          "path": "references/review.md",
+          "tokens": 759
+        }
+      ],
+      "helpers": [
+        {
+          "name": "guidanceStart",
+          "tokens": 84
+        }
+      ],
+      "total": 4003
+    },
+    "newPptxScene": {
+      "files": [
+        {
+          "path": "bootstrap/SKILL.md",
+          "tokens": 430
+        },
+        {
+          "path": "SKILL.md",
+          "tokens": 759
+        },
+        {
+          "path": "references/design.md",
+          "tokens": 837
+        },
+        {
+          "path": "references/authoring.md",
+          "tokens": 226
+        },
+        {
+          "path": "references/authoring-pptx.md",
+          "tokens": 142
+        },
+        {
+          "path": "references/review.md",
+          "tokens": 759
+        }
+      ],
+      "helpers": [
+        {
+          "name": "guidanceStart",
+          "tokens": 84
+        },
+        {
+          "name": "sceneContract",
+          "tokens": 318
+        }
+      ],
+      "total": 3555
+    },
+    "newGoogleScene": {
+      "files": [
+        {
+          "path": "bootstrap/SKILL.md",
+          "tokens": 430
+        },
+        {
+          "path": "SKILL.md",
+          "tokens": 759
+        },
+        {
+          "path": "references/design.md",
+          "tokens": 837
+        },
+        {
+          "path": "references/authoring.md",
+          "tokens": 226
+        },
+        {
+          "path": "references/authoring-google.md",
+          "tokens": 212
+        },
+        {
+          "path": "references/google-slides.md",
+          "tokens": 635
+        },
+        {
+          "path": "references/review.md",
+          "tokens": 759
+        }
+      ],
+      "helpers": [
+        {
+          "name": "guidanceStart",
+          "tokens": 84
+        },
+        {
+          "name": "sceneContract",
+          "tokens": 318
+        }
+      ],
+      "total": 4260
+    },
+    "intake": {
+      "files": [
+        {
+          "path": "bootstrap/SKILL.md",
+          "tokens": 430
+        },
+        {
+          "path": "SKILL.md",
+          "tokens": 759
+        },
+        {
+          "path": "references/intake.md",
+          "tokens": 351
+        }
+      ],
+      "helpers": [
+        {
+          "name": "guidanceStart",
+          "tokens": 84
+        }
+      ],
+      "total": 1624
+    },
+    "customImages": {
+      "files": [
+        {
+          "path": "bootstrap/SKILL.md",
+          "tokens": 430
+        },
+        {
+          "path": "SKILL.md",
+          "tokens": 759
+        },
+        {
+          "path": "references/images.md",
+          "tokens": 753
+        }
+      ],
+      "helpers": [
+        {
+          "name": "guidanceStart",
+          "tokens": 84
+        },
+        {
+          "name": "imageDownload",
+          "tokens": 97
+        }
+      ],
+      "total": 2123
+    }
+  },
+  "routes": {
+    "Discovery metadata": 39,
+    "Installed bootstrap": 430,
+    "Bootstrap + current guidance entry": 1189,
+    "Scoped PPTX edit + final review": 2472,
+    "Scoped Google edit + final review": 2667,
+    "New PPTX deck from native template + review": 3368,
+    "New Google deck from native template + review": 4003,
+    "New PPTX scene + contract + review": 3555,
+    "New Google scene + contract + review": 4260,
+    "Optional image guidance + download result": 2123
+  }
+}

@@ -2,27 +2,64 @@
 
 Use a clear takeaway per slide and make the hierarchy visible. Prefer a short
 claim title and evidence, relationship or example that supports it. A briefing
-deck can be denser than a live talk. Word budgets and family variety are judgment
-aids, not reasons to remove required content.
+deck can be denser than a live talk. Preserve required content and qualifications.
+
+## Choose each slide from its content
+
+Make a fresh composition decision for every slide. Identify its takeaway, the
+relationship the audience needs to understand, and the evidence that supports
+it; then choose the visual treatment. Do not inherit a numbered list, card grid,
+or other format because an earlier slide used it. Numbering should communicate
+order, priority or a useful reference, not turn unrelated ideas into steps.
+
+Consider the alternatives that serve this slide:
+
+| Content to communicate | Possible treatment |
+| --- | --- |
+| Steps, dependencies or milestones | Editable flow, timeline or branching diagram |
+| Components, layers or spatial relationships | Architecture, ecosystem or labeled diagram |
+| Alternatives or tradeoffs | Comparison, matrix or aligned evidence |
+| Parallel themes or categories | Grouped color boxes, meaningful icons or distinct regions |
+| Measured change or a finding | Evidence chart or a prominent metric with context |
+| Product behavior or a concrete example | Screenshot/image with editable annotations |
+| An experience, setting or conceptual idea | Relevant supplied, sourced or generated illustration/image |
+| A statement or a few items best read directly | Attributed quote or concise text/list |
+
+These are options, not a rotation schedule or a fixed menu. Decide whether icons,
+imagery, a diagram, colored grouping, or plain text improves comprehension on
+this slide. Use available authorized asset/generation tools when imagery serves
+the message; keep explanatory diagrams and labels editable. Generated imagery
+can illustrate an idea, but must not masquerade as measured evidence or an actual
+product screenshot. Follow the selected brand's asset policy.
+
+Keep a brief content-to-composition rationale in the agent's working notes for
+each slide. Similar content may justify similar layouts; different content needs
+its own decision. Do not force variety, insert decorative assets, or remove
+evidence to meet a layout quota. In preservation work, honor the agreed scope:
+brand-only and polish do not authorize redesigning the composition.
+
+## Carry the theme across compositions
+
+Keep palette, typography, hierarchy, recurring anchors and asset treatment
+coherent. The narrative thread comes from the takeaways and their progression;
+it does not require every slide to share the same body layout.
 
 Give color a role: emphasize the finding, distinguish meaningful categories or
 signal sections. Use the selected brand palette if present. Align repeated
 components to common anchors; group related objects, preserve whitespace and
-keep enough room for native text wrapping. Avoid more than two consecutive
-text-heavy slides when the material allows another treatment. A section break,
-diagram, quote or metric can provide rhythm; do not add filler to satisfy a quota.
+keep enough room for native text wrapping. Use color boxes to make meaningful
+grouping visible, with labels or other cues besides color.
 
-Choose the composition from the relationship: comparison pairs, process flow,
-timeline, ecosystem, layered architecture, pillars, annotated screenshot, metric
-with context, evidence chart or a concise table. Rotate layouts deliberately.
 Use native objects for diagrams and editable labels. Prefer an available approved
-functional icon library, checking each redesigned slide for a useful visual
-concept; skip icons that add decoration or crowding. A brand-only pass preserves
-composition. Keep the same icon treatment for the same concept.
+functional icon library when a recognizable concept benefits from an icon;
+skip icons that add decoration or crowding. Keep the same treatment for the same
+concept, even when the surrounding slide composition differs.
 
-Query concise generic patterns with `layouts --query "comparison" --limit 3`.
+Query patterns for the current slide's relationship, for example
+`layouts --query "comparison" --limit 3`; query again when the content changes.
 If a brand add-on offers verified native layouts, prefer those and use these
-patterns as composition guidance. Do not load the whole layout catalog.
+patterns as composition guidance. Select a suitable layout per slide; the first
+match is not a deck-wide default. Do not load the whole layout catalog.
 
 Keep chart data editable. Label units, periods, series and sources; use zero
 baselines for bars and consistent scales for comparisons. Avoid 3D decoration.
