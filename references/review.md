@@ -62,3 +62,7 @@ fresh native revision check. HTML previews and structural PASS are not visual QA
 Use `workspace repair --project DIR --slide ID` for a compact repair packet,
 including only the selected slide, findings and expected scene digest. After a
 repair, build/render affected slides and complete final coverage of the deck.
+
+Compiled decks also require [font screening and structured critique](quality.md).
+Use technical findings to target repairs, then judge the title against actual
+evidence and the composition against the slide’s intended relationship.

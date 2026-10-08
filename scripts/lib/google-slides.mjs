@@ -22,7 +22,7 @@ export async function copyGoogleDeck(id,name,deps={}) {
   const created=await response.json(); if(!created.id)throw new Error('Copy response was unconfirmed. Inspect Drive before retrying.');
   return {id:created.id,name:created.name,url:created.webViewLink??`https://docs.google.com/presentation/d/${created.id}/edit`};
 }
-export function compileGoogleScene(scene,deck) {
+export function compileGoogleScene(scene,deck,{localImages=false}={}) {
   validateScene(scene); const t=themeFor(scene),requests=[],limitations=[],existing=idsIn(deck);
   validId(deck?.presentationId); if(!deck.revisionId||!Array.isArray(deck.slides))throw new Error('Use a full native snapshot with a revision');
   const pt=d=>d?.unit==='PT'?d.magnitude:d?.unit==='EMU'?d.magnitude/12700:NaN;
@@ -32,10 +32,9 @@ export function compileGoogleScene(scene,deck) {
     const selector=cellLocation?{cellLocation}:{};
     return [{insertText:{objectId:e.id,...selector,insertionIndex:0,text:e.text}},
       {updateTextStyle:{objectId:e.id,...selector,textRange:{type:'ALL'},style:{fontFamily:t.font,fontSize:{magnitude:e.fontSize??(e.role==='title'?t.titleSize:t.bodySize),unit:'PT'},bold:e.bold??false,foregroundColor:{opaqueColor:solid(e.color??'text')}},fields:'fontFamily,fontSize,bold,foregroundColor'}},
-      {updateParagraphStyle:{objectId:e.id,...selector,textRange:{type:'ALL'},style:{alignment:({left:'START',center:'CENTER',right:'END'})[e.align??'left']},fields:'alignment'}}];
+      {updateParagraphStyle:{objectId:e.id,...selector,textRange:{type:'ALL'},style:{alignment:({left:'START',center:'CENTER',right:'END'})[e.align??'left'],lineSpacing:125,spaceAbove:{magnitude:0,unit:'PT'},spaceBelow:{magnitude:0,unit:'PT'}},fields:'alignment,lineSpacing,spaceAbove,spaceBelow'}}];
   }
   for(const s of scene.slides) {
-    if (s.notes !== undefined) throw new Error('Scene notes are not supported by this Google compiler; preserve/add them through native tools');
     const native=deck.slides.find(p=>p.objectId===s.id);
     if(native) {
       if(scene.mode==='new')throw new Error('New mode cannot replace existing slides');
@@ -52,7 +51,7 @@ export function compileGoogleScene(scene,deck) {
     for(const e of s.elements) {
       if(existing.has(e.id))throw new Error('New object ID collides with a native object');
       if(e.type==='image') {
-        if(!/^https:\/\//.test(e.src))throw new Error('Google image objects need a public HTTPS URL; use native asset insertion for local images');
+        if(!/^https:\/\//.test(e.src)&&!(localImages&&e.src.startsWith('/')))throw new Error('Google image objects need HTTPS or an explicit local image sidecar transport');
         if((e.fit??'contain')==='cover')throw new Error('Google cover crops require native crop controls; no silent approximation');
         requests.push({createImage:{objectId:e.id,url:e.src,elementProperties:props(s,e)}});
         requests.push({updatePageElementAltText:{objectId:e.id,title:e.alt,description:e.alt}});
@@ -74,41 +73,73 @@ export function compileGoogleScene(scene,deck) {
         e.rows.forEach((row,rowIndex)=>row.forEach((value,columnIndex)=>{if(value)requests.push(...text({...e,text:value,bold:rowIndex===0,color:rowIndex===0?(e.headerColor??e.color??'text'):(e.color??'text')}, {rowIndex,columnIndex}));requests.push({updateTableCellProperties:{objectId:e.id,tableRange:{location:{rowIndex,columnIndex},rowSpan:1,columnSpan:1},tableCellProperties:{tableCellBackgroundFill:{solidFill:{color:solid(rowIndex===0?(e.headerFill??'muted'):(e.bodyFill??'background')),alpha:1}},contentAlignment:'MIDDLE'},fields:'tableCellBackgroundFill,contentAlignment'}});}));
       } else {
         requests.push({createShape:{objectId:e.id,shapeType:e.type==='text'?'TEXT_BOX':e.shape==='ellipse'?'ELLIPSE':'RECTANGLE',elementProperties:props(s,e)}});
-        requests.push({updateShapeProperties:{objectId:e.id,shapeProperties:{shapeBackgroundFill:e.fill?{solidFill:{color:solid(e.fill),alpha:1}}:{propertyState:'NOT_RENDERED'},outline:{propertyState:'NOT_RENDERED'},contentAlignment:'MIDDLE'},fields:'shapeBackgroundFill,outline,contentAlignment'}});
+        requests.push({updateShapeProperties:{objectId:e.id,shapeProperties:{shapeBackgroundFill:e.fill?{solidFill:{color:solid(e.fill),alpha:1}}:{propertyState:'NOT_RENDERED'},outline:{propertyState:'NOT_RENDERED'},contentAlignment:'MIDDLE',autofit:{autofitType:'NONE'}},fields:'shapeBackgroundFill,outline,contentAlignment,autofit.autofitType'}});
         if(e.text)requests.push(...text(e));
       }
     }
   }
-  return {presentationId:deck.presentationId,requests,writeControl:{requiredRevisionId:deck.revisionId},sceneDigest:digest(scene),templateDigest:digest(deck),limitations,status:'unreviewed draft'};
+  return {presentationId:deck.presentationId,requests,writeControl:{requiredRevisionId:deck.revisionId},sceneDigest:digest(scene),templateDigest:digest(deck),limitations,localImages:scene.slides.flatMap(s=>s.elements.filter(e=>e.type==='image'&&!/^https:/.test(e.src)).map(e=>e.src)),notesPending:scene.slides.filter(s=>s.notes!==undefined).map(s=>s.id),status:'unreviewed draft'};
 }
 export async function applyGoogleScene(scene,deck,deps={}) {
   const plan=compileGoogleScene(scene,deck),current=await snapshotDeck(plan.presentationId,deps);
   if(current.revisionId!==deck.revisionId)throw new Error('Native deck changed; refresh, rebuild and inspect before applying');
   try{await(await request(`https://slides.googleapis.com/v1/presentations/${plan.presentationId}:batchUpdate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requests:plan.requests,writeControl:plan.writeControl})},deps)).json();}
   catch(error){throw new Error(`${error.message} Outcome may be uncertain. Inspect Slides before retrying; no automatic retry.`);}
-  const after=await snapshotDeck(plan.presentationId,deps),afterIds=idsIn(after);
+  let after=await snapshotDeck(plan.presentationId,deps);
+  const notes=compileGoogleNotes(scene,after);
+  if(notes.requests.length){
+    try{await(await request(`https://slides.googleapis.com/v1/presentations/${plan.presentationId}:batchUpdate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requests:notes.requests,writeControl:notes.writeControl})},deps)).json();}
+    catch(error){throw new Error(`${error.message} Content was sent; notes may be uncertain. Inspect before retrying.`);}
+    after=await snapshotDeck(plan.presentationId,deps);
+  }
   verifyGoogleSceneReadback(scene,after);
-  const replaced=new Set(scene.slides.flatMap(s=>s.replace??[]));
-  for(const s of deck.slides){const page=after.slides.find(x=>x.objectId===s.objectId);if(!page||digest(canonical(s.slideProperties))!==digest(canonical(page.slideProperties)))throw new Error('Update sent but slide metadata preservation failed; inspect native deck');for(const e of s.pageElements??[])if(!replaced.has(e.objectId)){const item=page.pageElements?.find(x=>x.objectId===e.objectId);if(!item||digest(canonical(e))!==digest(canonical(item)))throw new Error('Update sent but preserved content/style changed; inspect native deck');}}
+  verifyGooglePreservation(scene,deck,after);
   return {presentationId:after.presentationId,revisionId:after.revisionId,url:`https://docs.google.com/presentation/d/${after.presentationId}/edit`,limitations:plan.limitations,status:'native content and geometry read back; visual review required'};
 }
 
 // Verify content as well as kind. The API can refactor size/transform pairs.
 export function verifyGoogleSceneReadback(scene,after) {
+  validateScene(scene);
   const t=themeFor(scene),pt=d=>d?.unit==='PT'?d.magnitude:d?.unit==='EMU'?d.magnitude/12700:NaN,close=(a,b)=>Number.isFinite(a)&&Math.abs(a-b)<=1;
   const fail=detail=>{throw new Error(`Update sent but native ${detail} readback failed; inspect native deck`);};
   const content=o=>(o?.textElements??[]).map(e=>e.textRun?.content??'').join('').replace(/\n$/,'');
   const checkText=(native,expected)=>{if(content(native)!==(expected.text??''))fail('text content');const runs=(native?.textElements??[]).filter(x=>x.textRun?.content?.trim()).map(x=>x.textRun);for(const r of runs)if(r.style?.fontFamily!==t.font||!close(pt(r.style?.fontSize),expected.fontSize??(expected.role==='title'?t.titleSize:t.bodySize)))fail('text typography');};
-  for(const s of scene.slides)for(const e of s.elements){const item=after.slides.find(x=>x.objectId===s.id)?.pageElements?.find(x=>x.objectId===e.id),kind=({text:'shape',shape:'shape',line:'line',table:'table',image:'image',chart:'sheetsChart'})[e.type];if(!item?.[kind])fail('object type');
+  for(const s of scene.slides){if(s.notes!==undefined&&(!notesShape(after,s.id)?.shape||content(notesShape(after,s.id)?.shape?.text)!==s.notes))fail('speaker notes');for(const e of s.elements){const item=after.slides.find(x=>x.objectId===s.id)?.pageElements?.find(x=>x.objectId===e.id),kind=({text:'shape',shape:'shape',line:'line',table:'table',image:'image',chart:'sheetsChart'})[e.type];if(!item?.[kind])fail('object type');
     const tr=item.transform??{},w=pt(item.size?.width),h=pt(item.size?.height),tx=tr.unit==='EMU'?tr.translateX/12700:tr.translateX,ty=tr.unit==='EMU'?tr.translateY/12700:tr.translateY;
     if(e.type==='table'){
       if(!close(tx,e.x)||!close(ty,e.y))fail('table position');const table=item.table;if(table.rows!==e.rows.length||table.columns!==e.rows[0].length)fail('table dimensions');
       const widths=e.columnWidths??e.rows[0].map(()=>e.width/e.rows[0].length);widths.forEach((width,i)=>{if(!close(pt(table.tableColumns?.[i]?.columnWidth),width))fail('table column width');});
       let totalHeight=0;e.rows.forEach((row,ri)=>{const r=table.tableRows?.[ri];totalHeight+=pt(r?.rowHeight);row.forEach((value,ci)=>{const cell=r?.tableCells?.find(c=>c.location?.rowIndex===ri&&c.location?.columnIndex===ci)??r?.tableCells?.[ci];checkText(cell?.text,{...e,text:value});});});if(!Number.isFinite(totalHeight)||totalHeight>e.height+1)fail('table overflow');
     }else{
-      const sx=tr.scaleX??1,sy=tr.scaleY??1;if(tr.shearX||tr.shearY||!close(tx+Math.min(0,w*sx),e.x)||!close(ty+Math.min(0,h*sy),e.y)||!close(Math.abs(w*sx),e.width)||!close(Math.abs(h*sy),e.height))fail('element geometry');
+      const sx=tr.scaleX??1,sy=tr.scaleY??1,contain=['image','chart'].includes(e.type),fit=Math.min(e.width/w,e.height/h),expected=contain?{x:e.x+(e.width-w*fit)/2,y:e.y+(e.height-h*fit)/2,width:w*fit,height:h*fit}:e;
+      if(tr.shearX||tr.shearY||!close(tx+Math.min(0,w*sx),expected.x)||!close(ty+Math.min(0,h*sy),expected.y)||!close(Math.abs(w*sx),expected.width)||!close(Math.abs(h*sy),expected.height))fail(`element geometry (${e.id})`);
+      if(e.type==='image'&&(item.title!==e.alt||item.description!==e.alt))fail('image accessibility');if(e.type==='chart'&&(item.sheetsChart.spreadsheetId!==e.sheetsChart?.spreadsheetId||item.sheetsChart.chartId!==e.sheetsChart?.chartId))fail('chart source link');
       if(e.text)checkText(item.shape.text,e);if(e.type==='line'&&(Math.sign(sx)!==(e.flipH?-1:1)||Math.sign(sy)!==(e.flipV?-1:1)))fail('line direction');
     }
   }
-  return {status:'content and geometry verified; native visual review required'};
+  }
+  return {status:'content, geometry, notes, image alt text and chart links verified; native visual review required'};
+}
+
+function notesShape(deck,slideId){const slide=deck.slides.find(s=>s.objectId===slideId),page=slide?.slideProperties?.notesPage,id=page?.notesProperties?.speakerNotesObjectId;return page?.pageElements?.find(e=>e.objectId===id);}
+export function compileGoogleNotes(scene,deck){
+  validateScene(scene);validId(deck.presentationId);if(!deck.revisionId)throw new Error('Notes need a fresh native revision');
+  const requests=[];for(const slide of scene.slides.filter(s=>s.notes!==undefined)){
+    const item=notesShape(deck,slide.id);if(!item?.shape)throw new Error('Read back the native speaker notes object before writing notes');
+    const current=(item.shape.text?.textElements??[]).map(e=>e.textRun?.content??'').join('').replace(/\n$/,'');
+    if(current.length)requests.push({deleteText:{objectId:item.objectId,textRange:{type:'ALL'}}});
+    if(slide.notes)requests.push({insertText:{objectId:item.objectId,insertionIndex:0,text:slide.notes}});
+  }
+  return {presentationId:deck.presentationId,requests,writeControl:{requiredRevisionId:deck.revisionId},sceneDigest:digest(scene)};
+}
+export function verifyGooglePreservation(scene,before,after){
+  if(before.presentationId!==after.presentationId)throw new Error('Native preservation needs the same working-copy presentation');
+  const replaced=new Set(scene.slides.flatMap(s=>s.replace??[]));
+  for(const slide of before.slides){const page=after.slides.find(s=>s.objectId===slide.objectId);if(!page)throw new Error('Native slide preservation failed');
+    const targeted=scene.slides.find(s=>s.id===slide.objectId&&s.notes!==undefined);
+    const metadata=s=>{const copy=structuredClone(s.slideProperties);if(targeted){const item=notesShape({slides:[s]},s.objectId);const own=copy?.notesPage?.pageElements?.find(e=>e.objectId===item?.objectId);if(own?.shape)delete own.shape.text;}return canonical(copy);};
+    if(digest(metadata(slide))!==digest(metadata(page))||digest(canonical(slide.pageProperties))!==digest(canonical(page.pageProperties)))throw new Error('Native slide metadata preservation failed');
+    for(const e of slide.pageElements??[])if(!replaced.has(e.objectId)){const item=page.pageElements?.find(x=>x.objectId===e.objectId);if(!item||digest(canonical(e))!==digest(canonical(item)))throw new Error('Native preserved content/style changed');}
+  }
+  return {preserved:true,slides:before.slides.length};
 }

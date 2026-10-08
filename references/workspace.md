@@ -24,3 +24,9 @@ and accepts bounded JSON operations. It does not expose arbitrary file reads or
 shell execution. Google apply/upload remains an explicit CLI operation within
 authorized scope. The browser's previews approximate native metrics; charts show
 their data contract until target rendering is available.
+
+Builds also write quality reports. Compiled workspaces pin the design report
+through `workspace init --design-report FILE` and require current structured
+critique; follow [quality](quality.md). The repair packet includes targeted
+measurements and review questions. A content critique does not replace viewing
+native slides.

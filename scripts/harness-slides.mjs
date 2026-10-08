@@ -7,10 +7,10 @@ import { pathToFileURL } from 'node:url';
 import { json, saveJson, digest } from './lib/common.mjs';
 import { contract, coverage, sceneFindings } from './lib/scene.mjs';
 import { pptxTool } from './lib/presentation-tools.mjs';
-import { initWorkspace, loadWorkspace, saveScene, restoreVersion, history, buildWorkspace, applyWorkspace, workspaceStatus } from './lib/workspace.mjs';
+import { initWorkspace, loadWorkspace, saveScene, restoreVersion, history, buildWorkspace, applyWorkspace, workspaceQuality, recordWorkspaceCritique, workspaceStatus } from './lib/workspace.mjs';
 import { startStudio } from './lib/studio.mjs';
 import { prepareReview, markReview } from './lib/slide-review.mjs';
-import { snapshotDeck, copyGoogleDeck, googleSession } from './lib/google-slides.mjs';
+import { snapshotDeck, copyGoogleDeck, googleSession, compileGoogleScene, compileGoogleNotes, verifyGoogleSceneReadback, verifyGooglePreservation } from './lib/google-slides.mjs';
 import { request, checkDriveAccess, probeGooglePresentation, exportDeck, importDeck } from './google-drive-deck.mjs';
 import { renderPptxScene, composePptx } from './lib/pptx-render.mjs';
 import { install } from './install.mjs';
@@ -20,13 +20,14 @@ const exec=promisify(execFile);
 export const help=`Harness Slides · brand-neutral editable decks
 Usage: node scripts/harness-slides.mjs COMMAND ACTION [options]
 
-  deck contract [--id COMPONENT] | inspect --file plan.json | compile --file plan.json [--brand brand-contract.json] --output NEW_DIR
+  deck contract [--id COMPONENT] | inspect --file plan.json | compile --file plan.json [--brand brand-contract.json] [--fonts fonts.json] --output NEW_DIR
   scene contract | validate --file scene.json [--required evidence.json]
-  workspace init --project NEW_DIR --file scene.json [--format google-slides|pptx] [--template snapshot.json] [--source deck.pptx] [--required evidence.json]
+  workspace init --project NEW_DIR --file scene.json [--format google-slides|pptx] [--template snapshot.json] [--source deck.pptx] [--required evidence.json] [--design-report design-report.json] [--fonts fonts.json]
   workspace status|history|build --project DIR
   workspace save --project DIR --file scene.json --expected DIGEST [--note TEXT]
   workspace restore --project DIR --version v000001 --expected DIGEST
   workspace repair --project DIR --slide ID
+  workspace quality --project DIR [--slide ID] | critique --project DIR --assessment review.json
   workspace apply --project DIR [--dry-run]
   studio --project DIR [--port N]
   pptx inspect --file deck.pptx [--slide N] [--object ID] [--json]
@@ -39,6 +40,8 @@ Usage: node scripts/harness-slides.mjs COMMAND ACTION [options]
   layouts [--query WORDS] [--id ID] [--limit N]
   google snapshot --file-id ID --output snapshot.json
   google copy --file-id ID --name TITLE
+  google compile | notes --file scene.json --template snapshot.json --output plan.json [--local-images]
+  google verify --file scene.json --template after.json [--source before.json]
   google previews --file-id ID --output NEW_DIR
   drive check | export --file-id ID --output deck.pptx | import --file deck.pptx [--name TITLE] [--folder-id ID]
   review --file deck.pptx | --previews native-previews.json --output DIR
@@ -77,14 +80,14 @@ export async function nativePreviews({fileId,output},deps={}) {
 }
 export async function main(argv=process.argv.slice(2)) {
   const {values:v,positionals:p}=parseArgs({args:argv,allowPositionals:true,options:Object.fromEntries([
-    'brand','file','after','allow','plan','output','project','format','template','source','required','expected','note','version','slide','object','previews','mark','revision','status','port','file-id','folder-id','name','home','shared','query','id','limit','soffice','pdftoppm','pdfinfo','prompt-file','model'
-  ].map(k=>[k,{type:'string'}]).concat([['reference',{type:'string',multiple:true}]],['help','json','dry-run','refresh','google-check'].map(k=>[k,{type:'boolean'}])))});
+    'brand','file','after','allow','plan','output','project','format','template','source','required','expected','note','version','slide','object','previews','mark','revision','status','port','file-id','folder-id','name','home','shared','query','id','limit','soffice','pdftoppm','pdfinfo','prompt-file','model','fonts','design-report','assessment'
+  ].map(k=>[k,{type:'string'}]).concat([['reference',{type:'string',multiple:true}]],['help','json','dry-run','refresh','google-check','local-images'].map(k=>[k,{type:'boolean'}])))});
   const [command,action,...extra]=p;
   if(!command||v.help||command==='help'){console.log(help);return;}
   if(extra.length)throw new Error('Too many actions');
   const single=['studio','review','doctor','install','layouts'];
   if(single.includes(command)&&action)throw new Error('This command has no action argument');
-  const allowed={deck:{contract:['id'],inspect:['file'],compile:['file','brand','output']},setup:{images:[]},images:{status:[],check:[],generate:['project','id','prompt-file','output','reference','model'],download:['project','id']},scene:{contract:[],validate:['file','required']},workspace:{init:['project','file','format','template','source','required','brand'],save:['project','file','expected','note'],restore:['project','version','expected'],build:['project'],history:['project'],status:['project'],repair:['project','slide'],apply:['project','dry-run']},pptx:{inspect:['file','slide','object','json'],patch:['file','plan','output'],compare:['brand','file','after','allow'],render:['file','output','brand'],compose:['plan','output']},template:{inspect:['file','output'],choose:['file','id','query','format']},google:{snapshot:['file-id','output'],copy:['file-id','name'],previews:['file-id','output']},drive:{check:[],export:['file-id','output'],import:['file','name','folder-id']},icons:{copy:['plan']},studio:['project','port'],review:['file','previews','output','refresh','mark','revision','note','status','soffice','pdftoppm','pdfinfo'],doctor:['google-check','file-id'],install:['dry-run','home','shared'],layouts:['query','id','limit']}[command];
+  const allowed={deck:{contract:['id'],inspect:['file'],compile:['file','brand','output','fonts']},setup:{images:[]},images:{status:[],check:[],generate:['project','id','prompt-file','output','reference','model'],download:['project','id']},scene:{contract:[],validate:['file','required']},workspace:{init:['project','file','format','template','source','required','brand','design-report','fonts'],save:['project','file','expected','note'],restore:['project','version','expected'],build:['project'],history:['project'],status:['project'],repair:['project','slide'],quality:['project','slide'],critique:['project','assessment'],apply:['project','dry-run']},pptx:{inspect:['file','slide','object','json'],patch:['file','plan','output'],compare:['brand','file','after','allow'],render:['file','output','brand'],compose:['plan','output']},template:{inspect:['file','output'],choose:['file','id','query','format']},google:{compile:['file','template','output','local-images'],notes:['file','template','output'],verify:['file','template','source'],snapshot:['file-id','output'],copy:['file-id','name'],previews:['file-id','output']},drive:{check:[],export:['file-id','output'],import:['file','name','folder-id']},icons:{copy:['plan']},studio:['project','port'],review:['file','previews','output','refresh','mark','revision','note','status','soffice','pdftoppm','pdfinfo'],doctor:['google-check','file-id'],install:['dry-run','home','shared'],layouts:['query','id','limit']}[command];
   const flags=Array.isArray(allowed)?allowed:allowed?.[action];
   if(!flags)throw new Error('Unknown command/action; run --help');
   for(const key of Object.keys(v))if(!flags.includes(key))throw new Error(`--${key} is not valid for this command`);
@@ -95,14 +98,16 @@ export async function main(argv=process.argv.slice(2)) {
   else if(command==='setup'||command==='images') { const { images }=await import('./lib/images.mjs');result=await images(command==='setup'?'setup':action,{project:v.project,id:v.id,promptFile:v['prompt-file'],output:v.output,references:v.reference,model:v.model}); }
   else if(command==='scene'&&action==='validate'){const s=await json(v.file);result={coverage:coverage(s,v.required?await json(v.required):[]),findings:sceneFindings(s)};}
   else if(command==='workspace') {
-    if(action==='init')result=await initWorkspace({root:v.project,scene:await json(v.file),format:v.format,template:v.template,source:v.source,requiredSources:v.required?await json(v.required):[],brandContract:v.brand?await json(v.brand):undefined,base:dirname(resolve(v.file))});
+    if(action==='init')result=await initWorkspace({root:v.project,scene:await json(v.file),format:v.format,template:v.template,source:v.source,requiredSources:v.required?await json(v.required):[],brandContract:v.brand?await json(v.brand):undefined,designReport:v['design-report']?await json(v['design-report']):undefined,fonts:v.fonts?await json(v.fonts):undefined,base:dirname(resolve(v.file))});
     else if(action==='save')result=await saveScene({root:v.project,scene:await json(v.file),expectedDigest:v.expected,note:v.note});
     else if(action==='restore')result=await restoreVersion({root:v.project,id:v.version,expectedDigest:v.expected});
     else if(action==='build')result=await buildWorkspace({root:v.project});
     else if(action==='history')result=await history(resolve(v.project));
     else if(action==='status')result=await workspaceStatus(v.project);
     else if(action==='apply')result=await applyWorkspace({root:v.project,dryRun:v['dry-run']});
-    else if(action==='repair'){const w=await loadWorkspace(v.project),slide=w.scene.slides.find(s=>s.id===v.slide);if(!slide)throw new Error('Unknown slide');result={version:w.current.id,expectedDigest:w.current.sceneDigest,slide,findings:sceneFindings(w.scene).filter(f=>f.slide===slide.id),next:'Patch only selected objects; save with expected digest, rebuild and render'};}
+    else if(action==='quality')result=await workspaceQuality(v.project,v.slide);
+    else if(action==='critique')result=await recordWorkspaceCritique({root:v.project,assessment:await json(v.assessment)});
+    else if(action==='repair'){const w=await loadWorkspace(v.project),slide=w.scene.slides.find(s=>s.id===v.slide);if(!slide)throw new Error('Unknown slide');result={version:w.current.id,expectedDigest:w.current.sceneDigest,slide,quality:await workspaceQuality(v.project,slide.id),next:'Patch only selected objects; save with expected digest, rebuild and render'};}
     else throw new Error('Unknown workspace action');
   } else if(command==='studio') {
     const studio=await startStudio({root:v.project,port:v.port?Number(v.port):0});console.log(`Harness Slides Studio: ${studio.url}\nPress Ctrl-C to stop.`);for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>studio.close().then(()=>process.exit()));return;
@@ -117,7 +122,9 @@ export async function main(argv=process.argv.slice(2)) {
     if(action==='inspect'){const d=await pptxTool('inspect',[v.file]);const c={version:1,sourceSha256:d.sha256,canvas:d.size,observedTokens:d.observedTokens,layouts:d.layouts,slides:d.slides.map(({id,number,title,objects,layoutPart})=>({id,number,title,objects,layoutPart})),authority:'Observed native source; a brand add-on supplies usage policy'};await saveJson(v.output,c);result={output:v.output,layouts:c.layouts.length,slides:c.slides.length};}
     else if(action==='choose')result=chooseTemplate(await json(v.file),{id:v.id,query:v.query,format:v.format});else throw new Error('Unknown template action');
   } else if(command==='google') {
-    if(action==='snapshot'){const deck=await snapshotDeck(v['file-id'],await googleSession());await saveJson(v.output,deck);result={output:v.output,slides:deck.slides.length,revision:deck.revisionId};}
+    if(['compile','notes'].includes(action)){const scene=await json(v.file),deck=await json(v.template);const plan=action==='compile'?compileGoogleScene(scene,deck,{localImages:v['local-images']}):compileGoogleNotes(scene,deck);await saveJson(v.output,plan);result={output:v.output,requests:plan.requests.length,notesPending:plan.notesPending,localImages:plan.localImages,limitations:plan.limitations};}
+    else if(action==='verify'){const scene=await json(v.file),after=await json(v.template);result={...verifyGoogleSceneReadback(scene,after),...(v.source?verifyGooglePreservation(scene,await json(v.source),after):{})};}
+    else if(action==='snapshot'){const deck=await snapshotDeck(v['file-id'],await googleSession());await saveJson(v.output,deck);result={output:v.output,slides:deck.slides.length,revision:deck.revisionId};}
     else if(action==='copy')result=await copyGoogleDeck(v['file-id'],v.name,await googleSession());
     else if(action==='previews')result=await nativePreviews({fileId:v['file-id'],output:v.output});else throw new Error('Unknown Google action');
   } else if(command==='layouts')result=searchRecipes({query:v.query,id:v.id,limit:v.limit?Number(v.limit):3});

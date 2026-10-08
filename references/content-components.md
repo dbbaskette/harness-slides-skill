@@ -22,8 +22,9 @@ text, shapes, lines, tables and chart data using the selected brand's type roles
 colors and safe boxes. Unsupported content fields fail rather than disappear.
 Use a custom scene or native template when these components don't fit the content.
 
-`design-report.json` retains intent, evidence, asset use, hashes and fit estimates.
-Warnings require inspection and correction as needed; estimated fit is not proof.
+`design-report.json` retains intent, evidence, asset use, hashes and design choices.
+`quality-report.json` adds exact-font screening and structured review prompts;
+follow [quality](quality.md). Warnings require native inspection; metrics are not proof.
 Rewrite within the user's scope, split content or choose another composition
 before shrinking text. Metrics require context and a qualifier. Image captions
 and chart sources remain visible. Do not invent evidence to fill a template.
@@ -39,7 +40,7 @@ or initialize a workspace with both. Native master artwork comes from the actual
 brand template, not a re-created logo or theme approximation:
 
 ```sh
-node scripts/harness-slides.mjs workspace init --project WORKSPACE --file NEW_DIR/scene.json --brand NEW_DIR/brand-contract.json --format pptx
+node scripts/harness-slides.mjs workspace init --project WORKSPACE --file NEW_DIR/scene.json --brand NEW_DIR/brand-contract.json --design-report NEW_DIR/design-report.json --format pptx
 node scripts/harness-slides.mjs workspace build --project WORKSPACE
 ```
 
@@ -48,5 +49,5 @@ needed, then use the existing Google workspace flow. Local images need native
 insertion or an authorized public HTTPS asset; charts need a linked Sheets chart.
 Google tables use native cell padding and minimum row heights; readback checks
 content, position, widths and overflow. Diagram edges are editable lines, without
-automatic attachment when a node moves. Notes still require native Google tools.
+automatic attachment when a node moves. Notes use a staged revision-controlled native batch.
 Follow [review](review.md) for target rendering and visual verification.

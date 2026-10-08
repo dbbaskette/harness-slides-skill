@@ -26,7 +26,7 @@ test('PPTX scene produces native text, shapes, table cells, notes, chart XML and
   assert.equal(result.slides,3);assert.equal(result.status,'unreviewed draft');
   assert.ok(result.inventory.slides[0].objects.find(o=>o.name==='story_title'&&o.text.includes('scattered input')));
   assert.ok(result.inventory.slides[1].objects.find(o=>o.type==='graphicFrame'&&o.text.includes('Polish')));
-  const {stdout:tableXml}=await exec('unzip',['-p',output,'ppt/slides/slide2.xml']);assert.doesNotMatch(tableXml,/anchor="mid"/);assert.match(tableXml,/anchor="ctr"/);
+  const {stdout:tableXml}=await exec('unzip',['-p',output,'ppt/slides/slide2.xml']);assert.doesNotMatch(tableXml,/anchor="mid"/);assert.match(tableXml,/anchor="ctr"/);assert.match(tableXml,/<a:spcPct val="125000"/);
   const parts=Object.keys(result.inventory.parts);assert.ok(parts.some(p=>/^ppt\/charts\/chart\d+\.xml$/.test(p)));assert.ok(parts.some(p=>p.endsWith('.xlsx')));assert.ok(parts.some(p=>p.startsWith('ppt/notesSlides/notesSlide')));
   assert.equal(parts.some(p=>/^ppt\/media\/.+/.test(p)),false);
   await assert.rejects(()=>renderPptxScene(scene,output),/EEXIST/);

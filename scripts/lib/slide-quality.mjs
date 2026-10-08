@@ -1,0 +1,52 @@
+import {validateScene,themeFor,sceneFindings} from './scene.mjs';
+import {resolveFont,measureText} from './text-metrics.mjs';
+import {digest,json} from './common.mjs';
+
+const criteria=['title-support','visual-relationship','reading-order','technical-fit'];
+const overlap=(a,b)=>Math.min(a.x+a.width,b.x+b.width)-Math.max(a.x,b.x)>1&&Math.min(a.y+a.height,b.y+b.height)-Math.max(a.y,b.y)>1;
+const visible=e=>e.type==='table'?e.rows.flat().join(' '):e.type==='chart'?e.series.flatMap(s=>s.values).join(' '):e.text??'';
+const numbers=s=>[...s.matchAll(/(?<![\p{L}\p{N}])(-?\d+(?:[.,]\d+)*)(\s*%)?/gu)].map(m=>({value:Number(m[1].replace(/,/g,'')),percent:Boolean(m[2])}));
+export function validateDesignReport(report,scene,{initial=false}={}) {
+  if(!report||report.schema!==1||!Array.isArray(report.choices)||!Array.isArray(report.intentionalOverlaps??[]))throw new Error('Use a compiler design report');
+  if(initial&&report.sceneDigest!==digest(scene))throw new Error('Design report belongs to another scene');
+  if(new Set(report.choices.map(x=>x.id)).size!==report.choices.length||report.choices.length!==scene.slides.length)throw new Error('Design choices must cover every slide exactly once');
+  for(const s of scene.slides){const choice=report.choices.find(c=>c.id===s.id);if(!choice?.component||!choice.intent?.takeaway?.trim()||!choice.intent?.relationship?.trim()||!choice.intent?.rationale?.trim()||!Array.isArray(choice.intent.evidence)||!choice.intent.evidence.length||choice.intent.evidence.some(x=>!s.sources.includes(x)))throw new Error('Design intent is stale or lacks source coverage');}
+  for(const allowed of report.intentionalOverlaps??[]){const s=scene.slides.find(s=>s.id===allowed.slide);if(!s||!s.elements.some(e=>e.id===allowed.front)||!s.elements.some(e=>e.id===allowed.back)||!allowed.reason?.trim())throw new Error('Intentional overlap must identify actual objects and its purpose');}
+  return report;
+}
+export async function auditSceneQuality(scene,{designReport,fonts,artifactDigest,resolve=resolveFont}={}) {
+  validateScene(scene);if(fonts&&(!fonts||typeof fonts!=='object'||Array.isArray(fonts)||Object.keys(fonts).some(k=>!['regular','bold'].includes(k))))throw new Error('Fonts use regular/bold records');if(designReport)validateDesignReport(designReport,scene);
+  const theme=themeFor(scene),cache=new Map(),fontEvidence=[],measurements=[],findings=sceneFindings(scene),prompts=[];
+  const fontFor=async bold=>{const key=bold?'bold':'regular';if(!cache.has(key)){const spec=fonts?.[key];if(spec&&(!spec.path||Object.keys(spec).some(k=>!['path','sha256'].includes(k))))throw new Error('Fonts use regular/bold {path,sha256?} records');const result=await resolve(theme.font,{bold,file:spec?.path,expectedHash:spec?.sha256});cache.set(key,result);fontEvidence.push({weight:key,...result.evidence});}return cache.get(key);};
+  for(const slide of scene.slides) {
+    const choice=designReport?.choices.find(c=>c.id===slide.id),textObjects=slide.elements.filter(e=>e.text||e.type==='table');
+    for(const e of textObjects) {
+      const cells=e.type==='table'?e.rows.flatMap((row,ri)=>row.map((text,ci)=>({text,bold:ri===0,cell:{row:ri,column:ci},width:(e.columnWidths??row.map(()=>e.width/row.length))[ci],height:e.height/e.rows.length,padding:e.padding??3.6}))):[{text:e.text,bold:e.bold??false,width:e.width,height:e.height,padding:3.6}];
+      for(const cell of cells){const {font}=await fontFor(cell.bold);if(!font){findings.push({slide:slide.id,object:e.id,...(cell.cell?{cell:cell.cell}:{}),severity:'warn',code:'font-unavailable',detail:`Exact ${theme.font} ${cell.bold?'bold':'regular'} unavailable; supply the font or verify in the target editor`});continue;}
+        const metrics=measureText(cell.text,{font,fontSize:e.fontSize??(e.role==='title'?theme.titleSize:theme.bodySize),width:cell.width,height:cell.height,padding:cell.padding});
+        measurements.push({slide:slide.id,object:e.id,...(cell.cell?{cell:cell.cell}:{}),...metrics});
+        if(metrics.missingGlyphs.length)findings.push({slide:slide.id,object:e.id,severity:'warn',code:'missing-glyphs',detail:'Font lacks characters; fallback metrics cannot certify fit',characters:metrics.missingGlyphs});
+        if(metrics.overflowHeight>.5||metrics.overflowWidth>.5)findings.push({slide:slide.id,object:e.id,...(cell.cell?{cell:cell.cell}:{}),severity:'warn',code:'measured-text-overflow',detail:'Allocate more space, split or refine wording; do not silently shrink type',metrics});
+        if(metrics.tabStopsEstimated)findings.push({slide:slide.id,object:e.id,severity:'warn',code:'tab-stop-review',detail:'Tab stops require native review; measurements use four spaces'});
+      }
+    }
+    const content=slide.elements.filter(e=>e.text||['table','chart','image'].includes(e.type));
+    for(let i=0;i<content.length;i++)for(let j=i+1;j<content.length;j++){const a=content[i],b=content[j];if(!overlap(a,b))continue;const allowed=(designReport?.intentionalOverlaps??[]).some(x=>x.slide===slide.id&&((x.front===a.id&&x.back===b.id)||(x.front===b.id&&x.back===a.id)));if(!allowed)findings.push({slide:slide.id,object:a.id,relatedObjects:[b.id],severity:'warn',code:'content-collision',detail:'Content boxes overlap; repair or explicitly justify the intended annotation'});}
+    const title=slide.elements.filter(e=>e.role==='title'||e.text===slide.title),body=slide.elements.filter(e=>!title.includes(e)).map(visible).join(' '),bodyNumbers=numbers(body);
+    for(const value of numbers(slide.title))if(!bodyNumbers.some(n=>n.value===value.value&&n.percent===value.percent))findings.push({slide:slide.id,object:title[0]?.id,severity:'warn',code:'title-value-needs-support',detail:`Title value ${value.value}${value.percent?'%':''} lacks matching visible support; check the source, denominator and caveat`});
+    const reviewCriteria=[...criteria];if(designReport){const index=designReport.choices.findIndex(x=>x.id===slide.id);if(index>=2&&[index-1,index-2].every(i=>designReport.choices[i].component===choice.component))reviewCriteria.push('repetition-justification');}
+    prompts.push({slide:slide.id,title:slide.title,intent:choice?.intent??null,component:choice?.component??null,sources:slide.sources,objects:slide.elements.map(e=>e.id),criteria:reviewCriteria.map(id=>({id,question:({'title-support':'Does the title follow from the cited evidence, including units and caveats?','visual-relationship':'Does this treatment communicate the intended relationship?','reading-order':'Is the takeaway and supporting evidence easy to follow?','technical-fit':'Do native rendering, fonts, spacing and content bounds resolve the technical findings?','repetition-justification':'Does similar content justify this repeated composition? Do not manufacture variety.'})[id]}))});
+  }
+  const report={schema:1,sceneDigest:digest(scene),designDigest:designReport?digest({schema:designReport.schema,sceneDigest:designReport.sceneDigest,choices:designReport.choices,intentionalOverlaps:designReport.intentionalOverlaps??[],brandRevision:designReport.brandRevision,planDigest:designReport.planDigest}):null,...(artifactDigest?{artifactDigest}:{}),fontEvidence,measurements,findings,prompts,status:'screened; structured critique and native visual review required',limitations:['Font-backed measurement is not target-editor layout proof','Source IDs alone do not establish factual support','No automatic shrinking or forced layout alternation']};
+  report.revision=digest(report);return report;
+}
+export function assessCritique(quality,assessment) {
+  const {revision,...payload}=quality;if(revision!==digest(payload))throw new Error('Quality report changed');
+  if(assessment?.schema!==1||assessment.sceneDigest!==quality.sceneDigest||assessment.qualityRevision!==quality.revision||assessment.artifactDigest!==quality.artifactDigest||!Array.isArray(assessment.slides)||assessment.slides.length!==quality.prompts.length||new Set(assessment.slides.map(s=>s.id)).size!==assessment.slides.length)throw new Error('Critique must cover the current quality revision and each slide exactly once');
+  const unresolved=[];
+  for(const prompt of quality.prompts){const s=assessment.slides.find(s=>s.id===prompt.slide);if(!Array.isArray(s?.checks)||s.checks.length!==prompt.criteria.length||new Set(s.checks.map(c=>c.criterion)).size!==s.checks.length)throw new Error('Critique must assess each required criterion exactly once');
+    for(const criterion of prompt.criteria){const c=s.checks.find(c=>c.criterion===criterion.id);if(!c||!['pass','issue','uncertain'].includes(c.status)||!c.reason?.trim()||!Array.isArray(c.objects)||!c.objects.length||c.objects.some(id=>!prompt.objects.includes(id))||!Array.isArray(c.sources)||!c.sources.length||c.sources.some(id=>!prompt.sources.includes(id)))throw new Error('Critique needs a judgment, reason, actual object IDs and retained sources');if(c.status!=='pass')unresolved.push({slide:s.id,criterion:c.criterion,status:c.status,detail:c.reason,objects:c.objects,sources:c.sources});}
+  }
+  return {schema:1,sceneDigest:quality.sceneDigest,qualityRevision:quality.revision,assessment,unresolved,complete:!unresolved.length,status:unresolved.length?'content critique unresolved':'content critique recorded; native visual review still required'};
+}
+export async function qualityFile({file,designReport,fonts}){return auditSceneQuality(await json(file),{designReport:designReport?await json(designReport):undefined,fonts:fonts?await json(fonts):undefined});}

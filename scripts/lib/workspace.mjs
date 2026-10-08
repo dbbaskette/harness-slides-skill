@@ -4,6 +4,7 @@ import { constants } from 'node:fs';
 import { hash, digest, json, saveJson, regularInside } from './common.mjs';
 import { validateScene, renderSceneHtml, sceneFindings, coverage } from './scene.mjs';
 import { compileGoogleScene, applyGoogleScene, snapshotDeck, googleSession } from './google-slides.mjs';
+import {auditSceneQuality,assessCritique,validateDesignReport} from './slide-quality.mjs';
 import { renderPptxScene } from './pptx-render.mjs';
 
 export async function loadWorkspace(root) {
@@ -41,8 +42,8 @@ async function version(root,scene,number,note) {
   catch(error){await rm(dir,{recursive:true,force:true});throw error;}
   return record;
 }
-export async function initWorkspace({root,scene,format='google-slides',template,source,requiredSources=[],brand,brandContract,base=process.cwd()}) {
-  validateScene(scene);root=resolve(root);scene=structuredClone(scene);
+export async function initWorkspace({root,scene,format='google-slides',template,source,requiredSources=[],brand,brandContract,designReport,fonts,base=process.cwd()}) {
+  validateScene(scene);if(designReport)validateDesignReport(designReport,scene,{initial:true});root=resolve(root);scene=structuredClone(scene);
   if(!['google-slides','pptx'].includes(format))throw new Error('Choose google-slides or pptx');
   if(format==='google-slides'&&!template)throw new Error('Google workspaces need a native working-copy snapshot via --template');
   if(!Array.isArray(requiredSources)||requiredSources.some(x=>typeof x!=='string'||!x.trim()))throw new Error('Required sources must be IDs');
@@ -60,6 +61,8 @@ export async function initWorkspace({root,scene,format='google-slides',template,
       manifest.assets[name]=sha;e.src=name;
     }
     if(brandContract){const {checkBrandSources}=await import('./brand-contract.mjs');await checkBrandSources(brandContract);if(brandContract.medium.kind!=='slides')throw new Error('Workspace needs a slide brand contract');manifest.brandContract='inputs/brand-contract.json';manifest.brandRevision=brandContract.revision;await saveJson(join(root,manifest.brandContract),brandContract);}
+    if(designReport){manifest.designReport='inputs/design-report.json';manifest.designReportDigest=digest(designReport);await saveJson(join(root,manifest.designReport),designReport);}
+    if(fonts){manifest.fonts='inputs/fonts.json';manifest.fontsDigest=digest(fonts);await saveJson(join(root,manifest.fonts),fonts);}
     if(template){manifest.template='inputs/template.json';const deck=await json(template);await saveJson(join(root,manifest.template),deck);manifest.templateDigest=digest(deck);}
     if(source){const name=basename(source);if(!/^[\w .-]+\.pptx$/i.test(name))throw new Error('Source must be PPTX');manifest.source=`inputs/${name}`;await copyFile(source,join(root,manifest.source),constants.COPYFILE_EXCL);manifest.sourceSha256=hash(await readFile(join(root,manifest.source)));}
     await saveJson(join(root,'workspace.json'),manifest);await version(root,scene,1,'Initial draft');
@@ -102,7 +105,9 @@ export async function buildWorkspace({root}) {
       const artifacts={};
       if(plan){await saveJson(join(dir,'google-requests.json'),{requests:plan.requests,writeControl:plan.writeControl});artifacts['google-requests.json']=hash(await readFile(join(dir,'google-requests.json')));}
       else {await renderPptxScene(w.scene,join(dir,'deck.pptx'),{base:root,brand:brandContract});artifacts['deck.pptx']=hash(await readFile(join(dir,'deck.pptx')));}
-      const record={version:w.current.id,sceneDigest:w.current.sceneDigest,format:w.manifest.format,artifacts,sourceCoverage,findings:sceneFindings(w.scene),limitations:plan?.limitations??[],status:'unreviewed draft'};
+      const quality=await auditSceneQuality(w.scene,{...await qualityInputs(w),artifactDigest:digest(artifacts)});
+      await saveJson(join(dir,'quality-report.json'),quality);artifacts['quality-report.json']=hash(await readFile(join(dir,'quality-report.json')));
+      const record={version:w.current.id,sceneDigest:w.current.sceneDigest,format:w.manifest.format,artifacts,sourceCoverage,findings:quality.findings,qualityRevision:quality.revision,limitations:plan?.limitations??[],status:'unreviewed draft'};
       await saveJson(join(dir,'build.json'),record);
       return {root,build:dir,...record};
     }catch(error){await rm(dir,{recursive:true,force:true});throw error;}
@@ -113,8 +118,21 @@ export async function verifiedBuild(root) {
   if(w.manifest.brandContract){const contract=await json(await regularInside(w.root,w.manifest.brandContract));if(contract.revision!==w.manifest.brandRevision)throw new Error('Pinned brand contract changed');const {checkBrandSources}=await import('./brand-contract.mjs');await checkBrandSources(contract);}
   if(record.sceneDigest!==w.current.sceneDigest||record.version!==w.current.id)throw new Error('Build does not match current scene');
   for(const [name,sha] of Object.entries(record.artifacts))if(!/^[\w.-]+$/.test(name)||hash(await readFile(await regularInside(dir,name)))!==sha)throw new Error('Built artifact changed; build a new version and review it');
+  await qualityInputs(w);
+  if(record.artifacts['quality-report.json']){const quality=await json(await regularInside(dir,'quality-report.json'));for(const font of quality.fontEvidence??[])if(font.path&&hash(await readFile(font.path))!==font.sha256)throw new Error('Measured font changed; rebuild and review');}
   return {w,dir,record};
 }
+async function qualityInputs(w){const result={};for(const [key,name] of [['designReport','designReportDigest'],['fonts','fontsDigest']])if(w.manifest[key]){const value=await json(await regularInside(w.root,w.manifest[key]));if(digest(value)!==w.manifest[name])throw new Error('Pinned quality input changed');result[key]=value;}return result;}
+export async function workspaceQuality(root,slideId){
+  let report,path=null,unbuilt=false;const w=await loadWorkspace(root);
+  try{await regularInside(w.root,`versions/${w.current.id}/build/build.json`);}catch(error){if(error.code!=='ENOENT')throw error;unbuilt=true;}
+  if(unbuilt)report=await auditSceneQuality(w.scene,await qualityInputs(w));
+  else {const {dir}=await verifiedBuild(root);path=join(dir,'quality-report.json');report=await json(await regularInside(dir,'quality-report.json'));}
+  if(slideId&&!report.prompts.some(s=>s.slide===slideId))throw new Error('Unknown slide');
+  return {report:path,sceneDigest:report.sceneDigest,qualityRevision:report.revision,...(report.artifactDigest?{artifactDigest:report.artifactDigest}:{}),findings:report.findings.filter(f=>!slideId||f.slide===slideId),...(slideId?{measurements:report.measurements.filter(m=>m.slide===slideId),critique:report.prompts.find(s=>s.slide===slideId)}:{slides:report.prompts.map(s=>({id:s.slide,criteria:s.criteria.map(c=>c.id)}))})};
+}
+export async function recordWorkspaceCritique({root,assessment}){root=resolve(root);return lock(root,async()=>{const {dir}=await verifiedBuild(root),quality=await json(await regularInside(dir,'quality-report.json')),receipt=assessCritique(quality,assessment),path=join(dir,'critique.json');try{await regularInside(dir,'critique.json');}catch(e){if(e.code!=='ENOENT')throw e;}await writeFile(path,JSON.stringify(receipt,null,2)+'\n',{mode:0o600});return {path,...receipt};});}
+
 export async function applyWorkspace({root,dryRun=false},deps={}) {
   const {w,dir,record}=await verifiedBuild(root);
   if(w.manifest.format!=='google-slides')throw new Error('Apply is only for native Google Slides');
@@ -143,5 +161,9 @@ export async function workspaceStatus(root) {
     for(const slide of review.slides)if(hash(await readFile(await regularInside(join(checked.dir,'review'),slide.image)))!==slide.imageSha256)throw new Error('Review image changed');
     if(result.ready)result.status='local deck reviewed; verify target editor fidelity';
   }catch(error){result.ready=false;result.next=`Visual review required: ${error.message}`;}
+  if(w.manifest.designReport||checked.record.artifacts['quality-report.json'])try{
+    const quality=await json(await regularInside(checked.dir,'quality-report.json')),saved=await json(await regularInside(checked.dir,'critique.json')),receipt=assessCritique(quality,saved.assessment);
+    result.critiqueComplete=receipt.complete;result.critiqueUnresolved=receipt.unresolved;if(!receipt.complete){result.ready=false;result.status='content critique unresolved';}
+  }catch(error){result.critiqueComplete=false;if(w.manifest.designReport||error.code!=='ENOENT'){result.ready=false;result.status='structured content critique required';result.critiqueNext=error.message;}}
   return result;
 }

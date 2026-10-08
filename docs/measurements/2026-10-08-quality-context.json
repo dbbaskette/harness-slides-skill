@@ -1,0 +1,628 @@
+{
+  "tokenizer": "cl100k_base",
+  "inputDigest": "442a48559c82d8a24d7109e30da0d3fc1393a08c557c05257a15f382fefc6e7a",
+  "files": {
+    "bootstrap/SKILL.md": 385,
+    "SKILL.md": 778,
+    "references/authoring-google.md": 250,
+    "references/authoring-pptx.md": 142,
+    "references/authoring.md": 282,
+    "references/brand-addons.md": 544,
+    "references/content-components.md": 634,
+    "references/design.md": 837,
+    "references/editing.md": 440,
+    "references/google-slides.md": 1027,
+    "references/images.md": 753,
+    "references/intake.md": 351,
+    "references/quality.md": 687,
+    "references/review.md": 799,
+    "references/templates.md": 273,
+    "references/workspace.md": 370
+  },
+  "samples": {
+    "guidanceStart": 84,
+    "sceneContract": 353,
+    "comparisonContract": 192,
+    "imageDownload": 97
+  },
+  "readingPaths": {
+    "scopedPptx": {
+      "files": [
+        {
+          "path": "SKILL.md",
+          "tokens": 778
+        },
+        {
+          "path": "references/editing.md",
+          "tokens": 440
+        },
+        {
+          "path": "references/review.md",
+          "tokens": 799
+        }
+      ],
+      "helpers": [],
+      "total": 2017
+    },
+    "scopedGoogle": {
+      "files": [
+        {
+          "path": "SKILL.md",
+          "tokens": 778
+        },
+        {
+          "path": "references/google-slides.md",
+          "tokens": 1027
+        },
+        {
+          "path": "references/review.md",
+          "tokens": 799
+        }
+      ],
+      "helpers": [],
+      "total": 2604
+    },
+    "newPptxNative": {
+      "files": [
+        {
+          "path": "SKILL.md",
+          "tokens": 778
+        },
+        {
+          "path": "references/design.md",
+          "tokens": 837
+        },
+        {
+          "path": "references/authoring.md",
+          "tokens": 282
+        },
+        {
+          "path": "references/templates.md",
+          "tokens": 273
+        },
+        {
+          "path": "references/review.md",
+          "tokens": 799
+        }
+      ],
+      "helpers": [],
+      "total": 2969
+    },
+    "newGoogleNative": {
+      "files": [
+        {
+          "path": "SKILL.md",
+          "tokens": 778
+        },
+        {
+          "path": "references/design.md",
+          "tokens": 837
+        },
+        {
+          "path": "references/authoring.md",
+          "tokens": 282
+        },
+        {
+          "path": "references/templates.md",
+          "tokens": 273
+        },
+        {
+          "path": "references/google-slides.md",
+          "tokens": 1027
+        },
+        {
+          "path": "references/review.md",
+          "tokens": 799
+        }
+      ],
+      "helpers": [],
+      "total": 3996
+    },
+    "newPptxScene": {
+      "files": [
+        {
+          "path": "SKILL.md",
+          "tokens": 778
+        },
+        {
+          "path": "references/design.md",
+          "tokens": 837
+        },
+        {
+          "path": "references/authoring.md",
+          "tokens": 282
+        },
+        {
+          "path": "references/authoring-pptx.md",
+          "tokens": 142
+        },
+        {
+          "path": "references/review.md",
+          "tokens": 799
+        }
+      ],
+      "helpers": [
+        {
+          "name": "sceneContract",
+          "tokens": 353
+        }
+      ],
+      "total": 3191
+    },
+    "newGoogleScene": {
+      "files": [
+        {
+          "path": "SKILL.md",
+          "tokens": 778
+        },
+        {
+          "path": "references/design.md",
+          "tokens": 837
+        },
+        {
+          "path": "references/authoring.md",
+          "tokens": 282
+        },
+        {
+          "path": "references/authoring-google.md",
+          "tokens": 250
+        },
+        {
+          "path": "references/google-slides.md",
+          "tokens": 1027
+        },
+        {
+          "path": "references/review.md",
+          "tokens": 799
+        }
+      ],
+      "helpers": [
+        {
+          "name": "sceneContract",
+          "tokens": 353
+        }
+      ],
+      "total": 4326
+    },
+    "contentLedPptx": {
+      "files": [
+        {
+          "path": "SKILL.md",
+          "tokens": 778
+        },
+        {
+          "path": "references/design.md",
+          "tokens": 837
+        },
+        {
+          "path": "references/authoring.md",
+          "tokens": 282
+        },
+        {
+          "path": "references/content-components.md",
+          "tokens": 634
+        },
+        {
+          "path": "references/brand-addons.md",
+          "tokens": 544
+        },
+        {
+          "path": "references/quality.md",
+          "tokens": 687
+        },
+        {
+          "path": "references/review.md",
+          "tokens": 799
+        }
+      ],
+      "helpers": [
+        {
+          "name": "comparisonContract",
+          "tokens": 192
+        }
+      ],
+      "total": 4753
+    },
+    "contentCritique": {
+      "files": [
+        {
+          "path": "SKILL.md",
+          "tokens": 778
+        },
+        {
+          "path": "references/quality.md",
+          "tokens": 687
+        },
+        {
+          "path": "references/review.md",
+          "tokens": 799
+        }
+      ],
+      "helpers": [],
+      "total": 2264
+    },
+    "intake": {
+      "files": [
+        {
+          "path": "SKILL.md",
+          "tokens": 778
+        },
+        {
+          "path": "references/intake.md",
+          "tokens": 351
+        }
+      ],
+      "helpers": [],
+      "total": 1129
+    },
+    "customImages": {
+      "files": [
+        {
+          "path": "SKILL.md",
+          "tokens": 778
+        },
+        {
+          "path": "references/images.md",
+          "tokens": 753
+        }
+      ],
+      "helpers": [
+        {
+          "name": "imageDownload",
+          "tokens": 97
+        }
+      ],
+      "total": 1628
+    }
+  },
+  "standalone": {
+    "scopedPptx": {
+      "files": [
+        {
+          "path": "bootstrap/SKILL.md",
+          "tokens": 385
+        },
+        {
+          "path": "SKILL.md",
+          "tokens": 778
+        },
+        {
+          "path": "references/editing.md",
+          "tokens": 440
+        },
+        {
+          "path": "references/review.md",
+          "tokens": 799
+        }
+      ],
+      "helpers": [
+        {
+          "name": "guidanceStart",
+          "tokens": 84
+        }
+      ],
+      "total": 2486
+    },
+    "scopedGoogle": {
+      "files": [
+        {
+          "path": "bootstrap/SKILL.md",
+          "tokens": 385
+        },
+        {
+          "path": "SKILL.md",
+          "tokens": 778
+        },
+        {
+          "path": "references/google-slides.md",
+          "tokens": 1027
+        },
+        {
+          "path": "references/review.md",
+          "tokens": 799
+        }
+      ],
+      "helpers": [
+        {
+          "name": "guidanceStart",
+          "tokens": 84
+        }
+      ],
+      "total": 3073
+    },
+    "newPptxNative": {
+      "files": [
+        {
+          "path": "bootstrap/SKILL.md",
+          "tokens": 385
+        },
+        {
+          "path": "SKILL.md",
+          "tokens": 778
+        },
+        {
+          "path": "references/design.md",
+          "tokens": 837
+        },
+        {
+          "path": "references/authoring.md",
+          "tokens": 282
+        },
+        {
+          "path": "references/templates.md",
+          "tokens": 273
+        },
+        {
+          "path": "references/review.md",
+          "tokens": 799
+        }
+      ],
+      "helpers": [
+        {
+          "name": "guidanceStart",
+          "tokens": 84
+        }
+      ],
+      "total": 3438
+    },
+    "newGoogleNative": {
+      "files": [
+        {
+          "path": "bootstrap/SKILL.md",
+          "tokens": 385
+        },
+        {
+          "path": "SKILL.md",
+          "tokens": 778
+        },
+        {
+          "path": "references/design.md",
+          "tokens": 837
+        },
+        {
+          "path": "references/authoring.md",
+          "tokens": 282
+        },
+        {
+          "path": "references/templates.md",
+          "tokens": 273
+        },
+        {
+          "path": "references/google-slides.md",
+          "tokens": 1027
+        },
+        {
+          "path": "references/review.md",
+          "tokens": 799
+        }
+      ],
+      "helpers": [
+        {
+          "name": "guidanceStart",
+          "tokens": 84
+        }
+      ],
+      "total": 4465
+    },
+    "newPptxScene": {
+      "files": [
+        {
+          "path": "bootstrap/SKILL.md",
+          "tokens": 385
+        },
+        {
+          "path": "SKILL.md",
+          "tokens": 778
+        },
+        {
+          "path": "references/design.md",
+          "tokens": 837
+        },
+        {
+          "path": "references/authoring.md",
+          "tokens": 282
+        },
+        {
+          "path": "references/authoring-pptx.md",
+          "tokens": 142
+        },
+        {
+          "path": "references/review.md",
+          "tokens": 799
+        }
+      ],
+      "helpers": [
+        {
+          "name": "guidanceStart",
+          "tokens": 84
+        },
+        {
+          "name": "sceneContract",
+          "tokens": 353
+        }
+      ],
+      "total": 3660
+    },
+    "newGoogleScene": {
+      "files": [
+        {
+          "path": "bootstrap/SKILL.md",
+          "tokens": 385
+        },
+        {
+          "path": "SKILL.md",
+          "tokens": 778
+        },
+        {
+          "path": "references/design.md",
+          "tokens": 837
+        },
+        {
+          "path": "references/authoring.md",
+          "tokens": 282
+        },
+        {
+          "path": "references/authoring-google.md",
+          "tokens": 250
+        },
+        {
+          "path": "references/google-slides.md",
+          "tokens": 1027
+        },
+        {
+          "path": "references/review.md",
+          "tokens": 799
+        }
+      ],
+      "helpers": [
+        {
+          "name": "guidanceStart",
+          "tokens": 84
+        },
+        {
+          "name": "sceneContract",
+          "tokens": 353
+        }
+      ],
+      "total": 4795
+    },
+    "contentLedPptx": {
+      "files": [
+        {
+          "path": "bootstrap/SKILL.md",
+          "tokens": 385
+        },
+        {
+          "path": "SKILL.md",
+          "tokens": 778
+        },
+        {
+          "path": "references/design.md",
+          "tokens": 837
+        },
+        {
+          "path": "references/authoring.md",
+          "tokens": 282
+        },
+        {
+          "path": "references/content-components.md",
+          "tokens": 634
+        },
+        {
+          "path": "references/brand-addons.md",
+          "tokens": 544
+        },
+        {
+          "path": "references/quality.md",
+          "tokens": 687
+        },
+        {
+          "path": "references/review.md",
+          "tokens": 799
+        }
+      ],
+      "helpers": [
+        {
+          "name": "guidanceStart",
+          "tokens": 84
+        },
+        {
+          "name": "comparisonContract",
+          "tokens": 192
+        }
+      ],
+      "total": 5222
+    },
+    "contentCritique": {
+      "files": [
+        {
+          "path": "bootstrap/SKILL.md",
+          "tokens": 385
+        },
+        {
+          "path": "SKILL.md",
+          "tokens": 778
+        },
+        {
+          "path": "references/quality.md",
+          "tokens": 687
+        },
+        {
+          "path": "references/review.md",
+          "tokens": 799
+        }
+      ],
+      "helpers": [
+        {
+          "name": "guidanceStart",
+          "tokens": 84
+        }
+      ],
+      "total": 2733
+    },
+    "intake": {
+      "files": [
+        {
+          "path": "bootstrap/SKILL.md",
+          "tokens": 385
+        },
+        {
+          "path": "SKILL.md",
+          "tokens": 778
+        },
+        {
+          "path": "references/intake.md",
+          "tokens": 351
+        }
+      ],
+      "helpers": [
+        {
+          "name": "guidanceStart",
+          "tokens": 84
+        }
+      ],
+      "total": 1598
+    },
+    "customImages": {
+      "files": [
+        {
+          "path": "bootstrap/SKILL.md",
+          "tokens": 385
+        },
+        {
+          "path": "SKILL.md",
+          "tokens": 778
+        },
+        {
+          "path": "references/images.md",
+          "tokens": 753
+        }
+      ],
+      "helpers": [
+        {
+          "name": "guidanceStart",
+          "tokens": 84
+        },
+        {
+          "name": "imageDownload",
+          "tokens": 97
+        }
+      ],
+      "total": 2097
+    }
+  },
+  "routes": {
+    "Discovery metadata": 39,
+    "Installed bootstrap": 385,
+    "Bootstrap + current guidance entry": 1163,
+    "Scoped PPTX edit + final review": 2486,
+    "Scoped Google edit + final review": 3073,
+    "New PPTX deck from native template + review": 3438,
+    "New Google deck from native template + review": 4465,
+    "New PPTX scene + contract + review": 3660,
+    "New Google scene + contract + review": 4795,
+    "Content-led PPTX + selected component + review": 5222,
+    "Font screening + structured critique + review": 2733,
+    "Optional image guidance + download result": 2097
+  }
+}
