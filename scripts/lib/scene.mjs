@@ -1,3 +1,4 @@
+import {validateSlideDecision} from './slide-decisions.mjs';
 import { digest, escape } from './common.mjs';
 
 export const defaultTheme = Object.freeze({
@@ -35,13 +36,14 @@ export function validateScene(scene) {
   };
   if (!Array.isArray(scene.slides) || !scene.slides.length || scene.slides.length>100) throw new Error('Provide 1–100 slides');
   for (const s of scene.slides) {
-    if (Object.keys(s).some(k=>!['id','title','sources','elements','notes','layoutId','replace','protect'].includes(k))) throw new Error('Unsupported slide field');
+    if (Object.keys(s).some(k=>!['id','title','sources','elements','notes','layoutId','replace','protect','intent'].includes(k))) throw new Error('Unsupported slide field');
     claim(s.id); nonempty(s.title,'slide title');
     if (!Array.isArray(s.sources) || !s.sources.length || s.sources.some(x=>typeof x!=='string'||!x.trim())) throw new Error('Each slide needs source references; use brief:<section> for supplied creative briefs');
+    if(s.intent)validateSlideDecision(s.intent,s.sources,{required:true});
     if (!Array.isArray(s.elements) || !s.elements.length || s.elements.length>200) throw new Error('Provide 1–200 slide elements');
     if (s.notes !== undefined && typeof s.notes !== 'string') throw new Error('Notes must be text');
     for (const e of s.elements) {
-      const fields={text:['text','role','fontSize','color','fill','bold','align'],shape:['shape','text','role','fontSize','color','fill','bold','align'],line:['color','weight','arrow','flipH','flipV'],image:['src','alt','fit'],table:['rows','fontSize','color','headerFill','headerColor','bodyFill','padding','columnWidths'],chart:['chartType','series','source','sheetsChart','colors','labelSize']};
+      const fields={text:['href','text','role','fontSize','color','fill','bold','align'],shape:['href','shape','text','role','fontSize','color','fill','bold','align'],line:['color','weight','arrow','flipH','flipV'],image:['src','alt','fit'],table:['rows','fontSize','color','headerFill','headerColor','bodyFill','padding','columnWidths'],chart:['chartType','series','source','sheetsChart','colors','labelSize']};
       if (!types.has(e.type) || Object.keys(e).some(k=>!['id','type','x','y','width','height',...(fields[e.type]??[])].includes(k))) throw new Error(`Unsupported element field/type in ${e.id}; do not silently drop it`);
       claim(e.id);
       if (!types.has(e.type)) throw new Error(`Unsupported element type: ${e.type}; do not flatten it`);
@@ -53,6 +55,7 @@ export function validateScene(scene) {
       for (const k of ['bold','arrow','flipH','flipV']) if (e[k]!==undefined && typeof e[k]!=='boolean') throw new Error(`Invalid ${k}`);
       if (e.weight!==undefined) positive(e.weight,'line weight',20);
       if (e.role!==undefined && !['title','body'].includes(e.role)) throw new Error('Unknown semantic text role');
+      if(e.href!==undefined){let url;try{url=new URL(e.href);}catch{throw new Error('Use an absolute HTTP(S) hyperlink');}if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw new Error('Use an HTTP(S) hyperlink without credentials');}
       if (e.align !== undefined && !['left','center','right'].includes(e.align)) throw new Error('Invalid text alignment');
       if (e.type==='text') nonempty(e.text,'text');
       if (e.type==='shape') {if (!['rect','ellipse'].includes(e.shape??'rect')) throw new Error('Use rect or ellipse');if(e.text!==undefined)nonempty(e.text,'shape text');}
@@ -81,7 +84,7 @@ export function sceneFindings(scene) {
   for (const s of scene.slides) {
     const text=s.elements.flatMap(e=>e.type==='table'?e.rows.flat():e.text?[e.text]:[]).join(' '), words=text.trim().split(/\s+/).length;
     if (words>90) findings.push({slide:s.id,severity:'warn',code:'density',detail:`${words} visible text words; inspect reading effort`});
-    if (s.elements.every(e=>e.type==='text')) findings.push({slide:s.id,severity:'warn',code:'text-only',detail:'Consider a visual relationship or evidence when it serves the message'});
+    if (s.elements.every(e=>e.type==='text')) findings.push({slide:s.id,severity:s.intent?.visual?.family==='text'?'info':'warn',code:'text-only',detail:s.intent?.visual?.family==='text'?'Text is the recorded visual choice; judge its reading purpose':'Consider a visual relationship or evidence when it serves the message'});
     for (const e of s.elements) if (e.fontSize<14) findings.push({slide:s.id,object:e.id,severity:'warn',code:'small-text',detail:'Inspect at presentation size'});
     for (const e of s.elements.filter(e=>e.type==='text'||e.text)) {
       const ink=luminance(color(e.color??'text',theme)),fill=luminance(color(e.fill??'background',theme)),ratio=(Math.max(ink,fill)+.05)/(Math.min(ink,fill)+.05),font=e.fontSize??(e.role==='title'?theme.titleSize:theme.bodySize),minimum=font>=18||font>=14&&e.bold?3:4.5;
@@ -110,10 +113,11 @@ export function coverage(scene, required=[]) {
 export const contract = `Scene v2 (AI-owned intermediate; users may supply a brief or source documents).
 {version:2,title,mode:new|redesign|rework,canvas:{width,height},theme?:{font,background,text,accent,muted,titleSize,bodySize},slides:[...]}
 Coordinates are points. Stable IDs match [a-zA-Z_][a-zA-Z0-9_-]{4,49} and are unique across the scene.
-Slide: {id,title,sources:[evidence IDs],elements:[...],notes?:string,layoutId?:native Google layout ID,replace?:[existing object IDs],protect?:[existing object IDs]}.
+Slide: {id,title,sources:[evidence IDs],elements:[...],intent?:{takeaway,relationship,rationale,evidence,audienceQuestion,alternative:{treatment,reason},visual:{family,purpose,route?}},notes?:string,layoutId?:native Google layout ID,replace?:[existing object IDs],protect?:[existing object IDs]}.
 Element: {id,type:text|shape|line|table|image|chart,x,y,width,height,...}.
-Text/shape: text, role?:title|body, fontSize, color/fill (hex or theme key), bold, align:left|center|right. Shape: rect|ellipse.
+Text/shape: text, href?:absolute HTTP(S) hyperlink, role?:title|body, fontSize, color/fill (hex or theme key), bold, align:left|center|right. Shape: rect|ellipse.
 Line: color, weight, arrow, flipH/flipV. Table: rows (rectangular strings), fontSize, headerFill/headerColor/bodyFill, padding, columnWidths (points summing to width).
 Image: src (local path for PPTX, public HTTPS URL for Google), alt, fit:contain|cover.
 Chart: chartType:bar|line|pie, series:[{name,labels:[...],values:[...]}], source, colors?:[hex], labelSize?:points. Native editable chart data in PPTX; Google requires an existing linked Sheets chart via sheetsChart:{spreadsheetId,chartId}.
+For new creative work, include concise intent decisions on every slide; retained old scenes need not be rewritten. Native-template work records equivalent decisions against slide/object IDs.
 Brand add-ons supply themes, source templates, icons, voice and protected artwork. Never flatten unsupported objects or imply HTML is a target-editor render.`;

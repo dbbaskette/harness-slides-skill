@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
-import { initWorkspace, loadWorkspace, buildWorkspace, workspaceStatus } from '../scripts/lib/workspace.mjs';
+import { initWorkspace, loadWorkspace, buildWorkspace, workspaceStatus,recordWorkspaceCritique } from '../scripts/lib/workspace.mjs';
 import { startStudio } from '../scripts/lib/studio.mjs';
 import { prepareReview, markReview } from '../scripts/lib/slide-review.mjs';
 import { sceneFixture,temporary } from './fixtures.mjs';
@@ -24,6 +24,11 @@ test('real PPTX render produces complete PNG coverage and binds final review to 
   const dir=await temporary(t),root=join(dir,'workspace');await initWorkspace({root,scene:await sceneFixture(),format:'pptx'});const build=await buildWorkspace({root}),output=join(build.build,'review'),review=await prepareReview({file:join(build.build,'deck.pptx'),output});assert.equal(review.slides,2);assert.deepEqual(review.pending,[1,2]);
   const record=JSON.parse(await readFile(review.record));for(const slide of record.slides)assert.ok((await readFile(join(output,slide.image))).length>1000);
   // This records test receipt semantics, not a human visual-quality certification.
-  await markReview({output,revision:review.revision,numbers:[1,2],note:'Automated receipt test; manual visual acceptance recorded separately'});assert.equal((await workspaceStatus(root)).ready,true);
+  await markReview({output,revision:review.revision,numbers:[1,2],note:'Automated receipt test; manual visual acceptance recorded separately'});assert.equal((await workspaceStatus(root)).ready,false);
+  const quality=JSON.parse(await readFile(join(build.build,'quality-report.json')));await recordWorkspaceCritique({root,assessment:{schema:1,sceneDigest:quality.sceneDigest,qualityRevision:quality.revision,artifactDigest:quality.artifactDigest,slides:quality.prompts.map(p=>({id:p.slide,checks:p.criteria.map(c=>({criterion:c.id,status:'pass',reason:'Synthetic receipt behavior test; actual pixels require separate human judgment.',objects:p.objects,sources:p.sources}))}))}});assert.equal((await workspaceStatus(root)).ready,true);
   await writeFile(join(build.build,'deck.pptx'),'changed');assert.equal((await workspaceStatus(root)).ready,false);
+});
+
+test('native contain sizing uses actual raster proportions instead of the allocated box ratio',async t=>{
+ const dir=await temporary(t),scene=await sceneFixture(),path=new URL('../examples/assets/conceptual-greenhouse.png',import.meta.url).pathname;scene.slides=scene.slides.slice(0,1);scene.slides[0].elements.push({id:'wide_image',type:'image',src:path,alt:'Conceptual illustration',fit:'contain',x:40,y:120,width:200,height:200});const out=join(dir,'wide.pptx');await renderPptxScene(scene,out);const {execFile}=await import('node:child_process'),{promisify}=await import('node:util');const {stdout}=await promisify(execFile)('unzip',['-p',out,'ppt/slides/slide1.xml']);assert.match(stdout,/<a:srcRect l="0" r="0" t="-\d+" b="-\d+"/);
 });

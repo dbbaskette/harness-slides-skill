@@ -51,3 +51,25 @@ Google tables use native cell padding and minimum row heights; readback checks
 content, position, widths and overflow. Diagram edges are editable lines, without
 automatic attachment when a node moves. Notes use a staged revision-controlled native batch.
 Follow [review](review.md) for target rendering and visual verification.
+
+## Content decisions and expressive constructions
+
+New plans use schema 2: every intent includes an audienceQuestion, alternative
+{treatment,reason} and visual {family,purpose,route?}, alongside takeaway,
+relationship, rationale and retained evidence. Query only the selected contract.
+Saved schema-1 plans retain their rendering; do not silently redesign them.
+
+Comparison variants `open` and `rows` avoid full-height card backgrounds.
+Categories support `open`. `paired-diagram` places two sourced native node/edge
+models side by side; use matched actors and labeled connections. `decision`
+uses positioned nodes and labeled branches. `scope` expresses labeled ownership
+regions without inferred nesting. `evidence` separates a focal finding from its
+explanation and qualifier. Custom scenes remain available for richer structures.
+Diagram positions are normalized within the content region. Edges are editable
+lines, not automatically attached connectors; movement requires updating them.
+
+An image component may include an editable `explanation`. Consider generated
+art before selecting layout, not as decoration after compilation. Resolve the
+asset request with the authorized image helper, retain its metadata path, inspect
+the pixels, and provide alt text. Keep technical labels/claims native. Google
+local assets need an authorized upload/import route; never invent a public URL.

@@ -32,6 +32,21 @@ the message; keep explanatory diagrams and labels editable. Generated imagery
 can illustrate an idea, but must not masquerade as measured evidence or an actual
 product screenshot. Follow the selected brand's asset policy.
 
+Before selecting a component, record a concise decision (not a reasoning transcript):
+
+- Takeaway and audience question.
+- Source evidence, actors and the actual relationship.
+- Selected treatment and what it makes easier to understand.
+- Visual family and communicative purpose: text/no asset, icon, native diagram,
+  regions, table/chart, supplied/sourced image or generated art.
+- One plausible alternative and a content-specific reason for rejecting it.
+
+Topology, flow, ownership, containment and decision content needs visible supported
+objects and relationships. Headings and prose inside boxes are not automatically
+a diagram. Missing evidence calls for explicit limits, not invented connections.
+Use schema-2 plan intent or scene intent for authored work; native-template work
+keeps equivalent records against slide/object IDs in private task notes.
+
 Keep a brief content-to-composition rationale in the agent's working notes for
 each slide. Similar content may justify similar layouts; different content needs
 its own decision. Do not force variety, insert decorative assets, or remove

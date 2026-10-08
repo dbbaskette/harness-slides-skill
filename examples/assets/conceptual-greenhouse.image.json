@@ -1,0 +1,13 @@
+{
+  "provider": "gemini-web",
+  "libraryRevision": "8c5b1dcbf54ecf093551cc20bd25cef438190ba8",
+  "requestId": "smoke-robot-greenhouse-20261008-01",
+  "generated": true,
+  "model": "account-default",
+  "created": "2026-10-08T21:21:18Z",
+  "promptSha256": "516637b8cf8af565fabf8806eae777e12fc826fde2639a168b51effb3f4bd224",
+  "referenceSha256": [],
+  "width": 2752,
+  "height": 1536,
+  "sha256": "f79c127d3e61431661c387dc6d438c0414a531f4d10413eb35a9504a30962e58"
+}

@@ -1,0 +1,463 @@
+{
+  "schema": 2,
+  "title": "Neutral slide quality benchmark",
+  "assets": {
+    "greenhouse": {
+      "src": "assets/conceptual-greenhouse.png",
+      "alt": "Conceptual robot caring for plants in a teal greenhouse",
+      "metadata": "assets/conceptual-greenhouse.image.json"
+    }
+  },
+  "slides": [
+    {
+      "id": "topology_slide",
+      "title": "Write ownership changes the validation question",
+      "sources": [
+        "brief:neutral-quality"
+      ],
+      "intent": {
+        "takeaway": "Write ownership changes the validation question",
+        "relationship": "comparison",
+        "rationale": "Show write destinations with matched actors and labeled edges.",
+        "evidence": [
+          "brief:neutral-quality"
+        ],
+        "audienceQuestion": "How do the alternatives differ?",
+        "alternative": {
+          "treatment": "Generic prose cards",
+          "reason": "It hides the specific relationship or context this slide needs to expose."
+        },
+        "visual": {
+          "family": "diagram",
+          "purpose": "Show write destinations with matched actors and labeled edges."
+        }
+      },
+      "component": {
+        "kind": "paired-diagram",
+        "panels": [
+          {
+            "label": "Single write owner",
+            "nodes": [
+              {
+                "id": "client_node",
+                "label": "Client",
+                "x": 0.5,
+                "y": 0
+              },
+              {
+                "id": "writer_node",
+                "label": "Write owner",
+                "x": 0.5,
+                "y": 0.5
+              },
+              {
+                "id": "replica_node",
+                "label": "Read replica",
+                "x": 0.5,
+                "y": 1
+              }
+            ],
+            "edges": [
+              {
+                "from": "client_node",
+                "to": "writer_node",
+                "label": "writes"
+              },
+              {
+                "from": "writer_node",
+                "to": "replica_node",
+                "label": "replicates"
+              }
+            ]
+          },
+          {
+            "label": "Two write owners",
+            "nodes": [
+              {
+                "id": "client_node",
+                "label": "Client",
+                "x": 0.5,
+                "y": 0
+              },
+              {
+                "id": "writer_node",
+                "label": "Write owner A",
+                "x": 0,
+                "y": 1
+              },
+              {
+                "id": "replica_node",
+                "label": "Write owner B",
+                "x": 1,
+                "y": 1
+              }
+            ],
+            "edges": [
+              {
+                "from": "client_node",
+                "to": "writer_node",
+                "label": "writes"
+              },
+              {
+                "from": "client_node",
+                "to": "replica_node",
+                "label": "writes"
+              }
+            ]
+          }
+        ],
+        "caption": "Conceptual patterns only; no consistency or availability guarantees."
+      }
+    },
+    {
+      "id": "migration_slide",
+      "title": "Validate the dependency before migration",
+      "sources": [
+        "brief:neutral-quality"
+      ],
+      "intent": {
+        "takeaway": "Validate the dependency before migration",
+        "relationship": "decision",
+        "rationale": "Expose the evidence-controlled branches rather than three parallel text columns.",
+        "evidence": [
+          "brief:neutral-quality"
+        ],
+        "audienceQuestion": "Which validation follows from the dependency?",
+        "alternative": {
+          "treatment": "Generic prose cards",
+          "reason": "It hides the specific relationship or context this slide needs to expose."
+        },
+        "visual": {
+          "family": "diagram",
+          "purpose": "Expose the evidence-controlled branches rather than three parallel text columns."
+        }
+      },
+      "component": {
+        "kind": "decision",
+        "nodes": [
+          {
+            "id": "version_node",
+            "label": "Known version?",
+            "x": 0.5,
+            "y": 0
+          },
+          {
+            "id": "unknown_node",
+            "label": "Inventory first",
+            "x": 0,
+            "y": 0.5
+          },
+          {
+            "id": "known_node",
+            "label": "Check dependency",
+            "x": 1,
+            "y": 0.5
+          },
+          {
+            "id": "validate_node",
+            "label": "Run validation",
+            "x": 1,
+            "y": 1
+          }
+        ],
+        "edges": [
+          {
+            "from": "version_node",
+            "to": "unknown_node",
+            "label": "No"
+          },
+          {
+            "from": "version_node",
+            "to": "known_node",
+            "label": "Yes"
+          },
+          {
+            "from": "known_node",
+            "to": "validate_node",
+            "label": "Document result"
+          }
+        ],
+        "caption": "Compatibility is not guaranteed; retain the actual source-version caveat."
+      }
+    },
+    {
+      "id": "ownership_slide",
+      "title": "Service and customer responsibilities stay distinct",
+      "sources": [
+        "brief:neutral-quality"
+      ],
+      "intent": {
+        "takeaway": "Service and customer responsibilities stay distinct",
+        "relationship": "responsibility",
+        "rationale": "Label independent ownership regions without implying integration or containment.",
+        "evidence": [
+          "brief:neutral-quality"
+        ],
+        "audienceQuestion": "Who owns each action?",
+        "alternative": {
+          "treatment": "Generic prose cards",
+          "reason": "It hides the specific relationship or context this slide needs to expose."
+        },
+        "visual": {
+          "family": "regions",
+          "purpose": "Label independent ownership regions without implying integration or containment."
+        }
+      },
+      "component": {
+        "kind": "scope",
+        "regions": [
+          {
+            "label": "Service team",
+            "text": "Operate the service. Maintain its documented scope."
+          },
+          {
+            "label": "Customer team",
+            "text": "Validate application behavior. Own its configuration."
+          }
+        ],
+        "caption": "Illustrative ownership only; actual entitlement depends on agreement."
+      }
+    },
+    {
+      "id": "scenario_slide",
+      "title": "Automation still needs care and context",
+      "sources": [
+        "brief:neutral-quality"
+      ],
+      "intent": {
+        "takeaway": "Automation still needs care and context",
+        "relationship": "image",
+        "rationale": "Editorial greenhouse context makes the scenario tangible while its explanation stays editable.",
+        "evidence": [
+          "brief:neutral-quality"
+        ],
+        "audienceQuestion": "What should I understand or do?",
+        "alternative": {
+          "treatment": "Generic prose cards",
+          "reason": "It hides the specific relationship or context this slide needs to expose."
+        },
+        "visual": {
+          "family": "generated-art",
+          "purpose": "Editorial greenhouse context makes the scenario tangible while its explanation stays editable."
+        }
+      },
+      "component": {
+        "kind": "image",
+        "asset": "greenhouse",
+        "caption": "Conceptual illustration, not customer evidence.",
+        "explanation": "A routine can automate repeatable work. People still define goals and handle exceptions."
+      }
+    },
+    {
+      "id": "wording_slide",
+      "title": "Read the agreed wording exactly",
+      "sources": [
+        "brief:neutral-quality"
+      ],
+      "intent": {
+        "takeaway": "Read the agreed wording exactly",
+        "relationship": "claim",
+        "rationale": "Exact wording is the audience task; no asset is useful.",
+        "evidence": [
+          "brief:neutral-quality"
+        ],
+        "audienceQuestion": "What should I understand or do?",
+        "alternative": {
+          "treatment": "Decorative illustration",
+          "reason": "It hides the specific relationship or context this slide needs to expose."
+        },
+        "visual": {
+          "family": "text",
+          "purpose": "Exact wording is the audience task; no asset is useful."
+        }
+      },
+      "component": {
+        "kind": "statement",
+        "text": "Keep the agreed qualification visible.",
+        "support": "This slide intentionally asks the audience to read one sentence."
+      }
+    },
+    {
+      "id": "objection_slide_0",
+      "title": "Compare like-for-like discovery questions",
+      "sources": [
+        "brief:neutral-quality"
+      ],
+      "intent": {
+        "takeaway": "Compare like-for-like discovery questions",
+        "relationship": "comparison",
+        "rationale": "Repeated geometry helps compare comparable conversations.",
+        "evidence": [
+          "brief:neutral-quality"
+        ],
+        "audienceQuestion": "How do the alternatives differ?",
+        "alternative": {
+          "treatment": "Generic prose cards",
+          "reason": "It hides the specific relationship or context this slide needs to expose."
+        },
+        "visual": {
+          "family": "text",
+          "purpose": "Repeated geometry helps compare comparable conversations."
+        }
+      },
+      "component": {
+        "kind": "comparison",
+        "variant": "rows",
+        "columns": [
+          {
+            "label": "Customer question",
+            "text": "Who owns the action?"
+          },
+          {
+            "label": "Response",
+            "text": "Confirm the documented scope before making a promise."
+          }
+        ]
+      }
+    },
+    {
+      "id": "objection_slide_1",
+      "title": "Compare like-for-like discovery questions",
+      "sources": [
+        "brief:neutral-quality"
+      ],
+      "intent": {
+        "takeaway": "Compare like-for-like discovery questions",
+        "relationship": "comparison",
+        "rationale": "Repeated geometry helps compare comparable conversations.",
+        "evidence": [
+          "brief:neutral-quality"
+        ],
+        "audienceQuestion": "How do the alternatives differ?",
+        "alternative": {
+          "treatment": "Generic prose cards",
+          "reason": "It hides the specific relationship or context this slide needs to expose."
+        },
+        "visual": {
+          "family": "text",
+          "purpose": "Repeated geometry helps compare comparable conversations."
+        }
+      },
+      "component": {
+        "kind": "comparison",
+        "variant": "rows",
+        "columns": [
+          {
+            "label": "Customer question",
+            "text": "Who owns the action?"
+          },
+          {
+            "label": "Response",
+            "text": "Confirm the documented scope before making a promise."
+          }
+        ]
+      }
+    },
+    {
+      "id": "objection_slide_2",
+      "title": "Compare like-for-like discovery questions",
+      "sources": [
+        "brief:neutral-quality"
+      ],
+      "intent": {
+        "takeaway": "Compare like-for-like discovery questions",
+        "relationship": "comparison",
+        "rationale": "Repeated geometry helps compare comparable conversations.",
+        "evidence": [
+          "brief:neutral-quality"
+        ],
+        "audienceQuestion": "How do the alternatives differ?",
+        "alternative": {
+          "treatment": "Generic prose cards",
+          "reason": "It hides the specific relationship or context this slide needs to expose."
+        },
+        "visual": {
+          "family": "text",
+          "purpose": "Repeated geometry helps compare comparable conversations."
+        }
+      },
+      "component": {
+        "kind": "comparison",
+        "variant": "rows",
+        "columns": [
+          {
+            "label": "Customer question",
+            "text": "Who owns the action?"
+          },
+          {
+            "label": "Response",
+            "text": "Confirm the documented scope before making a promise."
+          }
+        ]
+      }
+    },
+    {
+      "id": "open_slide",
+      "title": "Compare options without heavy panels",
+      "sources": [
+        "brief:neutral-quality"
+      ],
+      "intent": {
+        "takeaway": "Compare options without heavy panels",
+        "relationship": "comparison",
+        "rationale": "Open aligned columns expose a short comparison.",
+        "evidence": [
+          "brief:neutral-quality"
+        ],
+        "audienceQuestion": "How do the alternatives differ?",
+        "alternative": {
+          "treatment": "Generic prose cards",
+          "reason": "It hides the specific relationship or context this slide needs to expose."
+        },
+        "visual": {
+          "family": "text",
+          "purpose": "Open aligned columns expose a short comparison."
+        }
+      },
+      "component": {
+        "kind": "comparison",
+        "variant": "open",
+        "columns": [
+          {
+            "label": "Known dependency",
+            "text": "Validate against the documented requirement."
+          },
+          {
+            "label": "Unknown dependency",
+            "text": "Inventory first; preserve uncertainty."
+          }
+        ]
+      }
+    },
+    {
+      "id": "evidence_slide",
+      "title": "Explain the decision behind the finding",
+      "sources": [
+        "brief:neutral-quality"
+      ],
+      "intent": {
+        "takeaway": "Explain the decision behind the finding",
+        "relationship": "claim",
+        "rationale": "A focal conclusion and subordinate explanation create hierarchy.",
+        "evidence": [
+          "brief:neutral-quality"
+        ],
+        "audienceQuestion": "What should I understand or do?",
+        "alternative": {
+          "treatment": "Generic prose cards",
+          "reason": "It hides the specific relationship or context this slide needs to expose."
+        },
+        "visual": {
+          "family": "text",
+          "purpose": "A focal conclusion and subordinate explanation create hierarchy."
+        }
+      },
+      "component": {
+        "kind": "evidence",
+        "finding": "Validate before promising",
+        "explanation": "The documented scope determines who can act and which check is required.",
+        "qualifier": "Illustrative training principle; no measured outcome is claimed."
+      }
+    }
+  ]
+}

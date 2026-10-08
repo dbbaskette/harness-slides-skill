@@ -36,3 +36,7 @@ repository retains its stated MIT license. The worker's cookie export and
 single-attempt strategy adapt the owner's Gemini Web Bridge implementation.
 Pillow (MIT-CMU) and Playwright (Apache-2.0) are optional installed dependencies
 with their own notices. These dependencies are installed only for image setup.
+
+The neutral conceptual-greenhouse fixture is authorized Gemini-generated art,
+not a copied product screenshot or customer evidence. Its sanitized sidecar
+records verified dimensions and hashes; no account session data is distributed.

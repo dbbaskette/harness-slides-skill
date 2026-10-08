@@ -66,3 +66,22 @@ repair, build/render affected slides and complete final coverage of the deck.
 Compiled decks also require [font screening and structured critique](quality.md).
 Use technical findings to target repairs, then judge the title against actual
 evidence and the composition against the slide’s intended relationship.
+
+## Export completeness
+
+Run `delivery inspect --file scene.json --format pdf [--companion PATH ...]` for
+requested PDF delivery. The report records scene/order, companion hashes, visible
+URLs and notes/reference concerns; it is screening, not factual or access approval.
+Judge whether essential explanation, reasoning and claim-changing caveats are
+actually available in each delivered format. A PDF does not expose slide notes.
+Keep important qualifications visible, or deliver the explicitly referenced
+authorized companion and verify its contents and reader access. Missing material
+keeps delivery unresolved. Preserve scoped wording/count/order; adding notes or
+restructuring requires the existing scope.
+
+Verify real hyperlink destinations and appendix coverage, exported count/order
+and every final page's pixels. Native editability remains a separate check. A
+dense legitimate reference appendix and a text-focused slide are valid; neither
+needs artwork for approval. Save the completeness judgment with delivered hashes
+and target revision. Changed scenes, companions, assets or exports need fresh
+review of affected evidence.

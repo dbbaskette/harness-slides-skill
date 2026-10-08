@@ -50,7 +50,7 @@ export async function initWorkspace({root,scene,format='google-slides',template,
   await mkdir(root); // Exclusive: never overlay a user directory.
   try {
     await mkdir(join(root,'inputs'));await mkdir(join(root,'versions'));
-    const manifest={version:1,tool:'harness-slides',format,requiredSources,brand:brand??null};
+    const manifest={version:1,tool:'harness-slides',qualityPolicy:2,format,requiredSources,brand:brand??null};
     manifest.assets={};
     for(const e of scene.slides.flatMap(s=>s.elements).filter(e=>e.type==='image'&&!/^https:\/\//.test(e.src))) {
       const path=resolve(base,e.src),s=await lstat(path),extension=extname(path).toLowerCase();
@@ -122,7 +122,7 @@ export async function verifiedBuild(root) {
   if(record.artifacts['quality-report.json']){const quality=await json(await regularInside(dir,'quality-report.json'));for(const font of quality.fontEvidence??[])if(font.path&&hash(await readFile(font.path))!==font.sha256)throw new Error('Measured font changed; rebuild and review');}
   return {w,dir,record};
 }
-async function qualityInputs(w){const result={};for(const [key,name] of [['designReport','designReportDigest'],['fonts','fontsDigest']])if(w.manifest[key]){const value=await json(await regularInside(w.root,w.manifest[key]));if(digest(value)!==w.manifest[name])throw new Error('Pinned quality input changed');result[key]=value;}return result;}
+async function qualityInputs(w){const result={policy:w.manifest.qualityPolicy??1};for(const [key,name] of [['designReport','designReportDigest'],['fonts','fontsDigest']])if(w.manifest[key]){const value=await json(await regularInside(w.root,w.manifest[key]));if(digest(value)!==w.manifest[name])throw new Error('Pinned quality input changed');result[key]=value;}return result;}
 export async function workspaceQuality(root,slideId){
   let report,path=null,unbuilt=false;const w=await loadWorkspace(root);
   try{await regularInside(w.root,`versions/${w.current.id}/build/build.json`);}catch(error){if(error.code!=='ENOENT')throw error;unbuilt=true;}
@@ -164,6 +164,6 @@ export async function workspaceStatus(root) {
   if(w.manifest.designReport||checked.record.artifacts['quality-report.json'])try{
     const quality=await json(await regularInside(checked.dir,'quality-report.json')),saved=await json(await regularInside(checked.dir,'critique.json')),receipt=assessCritique(quality,saved.assessment);
     result.critiqueComplete=receipt.complete;result.critiqueUnresolved=receipt.unresolved;if(!receipt.complete){result.ready=false;result.status='content critique unresolved';}
-  }catch(error){result.critiqueComplete=false;if(w.manifest.designReport||error.code!=='ENOENT'){result.ready=false;result.status='structured content critique required';result.critiqueNext=error.message;}}
+  }catch(error){result.critiqueComplete=false;if(w.manifest.qualityPolicy===2||w.manifest.designReport||error.code!=='ENOENT'){result.ready=false;result.status='structured content critique required';result.critiqueNext=error.message;}}
   return result;
 }

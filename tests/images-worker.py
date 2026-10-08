@@ -238,6 +238,21 @@ class ImagesTests(unittest.TestCase):
             self.assertEqual(adapter.client.retry, 0)
 
 
+class ModelAvailabilityTests(unittest.TestCase):
+    def test_actual_pinned_available_model_shape(self):
+        from types import SimpleNamespace
+        transport = object.__new__(worker.WebTransport)
+        available = SimpleNamespace(model_id='model-a', model_name='Model A', aliases=['a'], is_available=True)
+        unavailable = SimpleNamespace(model_id='model-b', model_name='Model B', aliases=['b'], is_available=False)
+        transport.client = SimpleNamespace(list_models=lambda: [available, unavailable])
+        self.assertEqual([m['available'] for m in transport.models()], [True, False])
+        self.assertIs(transport.select_model('a'), available)
+        self.assertIsNone(transport.select_model(None))
+        with self.assertRaises(worker.ImageError):
+            transport.select_model('b')
+        with self.assertRaises(worker.ImageError):
+            transport.select_model('missing')
+
 if __name__ == '__main__':
     os.umask(0o077)
     unittest.main()

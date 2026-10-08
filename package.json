@@ -1,6 +1,6 @@
 {
   "name": "harness-slides",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Brand-neutral editable slide authoring, preservation and visual review for agent harnesses.",
   "type": "module",
   "license": "MIT",
@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "fontkit": "2.0.4",
+    "image-size": "2.0.4",
     "pptx-automizer": "0.9.4",
     "pptxgenjs": "4.0.1"
   },

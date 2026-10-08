@@ -32,7 +32,7 @@ test('image status is offline; setup signs in once and generation stays in a sho
   await images('generate', { state, project: base, id: 'slide-04', promptFile: 'brief.txt', output: 'assets/image.png', references: ['reference.png'] }, deps);
   assert.equal(calls[1].options.input.action, 'generate');
   assert.equal(calls[1].options.input.references.length, 1);
-  assert.deepEqual(calls[1].args.slice(0, 1), ['-I']);
+  assert.deepEqual(calls[1].args.slice(0, 2), ['-I','-B']);
   assert.equal(calls[1].options.input.cookies, undefined);
   await images('download', { state, project: base, id: 'slide-04' }, deps);
   assert.equal(calls[2].options.input.action, 'download');
@@ -46,7 +46,7 @@ test('Chrome setup exports only required cookies and closes its context', async 
     cookies: async () => [{ name: '__Secure-1PSID', value: 'private' }, { name: '__Secure-1PSIDTS', value: 'timestamp' }, { name: 'OTHER', value: 'excluded' }],
     close: async () => { closed++; }
   };
-  const deps = { run: async () => {}, playwright: { chromium: { launchPersistentContext: async (profile, options) => { browserOptions = options; return context; } } } };
+  const deps = { run: async (_cmd,args) => {assert.ok(args.some(a=>a.startsWith('--user-data-dir=')));assert.ok(args.includes('--disable-background-mode'));}, playwright: { chromium: { launchPersistentContext: async (profile, options) => { browserOptions = options; return context; } } } };
   const cookies = await signIn(state, '/unused/runtime', deps);
   assert.deepEqual(Object.keys(cookies), ['__Secure-1PSID', '__Secure-1PSIDTS']);
   assert.equal(browserOptions.headless, true); assert.equal(closed, 1);
@@ -55,11 +55,12 @@ test('Chrome setup exports only required cookies and closes its context', async 
   assert.equal(closed, 2);
 });
 
-test('subprocess responses remain bounded and sanitized; helper exits', async () => {
+test('subprocess responses remain bounded and sanitized; helper exits', async t => {
+  const base=await realpath(await mkdtemp(join(tmpdir(),'slides-cli-image-state-')));t.after(()=>rm(base,{recursive:true,force:true}));const env={...process.env,HARNESS_IMAGE_STATE:join(base,'absent')};
   await assert.rejects(runProcess(process.execPath, ['-e', 'console.error("private-cookie"); console.log("bad JSON"); process.exit(1)'], { input: { action: 'generate' } }), error => !error.message.includes('private-cookie'));
   await assert.rejects(runProcess(process.execPath, ['-e', 'console.log("x".repeat(40000))'], { input: {} }), /invalid_worker_response/);
   assert.deepEqual(await runProcess(process.execPath, ['-e', 'console.log(JSON.stringify({status:"ready"}))'], { input: {} }), { status: 'ready' });
-  const { stdout } = await exec(process.execPath, [helper, 'images', 'status']);
+  const { stdout } = await exec(process.execPath, [helper, 'images', 'status'],{env});
   assert.equal(JSON.parse(stdout).liveChecked, false);
-  await assert.rejects(exec(process.execPath, [helper, 'images', 'status', '--model', 'unexpected']), /not valid/);
+  await assert.rejects(exec(process.execPath, [helper, 'images', 'status', '--model', 'unexpected'],{env}), /not valid/);
 });

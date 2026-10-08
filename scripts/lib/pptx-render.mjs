@@ -14,7 +14,7 @@ export async function renderPptxScene(scene,output,{base=process.cwd(),brand}={}
     if(s.notes)slide.addNotes(s.notes);
     for(const e of s.elements) {
       const box={x:e.x/72,y:e.y/72,w:e.width/72,h:e.height/72,objectName:e.id};
-      const style={fontFace:t.font,fontSize:e.fontSize??(e.role==='title'?t.titleSize:t.bodySize),color:hex(e.color??'text'),bold:e.bold??false,align:e.align??'left',margin:3.6,lineSpacingMultiple:1.25,paraSpaceBefore:0,paraSpaceAfter:0,breakLine:false,vertAnchor:'ctr',...(e.fill?{fill:{color:hex(e.fill)}}:{})};
+      const style={fontFace:t.font,fontSize:e.fontSize??(e.role==='title'?t.titleSize:t.bodySize),color:hex(e.color??'text'),bold:e.bold??false,align:e.align??'left',margin:3.6,lineSpacingMultiple:1.25,paraSpaceBefore:0,paraSpaceAfter:0,breakLine:false,...(e.href?{hyperlink:{url:e.href}}:{}),vertAnchor:'ctr',...(e.fill?{fill:{color:hex(e.fill)}}:{})};
       if(e.type==='text')slide.addText(e.text,{...box,...style});
       else if(e.type==='shape') {
         slide.addShape(e.shape==='ellipse'?pptx.ShapeType.ellipse:pptx.ShapeType.rect,{...box,fill:e.fill?{color:hex(e.fill)}:{color:hex('background'),transparency:100},line:{transparency:100}});
@@ -23,8 +23,8 @@ export async function renderPptxScene(scene,output,{base=process.cwd(),brand}={}
       else if(e.type==='table')slide.addTable(e.rows.map((row,i)=>row.map(text=>({text,options:{bold:i===0,color:hex(i===0?(e.headerColor??e.color??'text'):(e.color??'text')),fill:hex(i===0?(e.headerFill??'muted'):(e.bodyFill??'background'))}}))),{...box,...style,margin:e.padding??3.6,valign:'middle',border:{pt:0.5,color:'CCCCCC'},fill:hex('background'),autoPage:false,rowH:e.height/e.rows.length/72,colW:(e.columnWidths??e.rows[0].map(()=>e.width/e.rows[0].length)).map(v=>v/72)});
       else if(e.type==='image') {
         if(/^https?:/.test(e.src))throw new Error('Download authorized images to the workspace before PPTX rendering; no remote fetch during build');
-        const path=resolve(base,e.src);await readFile(path);
-        slide.addImage({...box,path,altText:e.alt,sizing:{type:e.fit??'contain',w:box.w,h:box.h}});
+        const path=resolve(base,e.src),imageBytes=await readFile(path);if(imageBytes.length>20*1024*1024)throw new Error('Image exceeds the supported size');const {imageSize}=await import('image-size'),dimensions=imageSize(imageBytes);if(!dimensions.width||!dimensions.height)throw new Error('Image has no actual dimensions');
+        slide.addImage({...box,w:dimensions.width/72,h:dimensions.height/72,path,altText:e.alt,sizing:{type:e.fit??'contain',w:box.w,h:box.h}});
       } else {
         const kind=({bar:pptx.ChartType.bar,line:pptx.ChartType.line,pie:pptx.ChartType.pie})[e.chartType];
         slide.addChart(kind,structuredClone(e.series),{...box,showTitle:false,showLegend:e.series.length>1,catAxisLabelFontFace:t.font,valAxisLabelFontFace:t.font,catAxisLabelFontSize:e.labelSize??14,valAxisLabelFontSize:e.labelSize??14,showValue:true,valAxisMinVal:e.chartType==='bar'?(()=>{const values=e.series.flatMap(s=>s.values),lo=Math.min(0,...values),hi=Math.max(0,...values);return lo<0?lo-Math.max(1,(hi-lo)*.15):0;})():undefined,varyColors:false,chartColors:e.colors?e.colors.map(hex):[hex('accent'),'777777','AAAAAA']});

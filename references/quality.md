@@ -37,14 +37,14 @@ After building, use the returned report path. An assessment uses `schema:1`, its
 Every required check has `criterion`, `status` (`pass`, `issue`, `uncertain`), a
 specific `reason`, actual `objects` IDs and retained `sources` IDs. The report
 supplies each slide's exact criteria and review questions. Assess title support,
-visual relationship, reading order and technical fit. Three consecutive uses of
-the same component also ask for justification; comparable content may warrant
+visual relationship, reading order and technical fit. Three occurrences of equivalent rendered-scene geometry across
+component names or three consecutive identical components ask for justification; comparable content may warrant
 repetition. Do not alternate layouts mechanically.
 
 Read the cited evidence and view the native pixels before judging. Source IDs
 and matching numbers cannot prove semantic support. Record uncertainties and
-issues honestly. Compiled workspaces require complete, current critique and
-visual review before readiness; old plain-scene workspaces retain their existing
+issues honestly. New creative workspaces require complete, current critique and
+visual review before readiness; previously saved plain-scene workspaces retain their existing
 visual-review behavior. Scene changes, artifact edits, font drift or changed
 pinned intent invalidate the relevant evidence. Structural changes need a fresh
 design handoff/workspace; do not edit pinned inputs to make checks pass.
@@ -52,3 +52,15 @@ design handoff/workspace; do not edit pinned inputs to make checks pass.
 `workspace repair` returns only the chosen slide, its object/cell measurements,
 findings, intent, review questions and expected digest. Save an explicit scoped
 repair as a new scene version, rebuild, reassess and inspect the final deck.
+
+Schema-2/new-workspace critique also judges explanatory value, focal hierarchy
+and asset purpose. Review the report's deck geometry groups and the whole deck,
+not only adjacent IDs. Ask what each treatment makes easier to understand than
+a list. Repeated objection/response comparisons can be appropriate; different
+technical relationships in equivalent panels need a specific recomposition
+finding. Geometry signals request judgment and never force variety.
+
+Native-template authoring uses the same questions and concise per-slide decision
+records against the native revision and actual slide/object IDs. Custom scenes
+carry optional intent; new creative work should supply it. Existing pinned tasks
+keep their recorded guidance/runtime; don't rewrite them to meet new contracts.
