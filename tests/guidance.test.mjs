@@ -24,16 +24,16 @@ async function fixture(t) {
 }
 test('new work sees main advancement; resumed work retains guidance and installed runtime without network', async t => {
   const f = await fixture(t), first = await start(f);
-  assert.equal(first.revision, f.first); assert.equal(first.runtime, f.runtime);
+  assert.equal(first.runtimeVersion,'0.2.0');assert.match(first.runtimeDigest,/^[a-f0-9]{64}$/);assert.equal(first.revision, f.first); assert.equal(first.runtime, f.runtime);
   const snapshot = join(first.guidance, '..');
   assert.deepEqual((await readdir(snapshot)).sort(), ['SKILL.md', 'pin.json', 'references']);
   await writeFile(join(f.source, 'SKILL.md'), `---\nname: ${skill}\n---\nSecond guidance\n`); const secondCommit = await f.commit();
   const second = await start(f); assert.equal(second.revision, secondCommit);
   await rm(f.source, { recursive: true });
   const continued = await resume({ ...f, task: first.task });
-  assert.equal(continued.freshness, 'pinned'); assert.equal(continued.revision, f.first);
+  assert.equal(continued.runtimeVersion,'0.2.0');assert.equal(continued.runtimeDigest,first.runtimeDigest);assert.equal(continued.freshness, 'pinned'); assert.equal(continued.revision, f.first);
   assert.match(await readFile(continued.guidance, 'utf8'), /First guidance/);
-  assert.equal((await resume({ ...f, task: first.task, cached: true })).freshness, 'cached-by-choice');
+  const cached=await resume({ ...f, task: first.task, cached: true });assert.equal(cached.freshness, 'cached-by-choice');assert.equal(cached.runtimeVersion,'0.2.0');
 });
 test('guidance and executable changes are detected when resuming saved work', async t => {
   const f = await fixture(t), pin = await start(f);
@@ -46,7 +46,7 @@ test('guidance and executable changes are detected when resuming saved work', as
 test('incompatible guidance does not create a task and releases the refresh lock', async t => {
   const f = await fixture(t);
   await writeFile(join(f.source, 'guidance/manifest.json'), JSON.stringify({ schema: 1, skill, entry: 'SKILL.md', minimumRuntime: '9.0.0' })); await f.commit();
-  await assert.rejects(start(f), /newer installed runtime/);
+  await assert.rejects(start(f), /requires 9\.0\.0 or newer; installed 0\.2\.0/);
   assert.deepEqual((await readdir(join(f.project, '.' + skill, 'guidance'))).sort(), ['repository.git']);
 });
 test('fetch failures preserve existing tasks and never claim current guidance', async t => {
@@ -79,7 +79,12 @@ test('refresh lock refuses concurrent updates without deleting another owner’s
 test('installed discovery entry is the small bootstrap while executable helpers stay local', async t => {
  const dir=await realpath(await mkdtemp(join(tmpdir(),'harness-bootstrap-install-')));t.after(()=>rm(dir,{recursive:true,force:true}));
  const result=await install({home:join(dir,'home'),shared:join(dir,'shared')});
+ assert.equal(result.runtimeVersion,pkg.version);
+ const installed=JSON.parse((await exec(process.execPath,[join(result.runtime,'scripts/harness-slides.mjs'),'version'])).stdout);assert.equal(installed.runtimeVersion,pkg.version);assert.equal(installed.runtime,result.runtime);
+ assert.equal((await exec(process.execPath,[join(dir,'home/.agents/skills/harness-slides/scripts/harness-slides.mjs'),'--version'])).stdout.trim(),'Harness Slides '+pkg.version);
  assert.equal(await readFile(join(result.runtime,'SKILL.md'),'utf8'),await readFile(new URL('../bootstrap/SKILL.md',import.meta.url),'utf8'));
  assert.notEqual(await readFile(join(result.runtime,'SKILL.md'),'utf8'),await readFile(new URL('../SKILL.md',import.meta.url),'utf8'));
  assert.match(await readFile(join(result.runtime,'scripts/sync-guidance.mjs'),'utf8'),/Refresh instructions only/);
 });
+
+test('resuming through a newer installation reports the saved executable version, not the new pointer',async t=>{const f=await fixture(t),pin=await start(f),newRuntime=join(f.dir,'new runtime'),current=join(f.dir,'current');await mkdir(join(newRuntime,'scripts'),{recursive:true});await writeFile(join(newRuntime,'package.json'),JSON.stringify({name:pkg.name,version:'0.3.0'}));await writeFile(join(newRuntime,'package-lock.json'),'{}');await writeFile(join(newRuntime,'scripts/helper.mjs'),'New installed helper');await symlink(newRuntime,current);const continued=await resume({project:f.project,task:pin.task,runtime:current});assert.equal(continued.runtime,f.runtime);assert.equal(continued.runtimeVersion,'0.2.0');assert.equal(continued.runtimeDigest,pin.runtimeDigest);});

@@ -15,6 +15,10 @@ across slides by default. Follow [design](references/design.md) for creative wor
 
 ## Agent entrypoint
 
+At start/resume, tell the user “Using Harness Slides v<runtimeVersion>” from the
+helper result; guidance revision is separate. Offline version checks use
+`harness-slides.mjs version` from the returned runtime.
+
 Accept the accompanying plain-language request and operate the needed helpers
 from the returned runtime. The AI prepares scenes and patches; never require
 users to type commands or design an outline/JSON. A bare invocation should offer
