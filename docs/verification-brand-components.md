@@ -157,3 +157,11 @@ the sandbox. Its permitted retry passed 46 of 48 checks; two could not run
 because host Pillow and the Playwright browser binary were absent. These are
 environment prerequisites, so the final publication gate uses the existing
 disposable Tart runner with its dependency setup.
+
+Final publication gate: **48/48 passed, zero skips**, macOS 27.0 / Node 22.23.2,
+with browser/native rendering, audited image dependencies, installer and context
+checks enabled. Logs: `/private/tmp/brand-slide-publication/harness-ci/`
+`harness-slides-test-20261008033648-63637-065c4e3f/`. The owned VM was deleted.
+Its installed digest exactly matches the publication runtime above. Subsequent
+changes only add this record and remove a temporary development-only dependency
+symlink from Git; the runtime payload is unchanged.
