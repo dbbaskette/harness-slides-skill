@@ -5,7 +5,9 @@ helpers were extracted from Dan Baskette's tanzu-brand project with its owner's
 authorization. Brand assets, templates and policy are not included.
 
 PptxGenJS (Brent Ely) and pptx-automizer (Thomas Singer and contributors) are MIT runtime
-dependencies; their installed packages retain their own notices. image-size is
+dependencies; Fontkit (Devon Govett and contributors, MIT) provides shaped font
+measurements. Their installed packages retain their own notices. Font files are
+resolved from the user’s system or explicit paths and are never distributed. image-size is
 pinned to a patched release through an override. No third-party skill source was
 copied. Source-reviewed ideas informed our original implementation:
 

@@ -10,7 +10,9 @@ to use the skill.
 Slides share a theme while their compositions follow their own content: a
 comparison, process, architecture, metric, chart, table, quote or image can each
 use a different structure. Brand add-ons can supply a resolved design contract
-and a separate author-voice handoff. The agent handles these choices and helpers.
+and a separate author-voice handoff. The agent handles these choices and helpers. It screens text using available
+font files, reviews each slide’s title and evidence, and checks native rendering.
+Missing fonts and uncertain claims are reported for resolution.
 
 ## 1. Install once
 
@@ -218,13 +220,14 @@ representative guidance-start response. Bootstrap activation is shown separately
 | Discovery metadata | 39 |
 | Installed bootstrap | 385 |
 | Bootstrap + current guidance entry | 1,163 |
-| Scoped PPTX edit + final review | 2,446 |
-| Scoped Google edit + final review | 2,641 |
-| New PPTX deck from native template + review | 3,398 |
-| New Google deck from native template + review | 4,033 |
-| New PPTX scene + contract + review | 3,620 |
-| New Google scene + contract + review | 4,325 |
-| Content-led PPTX + selected component + review | 4,467 |
+| Scoped PPTX edit + final review | 2,486 |
+| Scoped Google edit + final review | 3,073 |
+| New PPTX deck from native template + review | 3,438 |
+| New Google deck from native template + review | 4,465 |
+| New PPTX scene + contract + review | 3,660 |
+| New Google scene + contract + review | 4,795 |
+| Content-led PPTX + selected component + review | 5,222 |
+| Font screening + structured critique + review | 2,733 |
 | Optional image guidance + download result | 2,097 |
 
 Intake, workspace, brand integration and image guidance load only when needed. Native-template

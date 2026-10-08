@@ -14,7 +14,7 @@ export async function renderPptxScene(scene,output,{base=process.cwd(),brand}={}
     if(s.notes)slide.addNotes(s.notes);
     for(const e of s.elements) {
       const box={x:e.x/72,y:e.y/72,w:e.width/72,h:e.height/72,objectName:e.id};
-      const style={fontFace:t.font,fontSize:e.fontSize??(e.role==='title'?t.titleSize:t.bodySize),color:hex(e.color??'text'),bold:e.bold??false,align:e.align??'left',margin:3.6,breakLine:false,vertAnchor:'ctr',...(e.fill?{fill:{color:hex(e.fill)}}:{})};
+      const style={fontFace:t.font,fontSize:e.fontSize??(e.role==='title'?t.titleSize:t.bodySize),color:hex(e.color??'text'),bold:e.bold??false,align:e.align??'left',margin:3.6,lineSpacingMultiple:1.25,paraSpaceBefore:0,paraSpaceAfter:0,breakLine:false,vertAnchor:'ctr',...(e.fill?{fill:{color:hex(e.fill)}}:{})};
       if(e.type==='text')slide.addText(e.text,{...box,...style});
       else if(e.type==='shape') {
         slide.addShape(e.shape==='ellipse'?pptx.ShapeType.ellipse:pptx.ShapeType.rect,{...box,fill:e.fill?{color:hex(e.fill)}:{color:hex('background'),transparency:100},line:{transparency:100}});

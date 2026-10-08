@@ -54,3 +54,36 @@ node scripts/harness-slides.mjs drive import --file revised.pptx --name "Revised
 Import creates a new Google Slides file. Review actual Google output afterward:
 conversion can change fonts, wrapping, charts and layout. Keep the PPTX source
 and report conversion limitations. No automatic retries for uncertain uploads.
+
+## Connector compilation and readback
+
+Use the same compiler through an already-authorized native connector when that
+transport is available. These operations are offline and do not start another
+login or service:
+
+```sh
+node scripts/harness-slides.mjs google compile --file scene.json --template before.json --output plan.json --local-images
+node scripts/harness-slides.mjs google notes --file scene.json --template after-content.json --output notes-plan.json
+node scripts/harness-slides.mjs google verify --file scene.json --template after.json --source before.json
+```
+
+Send the structured `requests` and `writeControl` through the connector. Enable
+`--local-images` only for a transport with authenticated local-image sidecars;
+the plan lists the absolute local paths. Supply those paths as the connector's
+image sidecars, with matching createImage URL placeholders. Never silently upload
+assets publicly. The ordinary gcloud/workspace apply route still needs HTTPS
+image URLs. Images and linked charts fit inside their requested bounds while
+preserving intrinsic aspect ratio; readback checks their centered fit.
+
+Notes are a second revision-controlled phase: read actual speaker-notes IDs after
+content creation, compile the notes batch, send it, then read the final deck.
+Omitted notes preserve existing content; an explicit empty string clears notes.
+The gcloud apply helper stages this automatically. A notes failure leaves a
+partially completed operation and requires inspection before retrying.
+
+Final readback verifies text, geometry, unequal table widths/overflow, notes,
+image alt text, chart source IDs and untouched source objects/slide metadata.
+Chart data and styling remain in Sheets; verify its values and refresh the linked
+chart after source edits. Readback is not a visual-quality certification. Inspect
+native renders and keep revision-bound evidence. The repeatable live fixture and
+procedure are in [Google acceptance](../docs/verification/google-quality-acceptance.md).

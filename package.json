@@ -1,6 +1,6 @@
 {
   "name": "harness-slides",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Brand-neutral editable slide authoring, preservation and visual review for agent harnesses.",
   "type": "module",
   "license": "MIT",
@@ -18,12 +18,13 @@
     "ci:local": "bash scripts/ci/tart-macos.sh"
   },
   "dependencies": {
-    "pptxgenjs": "4.0.1",
-    "pptx-automizer": "0.9.4"
+    "fontkit": "2.0.4",
+    "pptx-automizer": "0.9.4",
+    "pptxgenjs": "4.0.1"
   },
   "devDependencies": {
-    "playwright": "1.58.0",
-    "js-tiktoken": "1.0.21"
+    "js-tiktoken": "1.0.21",
+    "playwright": "1.58.0"
   },
   "overrides": {
     "image-size": "2.0.4"
