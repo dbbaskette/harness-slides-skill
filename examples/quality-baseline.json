@@ -1,0 +1,270 @@
+{
+  "schema": 1,
+  "title": "Neutral slide quality benchmark",
+  "slides": [
+    {
+      "id": "topology_slide",
+      "title": "Write ownership changes the validation question",
+      "sources": [
+        "brief:neutral-quality"
+      ],
+      "intent": {
+        "takeaway": "Write ownership changes the validation question",
+        "relationship": "comparison",
+        "rationale": "Show write destinations with matched actors and labeled edges.",
+        "evidence": [
+          "brief:neutral-quality"
+        ]
+      },
+      "component": {
+        "kind": "comparison",
+        "columns": [
+          {
+            "label": "Single write owner",
+            "text": "client writes writer; writer replicates replica; Conceptual patterns only; no consistency or availability guarantees."
+          },
+          {
+            "label": "Two write owners",
+            "text": "client writes writer; client writes replica; Conceptual patterns only; no consistency or availability guarantees."
+          }
+        ]
+      }
+    },
+    {
+      "id": "migration_slide",
+      "title": "Validate the dependency before migration",
+      "sources": [
+        "brief:neutral-quality"
+      ],
+      "intent": {
+        "takeaway": "Validate the dependency before migration",
+        "relationship": "categories",
+        "rationale": "Expose the evidence-controlled branches rather than three parallel text columns.",
+        "evidence": [
+          "brief:neutral-quality"
+        ]
+      },
+      "component": {
+        "kind": "categories",
+        "items": [
+          {
+            "label": "Unknown version",
+            "text": "Inventory first."
+          },
+          {
+            "label": "Known version",
+            "text": "Check dependency; document validation."
+          },
+          {
+            "label": "Caveat",
+            "text": "Compatibility is not guaranteed; retain the actual source-version caveat."
+          }
+        ]
+      }
+    },
+    {
+      "id": "ownership_slide",
+      "title": "Service and customer responsibilities stay distinct",
+      "sources": [
+        "brief:neutral-quality"
+      ],
+      "intent": {
+        "takeaway": "Service and customer responsibilities stay distinct",
+        "relationship": "categories",
+        "rationale": "Label independent ownership regions without implying integration or containment.",
+        "evidence": [
+          "brief:neutral-quality"
+        ]
+      },
+      "component": {
+        "kind": "categories",
+        "items": [
+          {
+            "label": "Service team",
+            "text": "Operate the service. Maintain its documented scope."
+          },
+          {
+            "label": "Customer team",
+            "text": "Validate application behavior. Own its configuration."
+          },
+          {
+            "label": "Qualification",
+            "text": "Illustrative ownership only; actual entitlement depends on agreement."
+          }
+        ]
+      }
+    },
+    {
+      "id": "scenario_slide",
+      "title": "Automation still needs care and context",
+      "sources": [
+        "brief:neutral-quality"
+      ],
+      "intent": {
+        "takeaway": "Automation still needs care and context",
+        "relationship": "claim",
+        "rationale": "Editorial greenhouse context makes the scenario tangible while its explanation stays editable.",
+        "evidence": [
+          "brief:neutral-quality"
+        ]
+      },
+      "component": {
+        "kind": "statement",
+        "text": "A routine can automate repeatable work. People still define goals and handle exceptions.",
+        "support": "Conceptual illustration, not customer evidence."
+      }
+    },
+    {
+      "id": "wording_slide",
+      "title": "Read the agreed wording exactly",
+      "sources": [
+        "brief:neutral-quality"
+      ],
+      "intent": {
+        "takeaway": "Read the agreed wording exactly",
+        "relationship": "claim",
+        "rationale": "Exact wording is the audience task; no asset is useful.",
+        "evidence": [
+          "brief:neutral-quality"
+        ]
+      },
+      "component": {
+        "kind": "statement",
+        "text": "Keep the agreed qualification visible.",
+        "support": "This slide intentionally asks the audience to read one sentence."
+      }
+    },
+    {
+      "id": "objection_slide_0",
+      "title": "Compare like-for-like discovery questions",
+      "sources": [
+        "brief:neutral-quality"
+      ],
+      "intent": {
+        "takeaway": "Compare like-for-like discovery questions",
+        "relationship": "comparison",
+        "rationale": "Repeated geometry helps compare comparable conversations.",
+        "evidence": [
+          "brief:neutral-quality"
+        ]
+      },
+      "component": {
+        "kind": "comparison",
+        "columns": [
+          {
+            "label": "Customer question",
+            "text": "Who owns the action?"
+          },
+          {
+            "label": "Response",
+            "text": "Confirm the documented scope before making a promise."
+          }
+        ]
+      }
+    },
+    {
+      "id": "objection_slide_1",
+      "title": "Compare like-for-like discovery questions",
+      "sources": [
+        "brief:neutral-quality"
+      ],
+      "intent": {
+        "takeaway": "Compare like-for-like discovery questions",
+        "relationship": "comparison",
+        "rationale": "Repeated geometry helps compare comparable conversations.",
+        "evidence": [
+          "brief:neutral-quality"
+        ]
+      },
+      "component": {
+        "kind": "comparison",
+        "columns": [
+          {
+            "label": "Customer question",
+            "text": "Who owns the action?"
+          },
+          {
+            "label": "Response",
+            "text": "Confirm the documented scope before making a promise."
+          }
+        ]
+      }
+    },
+    {
+      "id": "objection_slide_2",
+      "title": "Compare like-for-like discovery questions",
+      "sources": [
+        "brief:neutral-quality"
+      ],
+      "intent": {
+        "takeaway": "Compare like-for-like discovery questions",
+        "relationship": "comparison",
+        "rationale": "Repeated geometry helps compare comparable conversations.",
+        "evidence": [
+          "brief:neutral-quality"
+        ]
+      },
+      "component": {
+        "kind": "comparison",
+        "columns": [
+          {
+            "label": "Customer question",
+            "text": "Who owns the action?"
+          },
+          {
+            "label": "Response",
+            "text": "Confirm the documented scope before making a promise."
+          }
+        ]
+      }
+    },
+    {
+      "id": "open_slide",
+      "title": "Compare options without heavy panels",
+      "sources": [
+        "brief:neutral-quality"
+      ],
+      "intent": {
+        "takeaway": "Compare options without heavy panels",
+        "relationship": "comparison",
+        "rationale": "Open aligned columns expose a short comparison.",
+        "evidence": [
+          "brief:neutral-quality"
+        ]
+      },
+      "component": {
+        "kind": "comparison",
+        "columns": [
+          {
+            "label": "Known dependency",
+            "text": "Validate against the documented requirement."
+          },
+          {
+            "label": "Unknown dependency",
+            "text": "Inventory first; preserve uncertainty."
+          }
+        ]
+      }
+    },
+    {
+      "id": "evidence_slide",
+      "title": "Explain the decision behind the finding",
+      "sources": [
+        "brief:neutral-quality"
+      ],
+      "intent": {
+        "takeaway": "Explain the decision behind the finding",
+        "relationship": "claim",
+        "rationale": "A focal conclusion and subordinate explanation create hierarchy.",
+        "evidence": [
+          "brief:neutral-quality"
+        ]
+      },
+      "component": {
+        "kind": "statement",
+        "text": "Validate before promising",
+        "support": "The documented scope determines who can act and which check is required. Illustrative training principle; no measured outcome is claimed."
+      }
+    }
+  ]
+}

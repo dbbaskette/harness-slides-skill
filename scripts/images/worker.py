@@ -3,6 +3,9 @@
 """One JSON request on stdin, one compact result on stdout, then exit.
 No listener or bridge process. Private receipts preserve download recovery.
 """
+import sys
+sys.dont_write_bytecode = True
+
 import asyncio
 import contextlib
 import fcntl
@@ -146,7 +149,7 @@ class WebTransport:
             raise ImageError('auth_required')
 
     def models(self):
-        return [{'id': m.model_id, 'name': m.model_name, 'available': m.available}
+        return [{'id': m.model_id, 'name': m.model_name, 'available': m.is_available}
                 for m in self.client.list_models() or []]
 
     def select_model(self, name):
@@ -154,7 +157,7 @@ class WebTransport:
             return None  # Explicit contract: account default, recorded as such.
         matches = [m for m in self.client.list_models() or []
                    if name.lower() in {str(x).lower() for x in [m.model_id, m.model_name, *m.aliases]}]
-        if len(matches) != 1 or not matches[0].available:
+        if len(matches) != 1 or not matches[0].is_available:
             raise ImageError('model_unavailable')
         return matches[0]
 

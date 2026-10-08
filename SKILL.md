@@ -9,6 +9,8 @@ The AI owns story and design unless supplied. A user can provide a brief, source
 documents or an existing deck; never require them to design an outline or JSON.
 Default to native Google Slides, honoring explicit PowerPoint requests.
 
+For new creative work, retain a concise content/asset decision per slide and
+review what the visual explains; generated art is one option, not a quota.
 Choose each slide's composition and visual assets from its own content. Carry
 the theme and narrative across the deck; do not carry a list or layout choice
 across slides by default. Follow [design](references/design.md) for creative work.

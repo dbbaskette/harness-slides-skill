@@ -16,7 +16,8 @@ node scripts/harness-slides.mjs images check
 
 `status` is offline: configured does not prove current authentication. Setup
 installs optional dependencies in a private runtime and opens a dedicated Chrome
-profile. Tell the user to sign in to Google and close that window. It verifies
+profile. Tell the user to sign in to Google and **Quit the dedicated Chrome instance (Cmd+Q on Mac)**;
+closing its last window may leave Chrome running and will not save the session. It verifies
 Gemini and saves required cookies privately. No service, port, bridge install or
 API key is needed. Google Cloud CLI credentials do not replace Gemini cookies.
 Setup requires macOS/Linux, Chrome, Python 3.11+ and network access. Resolve local
@@ -69,3 +70,10 @@ outside the deck. Operations lock that session; a busy result means wait. A new
 saved sign-in session can invalidate older receipts. Never read private state
 into context, commit it, or print provider logs. Runtime scripts and dependencies
 stay on disk. Return the compact helper result and relevant limitations.
+
+Diagnostics importing worker code must run Python with `-I -B`; environment
+bytecode flags alone are ignored by isolated Python. Do not create caches in the
+immutable installed runtime or exclude unexpected files from its integrity check.
+Setup keeps a separate profile, bounds its owned browser wait and preserves
+existing saved credentials when verification fails. Never quit unrelated Chrome
+processes or replace profiles as a routine retry.

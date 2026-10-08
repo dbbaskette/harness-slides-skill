@@ -13,7 +13,7 @@ silently adopting the current installation pointer. A version label alone does
 not prove byte identity; the installed content digest and task runtime hashes
 identify retained code. A failed compatibility check names both versions.
 
-Users see “Using Harness Slides v0.5.1”. `--version` is an offline human-readable
+Users see “Using Harness Slides v0.6.0”. `--version` is an offline human-readable
 check; `version` returns `package`, `runtimeVersion` and resolved `runtime` as
 JSON. Run it from the returned runtime. This does not authenticate Google or
 query releases. The existing `workspace restore --version v000001` remains a
@@ -30,11 +30,11 @@ workspace history selector.
 3. Integrate the verified source by PR. Confirm the merged tree equals the tested
    tree and that the tag is unused. Never move or overwrite a published tag/asset.
 4. Package the exact merge commit with Git's archive command, not a mutable work
-   directory. For v0.5.1, replacing COMMIT with its verified merge SHA:
+   directory. For v0.6.0, replacing COMMIT with its verified merge SHA:
 
    ```sh
-   git archive --format=zip --prefix=harness-slides-v0.5.1/ --output /private/tmp/harness-slides-v0.5.1.zip COMMIT
-   shasum -a 256 /private/tmp/harness-slides-v0.5.1.zip
+   git archive --format=zip --prefix=harness-slides-v0.6.0/ --output /private/tmp/harness-slides-v0.6.0.zip COMMIT
+   shasum -a 256 /private/tmp/harness-slides-v0.6.0.zip
    ```
 
 5. Extract into disposable state. Verify package version, compare file hashes

@@ -7,7 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const helper = fileURLToPath(new URL('../images/worker.py', import.meta.url));
 const requirements = fileURLToPath(new URL('../images/requirements.txt', import.meta.url));
-export const defaultState = () => join(homedir(), '.harness-slides-images');
+export const defaultState = () => process.env.HARNESS_IMAGE_STATE ?? join(homedir(), '.harness-slides-images');
 const messages = {
   setup_required: 'Ask Harness Slides to setup images, then sign in to Google in its Chrome window.',
   auth_required: 'The Gemini session needs sign-in. Run setup images again.',
@@ -89,7 +89,7 @@ export async function installImageRuntime(state, deps = {}) {
     await run(join(temp, 'venv/bin/python'), ['-m', 'pip', 'install', '--disable-pip-version-check', '-r', requirements], { progress: true });
     await run('npm', ['install', '--prefix', join(temp, 'browser'), '--ignore-scripts', '--no-audit', '--no-fund', '--save-exact', 'playwright@1.58.0'], { progress: true });
     // Import/check versions before marking ready. No account or provider request.
-    await run(join(temp, 'venv/bin/python'), ['-I', '-c', 'import gemini_webapi, PIL, curl_cffi']);
+    await run(join(temp, 'venv/bin/python'), ['-I', '-B', '-c', 'import gemini_webapi, PIL, curl_cffi']);
     const { writeFile } = await import('node:fs/promises');
     await writeFile(join(temp, 'ready'), '1\n', { mode: 0o600 });
     try { await rename(temp, runtime); }
@@ -106,10 +106,10 @@ export async function signIn(state, runtime, deps = {}) {
   const chrome = process.env.HARNESS_IMAGE_CHROME ?? (platform() === 'darwin'
     ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : '/usr/bin/google-chrome');
   const run = deps.run ?? runProcess;
-  process.stderr.write('Sign in to Google in the Slides Chrome window, then close that window to save the session.\n');
+  process.stderr.write('Sign in to Google in the Slides Chrome window, then Quit this dedicated Chrome instance (Cmd+Q on Mac) to save the session. Closing a window is insufficient. Your normal Chrome profile is separate.\n');
   // Manual sign-in without automation flags; ordinary generation never opens Chrome.
   await run(chrome, [`--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check',
-    '--disable-background-mode', '--password-store=basic', '--use-mock-keychain', 'https://gemini.google.com/app']);
+    '--disable-background-mode', '--class=HarnessSlidesImages', '--password-store=basic', '--use-mock-keychain', 'https://gemini.google.com/app']);
   const { chromium } = deps.playwright ?? await import(pathToFileURL(join(runtime, 'browser/node_modules/playwright/index.mjs')).href);
   let context;
   try {
@@ -133,9 +133,9 @@ export async function images(action, options = {}, deps = {}) {
   await privateDirectory(state);
   if (action === 'setup') {
     const installed = await (deps.install ?? installImageRuntime)(state, deps);
-    await run(join(installed, 'venv/bin/python'), ['-I', helper], { input: { action: 'runtime', state } });
+    await run(join(installed, 'venv/bin/python'), ['-I', '-B', helper], { input: { action: 'runtime', state } });
     const cookies = await (deps.signIn ?? signIn)(state, installed, deps);
-    return run(join(installed, 'venv/bin/python'), ['-I', helper], { input: { action: 'auth', state, cookies } });
+    return run(join(installed, 'venv/bin/python'), ['-I', '-B', helper], { input: { action: 'auth', state, cookies } });
   }
   if (!await exists(join(runtime, 'ready'))) return action === 'status'
     ? { status: 'setup_required', provider: 'gemini-web', liveChecked: false }
@@ -150,5 +150,5 @@ export async function images(action, options = {}, deps = {}) {
     Object.assign(payload, { promptFile: resolve(options.promptFile), output: options.output,
       references: (options.references ?? []).map(p => resolve(p)), ...(options.model ? { model: options.model } : {}) });
   }
-  return run(join(runtime, 'venv/bin/python'), ['-I', helper], { input: payload });
+  return run(join(runtime, 'venv/bin/python'), ['-I', '-B', helper], { input: payload });
 }

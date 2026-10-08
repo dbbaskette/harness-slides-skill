@@ -22,7 +22,7 @@ PowerPoint inspection also needs **Python 3.9 or newer**.
 Run these commands in your terminal:
 
 ```sh
-git clone --branch v0.5.1 --depth 1 https://github.com/dbbaskette/harness-slides-skill.git
+git clone --branch v0.6.0 --depth 1 https://github.com/dbbaskette/harness-slides-skill.git
 cd harness-slides-skill
 bash scripts/Install-Harness-Slides.sh
 ```
@@ -33,8 +33,8 @@ skills. To preview the changes first, add `--dry-run` to the installer command.
 
 ## Know which version you are using
 
-The current published release is [v0.5.1](https://github.com/dbbaskette/harness-slides-skill/releases/tag/v0.5.1).
-The skill reports “Using Harness Slides v0.5.1” when starting or resuming work.
+The current published release is [v0.6.0](https://github.com/dbbaskette/harness-slides-skill/releases/tag/v0.6.0).
+The skill reports “Using Harness Slides v0.6.0” when starting or resuming work.
 A resumed deck may use its older saved runtime and will report that version.
 Guidance can refresh independently; its revision does not replace the runtime version.
 
@@ -239,16 +239,16 @@ representative guidance-start response. Bootstrap activation is shown separately
 | --- | ---: |
 | Discovery metadata | 39 |
 | Installed bootstrap | 412 |
-| Bootstrap + current guidance entry | 1,239 |
-| Scoped PPTX edit + final review | 2,616 |
-| Scoped Google edit + final review | 3,203 |
-| New PPTX deck from native template + review | 3,568 |
-| New Google deck from native template + review | 4,595 |
-| New PPTX scene + contract + review | 3,790 |
-| New Google scene + contract + review | 4,925 |
-| Content-led PPTX + selected component + review | 5,352 |
-| Font screening + structured critique + review | 2,863 |
-| Optional image guidance + download result | 2,227 |
+| Bootstrap + current guidance entry | 1,271 |
+| Scoped PPTX edit + final review | 2,854 |
+| Scoped Google edit + final review | 3,441 |
+| New PPTX deck from native template + review | 3,965 |
+| New Google deck from native template + review | 4,992 |
+| New PPTX scene + contract + review | 4,260 |
+| New Google scene + contract + review | 5,395 |
+| Content-led PPTX + selected component + review | 6,195 |
+| Font screening + structured critique + review | 3,251 |
+| Optional image guidance + download result | 2,365 |
 
 Intake, workspace, brand integration and image guidance load only when needed. Native-template
 authoring skips the scene contract; scene routes include its actual helper output.

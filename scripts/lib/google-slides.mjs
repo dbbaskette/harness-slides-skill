@@ -31,7 +31,7 @@ export function compileGoogleScene(scene,deck,{localImages=false}={}) {
   function text(e,cellLocation) {
     const selector=cellLocation?{cellLocation}:{};
     return [{insertText:{objectId:e.id,...selector,insertionIndex:0,text:e.text}},
-      {updateTextStyle:{objectId:e.id,...selector,textRange:{type:'ALL'},style:{fontFamily:t.font,fontSize:{magnitude:e.fontSize??(e.role==='title'?t.titleSize:t.bodySize),unit:'PT'},bold:e.bold??false,foregroundColor:{opaqueColor:solid(e.color??'text')}},fields:'fontFamily,fontSize,bold,foregroundColor'}},
+      {updateTextStyle:{objectId:e.id,...selector,textRange:{type:'ALL'},style:{...(e.href?{link:{url:e.href}}:{}),fontFamily:t.font,fontSize:{magnitude:e.fontSize??(e.role==='title'?t.titleSize:t.bodySize),unit:'PT'},bold:e.bold??false,foregroundColor:{opaqueColor:solid(e.color??'text')}},fields:'fontFamily,fontSize,bold,foregroundColor'+(e.href?',link':'')}},
       {updateParagraphStyle:{objectId:e.id,...selector,textRange:{type:'ALL'},style:{alignment:({left:'START',center:'CENTER',right:'END'})[e.align??'left'],lineSpacing:125,spaceAbove:{magnitude:0,unit:'PT'},spaceBelow:{magnitude:0,unit:'PT'}},fields:'alignment,lineSpacing,spaceAbove,spaceBelow'}}];
   }
   for(const s of scene.slides) {
