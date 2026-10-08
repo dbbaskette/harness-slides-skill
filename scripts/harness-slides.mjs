@@ -20,6 +20,7 @@ const exec=promisify(execFile);
 export const help=`Harness Slides · brand-neutral editable decks
 Usage: node scripts/harness-slides.mjs COMMAND ACTION [options]
 
+  deck contract [--id COMPONENT] | inspect --file plan.json | compile --file plan.json [--brand brand-contract.json] --output NEW_DIR
   scene contract | validate --file scene.json [--required evidence.json]
   workspace init --project NEW_DIR --file scene.json [--format google-slides|pptx] [--template snapshot.json] [--source deck.pptx] [--required evidence.json]
   workspace status|history|build --project DIR
@@ -31,7 +32,7 @@ Usage: node scripts/harness-slides.mjs COMMAND ACTION [options]
   pptx inspect --file deck.pptx [--slide N] [--object ID] [--json]
   pptx patch --file original.pptx --plan patch.json --output new.pptx
   pptx compare --file original.pptx --after new.pptx [--allow changes.json]
-  pptx render --file scene.json --output new.pptx
+  pptx render --file scene.json --output new.pptx [--brand brand-contract.json]
   pptx compose --plan composition.json --output new.pptx
   template inspect --file template.pptx --output contract.json
   template choose --file manifest.json [--id ID] [--query WORDS] [--format google-slides|pptx]
@@ -43,6 +44,10 @@ Usage: node scripts/harness-slides.mjs COMMAND ACTION [options]
   review --file deck.pptx | --previews native-previews.json --output DIR
   review --output DIR --mark 1,2 --revision HASH --note TEXT [--status reviewed|unresolved]
   icons copy --plan icon-copy.json
+  setup images
+  images status|check
+  images generate --project DIR --id ID --prompt-file brief.txt --output assets/image.png [--reference image.png] [--model NAME]
+  images download --project DIR --id ID
   doctor [--google-check] [--file-id ID]
   install [--dry-run] [--home DIR] [--shared DIR]
 
@@ -72,23 +77,25 @@ export async function nativePreviews({fileId,output},deps={}) {
 }
 export async function main(argv=process.argv.slice(2)) {
   const {values:v,positionals:p}=parseArgs({args:argv,allowPositionals:true,options:Object.fromEntries([
-    'file','after','allow','plan','output','project','format','template','source','required','expected','note','version','slide','object','previews','mark','revision','status','port','file-id','folder-id','name','home','shared','query','id','limit','soffice','pdftoppm','pdfinfo'
-  ].map(k=>[k,{type:'string'}]).concat(['help','json','dry-run','refresh','google-check'].map(k=>[k,{type:'boolean'}])))});
+    'brand','file','after','allow','plan','output','project','format','template','source','required','expected','note','version','slide','object','previews','mark','revision','status','port','file-id','folder-id','name','home','shared','query','id','limit','soffice','pdftoppm','pdfinfo','prompt-file','model'
+  ].map(k=>[k,{type:'string'}]).concat([['reference',{type:'string',multiple:true}]],['help','json','dry-run','refresh','google-check'].map(k=>[k,{type:'boolean'}])))});
   const [command,action,...extra]=p;
   if(!command||v.help||command==='help'){console.log(help);return;}
   if(extra.length)throw new Error('Too many actions');
   const single=['studio','review','doctor','install','layouts'];
   if(single.includes(command)&&action)throw new Error('This command has no action argument');
-  const allowed={scene:{contract:[],validate:['file','required']},workspace:{init:['project','file','format','template','source','required'],save:['project','file','expected','note'],restore:['project','version','expected'],build:['project'],history:['project'],status:['project'],repair:['project','slide'],apply:['project','dry-run']},pptx:{inspect:['file','slide','object','json'],patch:['file','plan','output'],compare:['file','after','allow'],render:['file','output'],compose:['plan','output']},template:{inspect:['file','output'],choose:['file','id','query','format']},google:{snapshot:['file-id','output'],copy:['file-id','name'],previews:['file-id','output']},drive:{check:[],export:['file-id','output'],import:['file','name','folder-id']},icons:{copy:['plan']},studio:['project','port'],review:['file','previews','output','refresh','mark','revision','note','status','soffice','pdftoppm','pdfinfo'],doctor:['google-check','file-id'],install:['dry-run','home','shared'],layouts:['query','id','limit']}[command];
+  const allowed={deck:{contract:['id'],inspect:['file'],compile:['file','brand','output']},setup:{images:[]},images:{status:[],check:[],generate:['project','id','prompt-file','output','reference','model'],download:['project','id']},scene:{contract:[],validate:['file','required']},workspace:{init:['project','file','format','template','source','required','brand'],save:['project','file','expected','note'],restore:['project','version','expected'],build:['project'],history:['project'],status:['project'],repair:['project','slide'],apply:['project','dry-run']},pptx:{inspect:['file','slide','object','json'],patch:['file','plan','output'],compare:['brand','file','after','allow'],render:['file','output','brand'],compose:['plan','output']},template:{inspect:['file','output'],choose:['file','id','query','format']},google:{snapshot:['file-id','output'],copy:['file-id','name'],previews:['file-id','output']},drive:{check:[],export:['file-id','output'],import:['file','name','folder-id']},icons:{copy:['plan']},studio:['project','port'],review:['file','previews','output','refresh','mark','revision','note','status','soffice','pdftoppm','pdfinfo'],doctor:['google-check','file-id'],install:['dry-run','home','shared'],layouts:['query','id','limit']}[command];
   const flags=Array.isArray(allowed)?allowed:allowed?.[action];
   if(!flags)throw new Error('Unknown command/action; run --help');
   for(const key of Object.keys(v))if(!flags.includes(key))throw new Error(`--${key} is not valid for this command`);
   if(command==='review'&&v.mark&&(v.file||v.previews||v.refresh))throw new Error('Prepare and mark are separate operations');
   let result;
   if(command==='scene'&&action==='contract'){console.log(contract);return;}
-  if(command==='scene'&&action==='validate'){const s=await json(v.file);result={coverage:coverage(s,v.required?await json(v.required):[]),findings:sceneFindings(s)};}
+  if(command==='deck'){const {componentContract,inspectDeckPlan,compileDeckFile}=await import('./lib/deck-plan.mjs');result=action==='contract'?componentContract(v.id):action==='inspect'?inspectDeckPlan(await json(v.file)):await compileDeckFile(v);}
+  else if(command==='setup'||command==='images') { const { images }=await import('./lib/images.mjs');result=await images(command==='setup'?'setup':action,{project:v.project,id:v.id,promptFile:v['prompt-file'],output:v.output,references:v.reference,model:v.model}); }
+  else if(command==='scene'&&action==='validate'){const s=await json(v.file);result={coverage:coverage(s,v.required?await json(v.required):[]),findings:sceneFindings(s)};}
   else if(command==='workspace') {
-    if(action==='init')result=await initWorkspace({root:v.project,scene:await json(v.file),format:v.format,template:v.template,source:v.source,requiredSources:v.required?await json(v.required):[],base:dirname(resolve(v.file))});
+    if(action==='init')result=await initWorkspace({root:v.project,scene:await json(v.file),format:v.format,template:v.template,source:v.source,requiredSources:v.required?await json(v.required):[],brandContract:v.brand?await json(v.brand):undefined,base:dirname(resolve(v.file))});
     else if(action==='save')result=await saveScene({root:v.project,scene:await json(v.file),expectedDigest:v.expected,note:v.note});
     else if(action==='restore')result=await restoreVersion({root:v.project,id:v.version,expectedDigest:v.expected});
     else if(action==='build')result=await buildWorkspace({root:v.project});
@@ -103,7 +110,7 @@ export async function main(argv=process.argv.slice(2)) {
     if(action==='inspect'){const deck=await pptxTool('inspect',[v.file]);if(v.json)result=deck;else{const slides=v.slide?deck.slides.filter(s=>s.number===Number(v.slide)):deck.slides;result={sha256:deck.sha256,size:deck.size,slides:slides.map(s=>({number:s.number,id:s.id,title:s.title,objects:s.objects.filter(o=>!v.object||o.id===v.object).map(({id,name,type,text,box,contentHash})=>({id,name,type,text,box,contentHash}))}))};}}
     else if(action==='patch')result=await pptxTool('patch',[v.file,v.plan,v.output]);
     else if(action==='compare')result=await pptxTool('compare',[v.file,v.after,...(v.allow?[v.allow]:[])]);
-    else if(action==='render')result=await renderPptxScene(await json(v.file),v.output,{base:resolve(v.file,'..')});
+    else if(action==='render')result=await renderPptxScene(await json(v.file),v.output,{base:resolve(v.file,'..'),brand:v.brand?await json(v.brand):undefined});
     else if(action==='compose')result=await composePptx({...await json(v.plan),output:v.output});
     else throw new Error('Unknown PPTX action');
   } else if(command==='template') {
@@ -123,7 +130,7 @@ export async function main(argv=process.argv.slice(2)) {
     const tools={};for(const tool of ['python3','soffice','pdftoppm','pdfinfo','gcloud'])try{const r=await exec(tool,['--version'],{timeout:10000});tools[tool]={available:true,version:(r.stdout||r.stderr).split('\n')[0]};}catch{tools[tool]={available:false};}
     result={node:process.version,tools,google:v['google-check']?{drive:await checkDriveAccess(),native:v['file-id']?await probeGooglePresentation(v['file-id']):'untested: provide --file-id'}:'not checked'};
   } else throw new Error('Unknown command; run --help');
-  console.log(JSON.stringify(result,null,2));
+  console.log(JSON.stringify(result,null,['setup','images'].includes(command)?undefined:2));
   if(result?.preserved===false||result?.coverage?.complete===false)process.exitCode=1;
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href)main().catch(error=>{console.error(error.message);process.exitCode=1;});

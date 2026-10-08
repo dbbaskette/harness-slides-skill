@@ -41,7 +41,7 @@ async function version(root,scene,number,note) {
   catch(error){await rm(dir,{recursive:true,force:true});throw error;}
   return record;
 }
-export async function initWorkspace({root,scene,format='google-slides',template,source,requiredSources=[],brand,base=process.cwd()}) {
+export async function initWorkspace({root,scene,format='google-slides',template,source,requiredSources=[],brand,brandContract,base=process.cwd()}) {
   validateScene(scene);root=resolve(root);scene=structuredClone(scene);
   if(!['google-slides','pptx'].includes(format))throw new Error('Choose google-slides or pptx');
   if(format==='google-slides'&&!template)throw new Error('Google workspaces need a native working-copy snapshot via --template');
@@ -59,6 +59,7 @@ export async function initWorkspace({root,scene,format='google-slides',template,
       if(!manifest.assets[name])await writeFile(join(root,name),bytes,{flag:'wx',mode:0o600});
       manifest.assets[name]=sha;e.src=name;
     }
+    if(brandContract){const {checkBrandSources}=await import('./brand-contract.mjs');await checkBrandSources(brandContract);if(brandContract.medium.kind!=='slides')throw new Error('Workspace needs a slide brand contract');manifest.brandContract='inputs/brand-contract.json';manifest.brandRevision=brandContract.revision;await saveJson(join(root,manifest.brandContract),brandContract);}
     if(template){manifest.template='inputs/template.json';const deck=await json(template);await saveJson(join(root,manifest.template),deck);manifest.templateDigest=digest(deck);}
     if(source){const name=basename(source);if(!/^[\w .-]+\.pptx$/i.test(name))throw new Error('Source must be PPTX');manifest.source=`inputs/${name}`;await copyFile(source,join(root,manifest.source),constants.COPYFILE_EXCL);manifest.sourceSha256=hash(await readFile(join(root,manifest.source)));}
     await saveJson(join(root,'workspace.json'),manifest);await version(root,scene,1,'Initial draft');
@@ -89,7 +90,8 @@ export async function buildWorkspace({root}) {
     const w=await loadWorkspace(root),dir=join(root,'versions',w.current.id,'build');
     const sourceCoverage=coverage(w.scene,w.manifest.requiredSources);
     if(!sourceCoverage.complete)throw new Error(`Missing required evidence: ${sourceCoverage.missing.join(', ')}`);
-    let template;
+    let template,brandContract;
+    if(w.manifest.brandContract){brandContract=await json(await regularInside(root,w.manifest.brandContract));if(brandContract.revision!==w.manifest.brandRevision)throw new Error('Pinned brand contract changed; create an explicit new brand handoff');const {checkBrandSources}=await import('./brand-contract.mjs');await checkBrandSources(brandContract);}
     if(w.manifest.template){template=await json(await regularInside(root,w.manifest.template));if(digest(template)!==w.manifest.templateDigest)throw new Error('Template snapshot changed; use a new workspace');}
     if(w.manifest.source&&hash(await readFile(await regularInside(root,w.manifest.source)))!==w.manifest.sourceSha256)throw new Error('Original PPTX copy changed');
     for(const [file,sha] of Object.entries(w.manifest.assets??{}))if(hash(await readFile(await regularInside(root,file)))!==sha)throw new Error('Workspace asset changed; prepare a new immutable input');
@@ -99,8 +101,8 @@ export async function buildWorkspace({root}) {
     try {
       const artifacts={};
       if(plan){await saveJson(join(dir,'google-requests.json'),{requests:plan.requests,writeControl:plan.writeControl});artifacts['google-requests.json']=hash(await readFile(join(dir,'google-requests.json')));}
-      else {await renderPptxScene(w.scene,join(dir,'deck.pptx'),{base:root});artifacts['deck.pptx']=hash(await readFile(join(dir,'deck.pptx')));}
-      const record={version:w.current.id,sceneDigest:w.current.sceneDigest,format:w.manifest.format,artifacts,sourceCoverage,findings:sceneFindings(w.scene),status:'unreviewed draft'};
+      else {await renderPptxScene(w.scene,join(dir,'deck.pptx'),{base:root,brand:brandContract});artifacts['deck.pptx']=hash(await readFile(join(dir,'deck.pptx')));}
+      const record={version:w.current.id,sceneDigest:w.current.sceneDigest,format:w.manifest.format,artifacts,sourceCoverage,findings:sceneFindings(w.scene),limitations:plan?.limitations??[],status:'unreviewed draft'};
       await saveJson(join(dir,'build.json'),record);
       return {root,build:dir,...record};
     }catch(error){await rm(dir,{recursive:true,force:true});throw error;}
@@ -108,6 +110,7 @@ export async function buildWorkspace({root}) {
 }
 export async function verifiedBuild(root) {
   const w=await loadWorkspace(root),dir=join(w.root,'versions',w.current.id,'build'),record=await json(await regularInside(w.root,`versions/${w.current.id}/build/build.json`));
+  if(w.manifest.brandContract){const contract=await json(await regularInside(w.root,w.manifest.brandContract));if(contract.revision!==w.manifest.brandRevision)throw new Error('Pinned brand contract changed');const {checkBrandSources}=await import('./brand-contract.mjs');await checkBrandSources(contract);}
   if(record.sceneDigest!==w.current.sceneDigest||record.version!==w.current.id)throw new Error('Build does not match current scene');
   for(const [name,sha] of Object.entries(record.artifacts))if(!/^[\w.-]+$/.test(name)||hash(await readFile(await regularInside(dir,name)))!==sha)throw new Error('Built artifact changed; build a new version and review it');
   return {w,dir,record};
@@ -119,7 +122,7 @@ export async function applyWorkspace({root,dryRun=false},deps={}) {
   if(digest(deck)!==w.manifest.templateDigest)throw new Error('Template snapshot changed');
   const plan=compileGoogleScene(w.scene,deck);
   if(JSON.stringify(await json(join(dir,'google-requests.json')))!==JSON.stringify({requests:plan.requests,writeControl:plan.writeControl}))throw new Error('Compiled plan changed');
-  if(dryRun)return {presentationId:plan.presentationId,requests:plan.requests.length,status:'dry run; no Google access'};
+  if(dryRun)return {presentationId:plan.presentationId,requests:plan.requests.length,limitations:plan.limitations,status:'dry run; no Google access'};
   return applyGoogleScene(w.scene,deck,await googleSession(deps));
 }
 export async function workspaceStatus(root) {

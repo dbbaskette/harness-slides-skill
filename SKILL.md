@@ -9,6 +9,10 @@ The AI owns story and design unless supplied. A user can provide a brief, source
 documents or an existing deck; never require them to design an outline or JSON.
 Default to native Google Slides, honoring explicit PowerPoint requests.
 
+Choose each slide's composition and visual assets from its own content. Carry
+the theme and narrative across the deck; do not carry a list or layout choice
+across slides by default. Follow [design](references/design.md) for creative work.
+
 ## Agent entrypoint
 
 Accept the accompanying plain-language request and operate the needed helpers
@@ -31,9 +35,11 @@ this engine. Apply its selected contract and assets; do not mix identities.
 | New deck, redesign or full rework | [Design](references/design.md), then [choose a method](references/authoring.md); load only that method/format |
 | Polish, content-preserving patch or selected-slide edit | [PPTX editing](references/editing.md) or [Google operations](references/google-slides.md), matching the destination |
 | Native Google access/operations | [Google Slides](references/google-slides.md) |
+| Content-led compiler | [Components](references/content-components.md); query the selected component only |
 | Template or brand extension | [Brand add-ons](references/brand-addons.md); [template reuse](references/templates.md) only for inspection/composition |
 | Final rendering and verification | [Review](references/review.md) |
 | Workspace browser and version controls | [Workspace](references/workspace.md) |
+| Custom image generation or image setup | [Images](references/images.md) |
 
 The guidance snapshot contains instructions only. Resolve references here; run
 commands from the task's returned installed **runtime**, never this snapshot. Write artifacts in the user's project. Keep the installed skill unchanged.

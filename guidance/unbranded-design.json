@@ -1,0 +1,25 @@
+{
+  "fontFamily": "Arial",
+  "colors": {
+    "canvasPrimary": "#FFFFFF", "canvasSecondary": "#F0F2F5", "inkDeep": "#202124",
+    "inkSecondary": "#555555", "headingPrimary": "#2867B2", "accentAqua": "#2867B2"
+  },
+  "slides": {
+    "canvas": {"width": 960, "height": 540},
+    "titleBox": {"x": 48, "y": 28, "width": 864, "height": 72},
+    "contentBox": {"x": 48, "y": 116, "width": 864, "height": 372},
+    "reservedBottom": 512,
+    "spacing": {"column": 28, "inset": 16},
+    "typography": {
+      "title": {"size": 32, "bold": true, "colorRole": "headingPrimary"},
+      "body": {"size": 24, "bold": false, "colorRole": "inkDeep"},
+      "bodyReference": {"size": 20, "bold": false, "colorRole": "inkDeep"},
+      "label": {"size": 20, "bold": true, "colorRole": "inkDeep"},
+      "caption": {"size": 14, "bold": false, "colorRole": "inkSecondary"},
+      "metric": {"size": 64, "bold": true, "colorRole": "accentAqua"},
+      "quote": {"size": 30, "bold": false, "colorRole": "inkDeep"}
+    },
+    "chart": {"seriesRoles": ["headingPrimary", "inkSecondary"], "axisFontPt": 18},
+    "table": {"headerFillRole": "headingPrimary", "headerTextRole": "canvasPrimary", "fontPt": 20, "paddingPt": 10}
+  }
+}

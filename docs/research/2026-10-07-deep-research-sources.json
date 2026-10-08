@@ -1,0 +1,480 @@
+{
+  "schemaVersion": 1,
+  "researchDate": "2026-10-07",
+  "scope": "Source and documentation review, with earlier experiments separately attributed. No third-party install/execution or new live Google benchmark.",
+  "sourceInspection": "Files were read in full or inspected in targeted sections; hashes identify complete source files.",
+  "publicRepositories": [
+    {
+      "repository": "oimiragieo/google-slides-generator",
+      "commit": "e9afc00dcefaf073a501fea240ede4b88ce9b035",
+      "commitDate": "2026-07-18T12:36:17-04:00",
+      "url": "https://github.com/oimiragieo/google-slides-generator",
+      "licenseObserved": {
+        "path": "LICENSE",
+        "label": "MIT",
+        "sha256": "a611ec3d3b8add3287c9423768888e9533a1381c68bc85b1c5092ec87a38c9f8",
+        "url": "https://github.com/oimiragieo/google-slides-generator/blob/e9afc00dcefaf073a501fea240ede4b88ce9b035/LICENSE"
+      },
+      "inspectedFiles": [
+        {
+          "path": "docs/fidelity-limits.md",
+          "sha256": "7796e26c8b3f2a63e49ce6d7c5d9ab74f58d9321bfd2e1694fef25dbe9c6731c",
+          "url": "https://github.com/oimiragieo/google-slides-generator/blob/e9afc00dcefaf073a501fea240ede4b88ce9b035/docs/fidelity-limits.md"
+        },
+        {
+          "path": "docs/html-art-direction.md",
+          "sha256": "2c6d4778b177fb582cf8c50f054624c41f267b80e06b9e78b2b1a80d9285b4af",
+          "url": "https://github.com/oimiragieo/google-slides-generator/blob/e9afc00dcefaf073a501fea240ede4b88ce9b035/docs/html-art-direction.md"
+        },
+        {
+          "path": "src/contracts/scene-graph.ts",
+          "sha256": "dc38889b4a9991f528be7dd3c8cc130743d8bc11d1618e32b0e2a9b9c95fbe15",
+          "url": "https://github.com/oimiragieo/google-slides-generator/blob/e9afc00dcefaf073a501fea240ede4b88ce9b035/src/contracts/scene-graph.ts"
+        },
+        {
+          "path": "src/design/compiler.ts",
+          "sha256": "71be13d8cb19ca15ec801f59a47abea8a9bad1633d5cac7bfdda152f4a9aaaa0",
+          "url": "https://github.com/oimiragieo/google-slides-generator/blob/e9afc00dcefaf073a501fea240ede4b88ce9b035/src/design/compiler.ts"
+        },
+        {
+          "path": "src/design/google-text-box.ts",
+          "sha256": "5049ab7473b330a2b58d40ad6fed39c55abc9fab18674bf40cf60ef75c4c41a2",
+          "url": "https://github.com/oimiragieo/google-slides-generator/blob/e9afc00dcefaf073a501fea240ede4b88ce9b035/src/design/google-text-box.ts"
+        },
+        {
+          "path": "src/design/layouts.ts",
+          "sha256": "8e4bf446846ef5c0eeaf71f2df44a332899233123bdf5b6042fb71042d25f84c",
+          "url": "https://github.com/oimiragieo/google-slides-generator/blob/e9afc00dcefaf073a501fea240ede4b88ce9b035/src/design/layouts.ts"
+        },
+        {
+          "path": "src/design/text-fit.ts",
+          "sha256": "5183441ae8b575e4a30bbfad31e2bcc7a3a3ac5d2db1d67095f2aee07acacc82",
+          "url": "https://github.com/oimiragieo/google-slides-generator/blob/e9afc00dcefaf073a501fea240ede4b88ce9b035/src/design/text-fit.ts"
+        },
+        {
+          "path": "src/narrative/roles.ts",
+          "sha256": "719bb74ea4573838ff5849f026a0335595999b712ec362678c1bb026bf1b6cdf",
+          "url": "https://github.com/oimiragieo/google-slides-generator/blob/e9afc00dcefaf073a501fea240ede4b88ce9b035/src/narrative/roles.ts"
+        },
+        {
+          "path": "src/narrative/validate.ts",
+          "sha256": "156a55155f6531d8af039dcb7634f799307e1822de3722283edd4714012f4374",
+          "url": "https://github.com/oimiragieo/google-slides-generator/blob/e9afc00dcefaf073a501fea240ede4b88ce9b035/src/narrative/validate.ts"
+        },
+        {
+          "path": "src/qa/editability.ts",
+          "sha256": "82d06cff78509a3df2a27ab1c23bc56f636bd7f4f3344a8c75ca958b537d72a5",
+          "url": "https://github.com/oimiragieo/google-slides-generator/blob/e9afc00dcefaf073a501fea240ede4b88ce9b035/src/qa/editability.ts"
+        },
+        {
+          "path": "src/qa/postpublish.ts",
+          "sha256": "d6de23870a58dc0f08896031c95376deaa98831326681e81ed39b80b29265325",
+          "url": "https://github.com/oimiragieo/google-slides-generator/blob/e9afc00dcefaf073a501fea240ede4b88ce9b035/src/qa/postpublish.ts"
+        },
+        {
+          "path": "src/qa/render-audit.ts",
+          "sha256": "a7dc4e10d11e998ef933d3c258f4695710eed3dfc3872923365d8a7a414b3502",
+          "url": "https://github.com/oimiragieo/google-slides-generator/blob/e9afc00dcefaf073a501fea240ede4b88ce9b035/src/qa/render-audit.ts"
+        },
+        {
+          "path": "src/qa/static-audit.ts",
+          "sha256": "a75165792a852ac41490d54d1e4602af8b0c2b2beed8833747a94d57b9f003c1",
+          "url": "https://github.com/oimiragieo/google-slides-generator/blob/e9afc00dcefaf073a501fea240ede4b88ce9b035/src/qa/static-audit.ts"
+        },
+        {
+          "path": "src/qa/visual-diff.ts",
+          "sha256": "75ea29869ae15dc1c91884d4786c619d6441479d49f504fe9e7803ea433c4c6c",
+          "url": "https://github.com/oimiragieo/google-slides-generator/blob/e9afc00dcefaf073a501fea240ede4b88ce9b035/src/qa/visual-diff.ts"
+        },
+        {
+          "path": "src/renderers/google/asset-publisher.ts",
+          "sha256": "2b0ce7a56b3d8de3b2887f3c5b2a525e7407131301cb6953239af70d2d559009",
+          "url": "https://github.com/oimiragieo/google-slides-generator/blob/e9afc00dcefaf073a501fea240ede4b88ce9b035/src/renderers/google/asset-publisher.ts"
+        },
+        {
+          "path": "src/renderers/google/compiler.ts",
+          "sha256": "27521cde0fd0f7da41577135ce409d1b9e57002425832dbaf4ade9838f8ae458",
+          "url": "https://github.com/oimiragieo/google-slides-generator/blob/e9afc00dcefaf073a501fea240ede4b88ce9b035/src/renderers/google/compiler.ts"
+        },
+        {
+          "path": "src/renderers/google/readback.ts",
+          "sha256": "13038f5a69e8e5d2961454268d2a1f1fb7de0b0e0fa54f80324c30066ab4da76",
+          "url": "https://github.com/oimiragieo/google-slides-generator/blob/e9afc00dcefaf073a501fea240ede4b88ce9b035/src/renderers/google/readback.ts"
+        },
+        {
+          "path": "src/renderers/google/requests.ts",
+          "sha256": "7e7cb260f738398bd9e22535bef903fa6a276b9fd5aef0b3b467f53bc696a1e1",
+          "url": "https://github.com/oimiragieo/google-slides-generator/blob/e9afc00dcefaf073a501fea240ede4b88ce9b035/src/renderers/google/requests.ts"
+        },
+        {
+          "path": "src/renderers/google/thumbnails.ts",
+          "sha256": "36a8e75cc70d13292020a7455c693a855582d244ec78f08333f747d93c3e3c87",
+          "url": "https://github.com/oimiragieo/google-slides-generator/blob/e9afc00dcefaf073a501fea240ede4b88ce9b035/src/renderers/google/thumbnails.ts"
+        },
+        {
+          "path": "src/renderers/google/units.ts",
+          "sha256": "da96289c6333e64d656d15e752991713e2d4ccc760174eed99a0ccf71d32cbdb",
+          "url": "https://github.com/oimiragieo/google-slides-generator/blob/e9afc00dcefaf073a501fea240ede4b88ce9b035/src/renderers/google/units.ts"
+        },
+        {
+          "path": "tests/live/google-smoke.test.ts",
+          "sha256": "aefc71e7765bbee603dec5493f8ca86c66733bd6c29e09bc80b711eb0c2b99f1",
+          "url": "https://github.com/oimiragieo/google-slides-generator/blob/e9afc00dcefaf073a501fea240ede4b88ce9b035/tests/live/google-smoke.test.ts"
+        },
+        {
+          "path": "tests/unit/drift-attribution.test.ts",
+          "sha256": "f954680794852e00166dc5ef12683b6676deefabecbc8646cabc9add64de3f54",
+          "url": "https://github.com/oimiragieo/google-slides-generator/blob/e9afc00dcefaf073a501fea240ede4b88ce9b035/tests/unit/drift-attribution.test.ts"
+        }
+      ]
+    },
+    {
+      "repository": "cpo-labs/skills",
+      "commit": "dd65f348394bf80a5d5cf031ba261ffa72699521",
+      "commitDate": "2026-07-03T11:34:56+02:00",
+      "url": "https://github.com/cpo-labs/skills",
+      "licenseObserved": {
+        "path": "LICENSE",
+        "label": "MIT",
+        "sha256": "cf2648d947d6da8a99847f575cc520a8c21558dc5a4a955d95885c9585d11261",
+        "url": "https://github.com/cpo-labs/skills/blob/dd65f348394bf80a5d5cf031ba261ffa72699521/LICENSE"
+      },
+      "inspectedFiles": [
+        {
+          "path": "skills/brandkit/SKILL.md",
+          "sha256": "ce46eff4adb1b2591d7e1cc0ec9a36bd0c1d1e07dff4384c785867a0a36ef83b",
+          "url": "https://github.com/cpo-labs/skills/blob/dd65f348394bf80a5d5cf031ba261ffa72699521/skills/brandkit/SKILL.md"
+        },
+        {
+          "path": "skills/voiceprint/SKILL.md",
+          "sha256": "adc88c232d086ea7c62439127c0ddc9f38ae2b9fe3380dbea3cfd5566758bc41",
+          "url": "https://github.com/cpo-labs/skills/blob/dd65f348394bf80a5d5cf031ba261ffa72699521/skills/voiceprint/SKILL.md"
+        }
+      ]
+    },
+    {
+      "repository": "Hasasasa/html-to-editable-pptx",
+      "commit": "17c1dbb76e958543dc2741a7d50ca374354f33b7",
+      "commitDate": "2026-07-07T17:55:02+08:00",
+      "url": "https://github.com/Hasasasa/html-to-editable-pptx",
+      "licenseObserved": {
+        "path": "LICENSE",
+        "label": "MIT",
+        "sha256": "2c660995fdf9061243c0e83cf52a26d5b05a77eb15aa16a9d838992ba8cd56a1",
+        "url": "https://github.com/Hasasasa/html-to-editable-pptx/blob/17c1dbb76e958543dc2741a7d50ca374354f33b7/LICENSE"
+      },
+      "inspectedFiles": [
+        {
+          "path": "SKILL.md",
+          "sha256": "1d3859ef9e38687ff0ea127796e05295b625159f43dc197aeceabaea769e2b5b",
+          "url": "https://github.com/Hasasasa/html-to-editable-pptx/blob/17c1dbb76e958543dc2741a7d50ca374354f33b7/SKILL.md"
+        },
+        {
+          "path": "scripts/assemble.py",
+          "sha256": "db4e6a9c305336bab882534cf31931caa7e4f431c7ef2ebcca2c481b838713da",
+          "url": "https://github.com/Hasasasa/html-to-editable-pptx/blob/17c1dbb76e958543dc2741a7d50ca374354f33b7/scripts/assemble.py"
+        },
+        {
+          "path": "scripts/visual_audit.py",
+          "sha256": "d2814f07c27b04de94752103c506df1e9bf5d12db5adc9e04629f618df17a326",
+          "url": "https://github.com/Hasasasa/html-to-editable-pptx/blob/17c1dbb76e958543dc2741a7d50ca374354f33b7/scripts/visual_audit.py"
+        }
+      ]
+    },
+    {
+      "repository": "GX-Alex/html2pptx",
+      "commit": "1887e4b0997e9a2fc1f314336daa6172f46e4a37",
+      "commitDate": "2026-06-08T23:07:26+08:00",
+      "url": "https://github.com/GX-Alex/html2pptx",
+      "licenseObserved": {
+        "path": "LICENSE",
+        "label": "MIT",
+        "sha256": "3f673c1bef5ed9a62b0271ff8e0631915b8d849d0f6939f41754ce1ed6936232",
+        "url": "https://github.com/GX-Alex/html2pptx/blob/1887e4b0997e9a2fc1f314336daa6172f46e4a37/LICENSE"
+      },
+      "inspectedFiles": [
+        {
+          "path": "skills/html2pptx/SKILL.md",
+          "sha256": "57927bdff21e65a77a2d87fbdaff847011eeadc572b9335cbe666d2feb86f76e",
+          "url": "https://github.com/GX-Alex/html2pptx/blob/1887e4b0997e9a2fc1f314336daa6172f46e4a37/skills/html2pptx/SKILL.md"
+        },
+        {
+          "path": "skills/html2pptx/scripts/html2pptx.py",
+          "sha256": "a64a3949edbd31db6b2477e085604aad47e791a9e18649ae975991dc21fea984",
+          "url": "https://github.com/GX-Alex/html2pptx/blob/1887e4b0997e9a2fc1f314336daa6172f46e4a37/skills/html2pptx/scripts/html2pptx.py"
+        },
+        {
+          "path": "skills/html2pptx/scripts/html_dom_to_editable_svg.js",
+          "sha256": "e3482cef999c5bfded183e1d671e915e1a9695aa48193c115ed90edbaf8e9c26",
+          "url": "https://github.com/GX-Alex/html2pptx/blob/1887e4b0997e9a2fc1f314336daa6172f46e4a37/skills/html2pptx/scripts/html_dom_to_editable_svg.js"
+        }
+      ]
+    },
+    {
+      "repository": "atharva9167j/dom-to-pptx",
+      "commit": "939ef79f00db8f9f5f4f75b590e83e380abce197",
+      "commitDate": "2026-09-14T17:39:29+05:30",
+      "url": "https://github.com/atharva9167j/dom-to-pptx",
+      "licenseObserved": {
+        "path": "LICENSE",
+        "label": "MIT",
+        "sha256": "03e47f0d43133a09b8e91ca80eeb50fd8cd94620cf1f59712163909b0ec9b182",
+        "url": "https://github.com/atharva9167j/dom-to-pptx/blob/939ef79f00db8f9f5f4f75b590e83e380abce197/LICENSE"
+      },
+      "inspectedFiles": [
+        {
+          "path": "README.md",
+          "sha256": "ee8b3443b5b45e2bb42c4916cb2033b5f5b46c43e4bbcfe2fe4d20316646846f",
+          "url": "https://github.com/atharva9167j/dom-to-pptx/blob/939ef79f00db8f9f5f4f75b590e83e380abce197/README.md"
+        },
+        {
+          "path": "packages/dom-to-pptx-skills/skills/dom-to-pptx-skill/SKILL.md",
+          "sha256": "515508b34170f45d686f01ac479b84e79a2d2e4f7c6d3fe16f25d6ff5a7a96b2",
+          "url": "https://github.com/atharva9167j/dom-to-pptx/blob/939ef79f00db8f9f5f4f75b590e83e380abce197/packages/dom-to-pptx-skills/skills/dom-to-pptx-skill/SKILL.md"
+        },
+        {
+          "path": "src/index.js",
+          "sha256": "53c09de13d6670dd411d23b139409ed1c9c2e5d0e68a5dc02158c6df8c2d9cf9",
+          "url": "https://github.com/atharva9167j/dom-to-pptx/blob/939ef79f00db8f9f5f4f75b590e83e380abce197/src/index.js"
+        }
+      ]
+    },
+    {
+      "repository": "textboy/mk-present",
+      "commit": "ca38824a8502efc4e28beb7a7e070ba019a61add",
+      "commitDate": "2026-05-21T21:26:39+08:00",
+      "url": "https://github.com/textboy/mk-present",
+      "licenseObserved": {
+        "path": "LICENSE",
+        "label": "MIT",
+        "sha256": "22dc444dcac1c28520ba82fd9a89f82d216910a93b2d46b97147123731f6b801",
+        "url": "https://github.com/textboy/mk-present/blob/ca38824a8502efc4e28beb7a7e070ba019a61add/LICENSE"
+      },
+      "inspectedFiles": [
+        {
+          "path": "present-ppt/SKILL.md",
+          "sha256": "42a45fadc1e673711cdfd5eb98091728712601ad6952fb94c1495a887bd7a65f",
+          "url": "https://github.com/textboy/mk-present/blob/ca38824a8502efc4e28beb7a7e070ba019a61add/present-ppt/SKILL.md"
+        },
+        {
+          "path": "present-ppt/scripts/html_to_pptx_v9.js",
+          "sha256": "0095a6a44e2bb3771751a68a3ddcebf213b2f141b470edd2ea88589b33abf5f8",
+          "url": "https://github.com/textboy/mk-present/blob/ca38824a8502efc4e28beb7a7e070ba019a61add/present-ppt/scripts/html_to_pptx_v9.js"
+        }
+      ]
+    },
+    {
+      "repository": "siril9/presentation-skill",
+      "commit": "2776d8a7d08e64924a69cbf5bdb1271c5bedf99b",
+      "commitDate": "2026-09-30T01:08:49-04:00",
+      "url": "https://github.com/siril9/presentation-skill",
+      "licenseObserved": {
+        "path": "LICENSE",
+        "label": "MIT",
+        "sha256": "35ad5e04d561f55065144021e70024bf94f50ef43903f4c54fc62802ed9f50f5",
+        "url": "https://github.com/siril9/presentation-skill/blob/2776d8a7d08e64924a69cbf5bdb1271c5bedf99b/LICENSE"
+      },
+      "inspectedFiles": [
+        {
+          "path": "SKILL.md",
+          "sha256": "b6555ad5bd289e2d946071d96b615a0d2b6450aa8ca18751b8a56c397564af4e",
+          "url": "https://github.com/siril9/presentation-skill/blob/2776d8a7d08e64924a69cbf5bdb1271c5bedf99b/SKILL.md"
+        }
+      ]
+    },
+    {
+      "repository": "mpuig/agent-slides",
+      "commit": "820782a5fb8cb8f251d7c0750e4299c321cd068c",
+      "commitDate": "2026-03-15T16:00:14+01:00",
+      "url": "https://github.com/mpuig/agent-slides",
+      "licenseObserved": {
+        "path": "LICENSE",
+        "label": "MIT",
+        "sha256": "9fdfc0fdb05cd6c3186977ee4437b2519ea79aaa0f083aa744f03b5c5ea584c5",
+        "url": "https://github.com/mpuig/agent-slides/blob/820782a5fb8cb8f251d7c0750e4299c321cd068c/LICENSE"
+      },
+      "inspectedFiles": [
+        {
+          "path": "skills/slides-critique/SKILL.md",
+          "sha256": "42a2bf8ddb55bcc725dcffa35029ad5095eec0d5ad6b866a969b964fa3f2782c",
+          "url": "https://github.com/mpuig/agent-slides/blob/820782a5fb8cb8f251d7c0750e4299c321cd068c/skills/slides-critique/SKILL.md"
+        }
+      ]
+    },
+    {
+      "repository": "zarazhangrui/frontend-slides",
+      "commit": "9906a34d640d2111f724544cbc50f7f130569ae1",
+      "commitDate": "2026-06-23T13:08:18-07:00",
+      "url": "https://github.com/zarazhangrui/frontend-slides",
+      "licenseObserved": {
+        "path": "LICENSE",
+        "label": "MIT",
+        "sha256": "62928eb197fe4662d1efc3af0735b3ba5df3c0308badd9a2baf2b619009f5366",
+        "url": "https://github.com/zarazhangrui/frontend-slides/blob/9906a34d640d2111f724544cbc50f7f130569ae1/LICENSE"
+      },
+      "inspectedFiles": [
+        {
+          "path": "SKILL.md",
+          "sha256": "832994fe1dfcce2aa7ceca9a1b7b708eca94becef242713999855f4e946cf4d5",
+          "url": "https://github.com/zarazhangrui/frontend-slides/blob/9906a34d640d2111f724544cbc50f7f130569ae1/SKILL.md"
+        }
+      ]
+    }
+  ],
+  "webSources": [
+    {
+      "id": "p-builder",
+      "url": "https://github.com/Julien339/pptx-builder-skill/blob/master/SKILL.md",
+      "retrievedDate": "2026-10-07",
+      "evidence": "primary documentation or supplemental web source review; no pinned source snapshot"
+    },
+    {
+      "id": "p-office",
+      "url": "https://github.com/office-kit/pptx",
+      "retrievedDate": "2026-10-07",
+      "evidence": "primary documentation or supplemental web source review; no pinned source snapshot"
+    },
+    {
+      "id": "p-anthropic",
+      "url": "https://github.com/anthropics/skills/blob/main/skills/pptx/SKILL.md",
+      "retrievedDate": "2026-10-07",
+      "evidence": "primary documentation or supplemental web source review; no pinned source snapshot"
+    },
+    {
+      "id": "api-autofit",
+      "url": "https://developers.google.com/workspace/slides/api/reference/rest/v1/presentations.pages/shapes#Autofit",
+      "retrievedDate": "2026-10-07",
+      "evidence": "primary documentation or supplemental web source review; no pinned source snapshot"
+    },
+    {
+      "id": "api-tables",
+      "url": "https://developers.google.com/workspace/slides/api/samples/tables",
+      "retrievedDate": "2026-10-07",
+      "evidence": "primary documentation or supplemental web source review; no pinned source snapshot"
+    },
+    {
+      "id": "api-requests",
+      "url": "https://developers.google.com/workspace/slides/api/reference/rest/v1/presentations/request",
+      "retrievedDate": "2026-10-07",
+      "evidence": "primary documentation or supplemental web source review; no pinned source snapshot"
+    },
+    {
+      "id": "api-charts",
+      "url": "https://developers.google.com/workspace/slides/api/guides/add-chart",
+      "retrievedDate": "2026-10-07",
+      "evidence": "primary documentation or supplemental web source review; no pinned source snapshot"
+    },
+    {
+      "id": "api-lines",
+      "url": "https://developers.google.com/workspace/slides/api/reference/rest/v1/presentations.pages/lines",
+      "retrievedDate": "2026-10-07",
+      "evidence": "primary documentation or supplemental web source review; no pinned source snapshot"
+    },
+    {
+      "id": "api-notes",
+      "url": "https://developers.google.com/workspace/slides/api/guides/notes",
+      "retrievedDate": "2026-10-07",
+      "evidence": "primary documentation or supplemental web source review; no pinned source snapshot"
+    },
+    {
+      "id": "api-batch",
+      "url": "https://developers.google.com/workspace/slides/api/guides/batch",
+      "retrievedDate": "2026-10-07",
+      "evidence": "primary documentation or supplemental web source review; no pinned source snapshot"
+    },
+    {
+      "id": "api-thumbnails",
+      "url": "https://developers.google.com/workspace/slides/api/reference/rest/v1/presentations.pages/getThumbnail",
+      "retrievedDate": "2026-10-07",
+      "evidence": "primary documentation or supplemental web source review; no pinned source snapshot"
+    },
+    {
+      "id": "api-transforms",
+      "url": "https://developers.google.com/workspace/slides/api/samples/transform",
+      "retrievedDate": "2026-10-07",
+      "evidence": "primary documentation or supplemental web source review; no pinned source snapshot"
+    },
+    {
+      "id": "api-merge",
+      "url": "https://developers.google.com/workspace/slides/api/guides/merge",
+      "retrievedDate": "2026-10-07",
+      "evidence": "primary documentation or supplemental web source review; no pinned source snapshot"
+    },
+    {
+      "id": "practice-assertion",
+      "url": "https://writing.engr.psu.edu/assertion_evidence_EA.html",
+      "retrievedDate": "2026-10-07",
+      "evidence": "primary documentation or supplemental web source review; no pinned source snapshot"
+    },
+    {
+      "id": "practice-contrast",
+      "url": "https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html",
+      "retrievedDate": "2026-10-07",
+      "evidence": "primary documentation or supplemental web source review; no pinned source snapshot"
+    },
+    {
+      "id": "practice-google-a11y",
+      "url": "https://support.google.com/docs/answer/6199477",
+      "retrievedDate": "2026-10-07",
+      "evidence": "primary documentation or supplemental web source review; no pinned source snapshot"
+    },
+    {
+      "id": "practice-ms-a11y",
+      "url": "https://support.microsoft.com/en-us/accessibility/powerpoint/make-your-powerpoint-presentations-accessible-to-people-with-disabilities",
+      "retrievedDate": "2026-10-07",
+      "evidence": "primary documentation or supplemental web source review; no pinned source snapshot"
+    },
+    {
+      "id": "practice-fonts",
+      "url": "https://support.microsoft.com/en-gb/office/fonts/benefits-of-embedding-custom-fonts",
+      "retrievedDate": "2026-10-07",
+      "evidence": "primary documentation or supplemental web source review; no pinned source snapshot"
+    }
+  ],
+  "localEvidence": {
+    "harnessHead": "3ad89ccf35afc3c37e04cfab5abc9635418a6cf8",
+    "tanzuHead": "495dacf744618a40c829cccef9f38018a4ab496d",
+    "files": [
+      {
+        "reportRelativePath": "../../../tanzu-brand/SKILL.md",
+        "sha256": "02c05840a8fcf1f0c1db77c13e8ce3e1109d8b9731dae5d7770629d5e9aa4e06"
+      },
+      {
+        "reportRelativePath": "../../../tanzu-brand/brand/presentation-system.json",
+        "sha256": "8ff9af8fa319804739bf8e3e51844fcb76375741e4e80ac9626cefdd300f1d46"
+      },
+      {
+        "reportRelativePath": "../../../tanzu-brand/brand/tokens.json",
+        "sha256": "4d0b3ac59cd85e94a402080ec4b5228d2a0aeeea0a87b199dd2017929f5f7695"
+      },
+      {
+        "reportRelativePath": "../../../tanzu-brand/docs/research/2026-10-06-presentation-integrations.md",
+        "sha256": "83fa329b0693beb2d850b78f7a5cd0bed1095464b5dc088bb4acf66c136b661c"
+      },
+      {
+        "reportRelativePath": "../../../tanzu-brand/references/brand-rules.md",
+        "sha256": "25dd57b3a16d4a1238fb50fdfb8b0660e172229f3ebbba26337634afe4048f0a"
+      },
+      {
+        "reportRelativePath": "../../../tanzu-brand/references/presentation-system.md",
+        "sha256": "59ba0e6a705fcc3f9840def26e85c53f5f13f201e739b61e4b6f3c61734a6bba"
+      },
+      {
+        "reportRelativePath": "../../references/google-slides.md",
+        "sha256": "e48d6cc1a84597c4789619ad61fdb46b70971d5fc06469c9531d0960fe2ff3c3"
+      },
+      {
+        "reportRelativePath": "../../scripts/lib/google-slides.mjs",
+        "sha256": "7321f88af105a052f0d41b90653f812bf27e3acbd03c066dc5d1a8d0fc49561e"
+      },
+      {
+        "reportRelativePath": "../../scripts/lib/layouts.mjs",
+        "sha256": "a75860b9d70203ee7360ed933aed8621a84194fe49a1cd6d988edf8ad5f89e0f"
+      },
+      {
+        "reportRelativePath": "../../scripts/lib/slide-review.mjs",
+        "sha256": "146334aa3f983ab5c685af08c4e36c8cb04c145536f71d39f091c169bb034375"
+      }
+    ]
+  }
+}

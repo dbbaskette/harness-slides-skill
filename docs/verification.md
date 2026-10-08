@@ -78,3 +78,42 @@ The owned clone was deleted; no base or signed-in VM changed. No live model or
 Google account was used. A prior browser-version setup failure was corrected in
 Brand's combined guest script; the full rerun passed. These local candidates
 remain unpublished. This record changes documentation only.
+
+## On-demand Gemini Web images — October 7, 2026
+
+Final working-tree gate: **PASS**, 42/42 Node tests, zero failures or skips,
+including the image worker's 11 offline cases. Real browser interaction and
+LibreOffice/Poppler rendering were enabled. Dependency audit, context report,
+shared installer and the bundled workspace build/render passed. Both skill
+entrypoints also passed the frontmatter validator.
+
+- Base commit: `3ad89ccf35afc3c37e04cfab5abc9635418a6cf8`, with the local image
+  implementation and existing guidance/DNS changes. These changes are uncommitted.
+- Installed runtime: `0.3.0-5d0ce4b144c0b3aad576`.
+- Runtime content digest:
+  `5d0ce4b144c0b3aad5765a683df742b4ed1112edd399b9532a6f394d7ef1d023`.
+  The host dry-run and guest installation reported the same digest.
+- Environment: macOS 27.0, Node 22.23.2, system Python 3.9.6 for existing
+  presentation tools; the optional image environment used Python 3.11.17.
+- The actual pinned Gemini dependency installed in disposable private state and
+  passed its source-hash audit without authenticating or generating an image.
+- Logs: `/private/tmp/harness-slides-image-ci/`
+  `harness-slides-test-20261008021803-91228-6d8b4de2/`.
+- The exact disposable clone was stopped/deleted and its VM directory confirmed
+  absent. The stopped base and other VMs were not changed.
+
+The earlier preliminary run also passed, but the digest above identifies the
+final executable state, including atomic asset/metadata publication, clearer
+Python prerequisites and the runtime compatibility guard. Documentation and
+measurement records added afterward do not change that runtime.
+
+Measured context increase: 16 tokens on ordinary routes; conditionally 753 tokens
+of image guidance plus a 97-token normalized result. See the
+[measurement report](measurements/2026-10-07-gemini-images.md) and its JSON counts.
+These are `cl100k_base` counts and exclude image pixels/vision and conversation.
+
+Provider fixtures establish local orchestration, receipt recovery, classification,
+locking and file safety. They do not certify live Google sign-in, account-specific
+image generation or authenticated download behavior. Those remain a live
+acceptance checkpoint. No real Google account, model request or account quota
+was used, and this gate does not establish Linux parity.

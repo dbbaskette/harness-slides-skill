@@ -7,6 +7,11 @@ need; the agent handles the story, design, builds, and slide review.
 Use `/harness-slides` in Claude Code, `$harness-slides` in Codex, or ask Cursor
 to use the skill.
 
+Slides share a theme while their compositions follow their own content: a
+comparison, process, architecture, metric, chart, table, quote or image can each
+use a different structure. Brand add-ons can supply a resolved design contract
+and a separate author-voice handoff. The agent handles these choices and helpers.
+
 ## 1. Install once
 
 You need **Git**, **Node.js 20 or newer**, and **Codex, Claude Code, or Cursor**.
@@ -88,6 +93,28 @@ finished presentation.
   [Google setup](references/google-slides.md) if access is unavailable.
 - **Your branding:** supply a company template or name an installed brand skill,
   such as Tanzu Brand. Harness Slides uses the identity you provide.
+
+## Add custom images
+
+Ask for the visual as part of your deck request:
+
+```text
+/harness-slides Add a custom image of a modern cloud platform to slide 4.
+Leave room for the headline and use our brand colors.
+```
+
+The first time, the agent prepares the optional image helper and opens a
+separate Chrome window. Sign in to Google, then close that window. You can also
+ask `/harness-slides setup images` in advance (use `$harness-slides` in Codex).
+Later image requests run once and exit. There is no service to start or manage.
+Downloaded images and metadata are saved with your deck; sign-in stays private.
+
+This optional Gemini Web path needs Chrome and Python 3.11 or newer on macOS or
+Linux. It uses your Gemini web account and its limits, through an unofficial
+transport. A Google Cloud CLI login does not configure this session. The agent
+checks access and reports failures; it can retry a saved image download without
+asking Gemini to generate another image. See [image guidance](references/images.md)
+for helper details and [dependency notices](NOTICE.md) for licensing.
 
 ## Improve an existing deck
 
@@ -179,8 +206,8 @@ for architecture and provenance.
 <summary>Instruction context usage</summary>
 
 The skill loads only guidance for the selected task, output format, and optional
-brand. These counts cover instruction loading, excluding source documents,
-images, tool responses, and generated artifacts.
+brand. These counts cover routed instructions and the stated helper-result samples.
+Source documents, image pixels and other tool responses add separately.
 
 <!-- CONTEXT-USAGE:START -->
 Measured with `cl100k_base`; cumulative instruction counts, including a normalized
@@ -190,20 +217,25 @@ representative guidance-start response. Bootstrap activation is shown separately
 | --- | ---: |
 | Discovery metadata | 39 |
 | Installed bootstrap | 385 |
-| Bootstrap + current guidance entry | 1,078 |
-| Scoped PPTX edit + final review | 2,235 |
-| Scoped Google edit + final review | 2,430 |
-| New PPTX deck from native template + review | 2,676 |
-| New Google deck from native template + review | 3,311 |
-| New PPTX scene + contract + review | 2,913 |
-| New Google scene + contract + review | 3,618 |
+| Bootstrap + current guidance entry | 1,163 |
+| Scoped PPTX edit + final review | 2,446 |
+| Scoped Google edit + final review | 2,641 |
+| New PPTX deck from native template + review | 3,398 |
+| New Google deck from native template + review | 4,033 |
+| New PPTX scene + contract + review | 3,620 |
+| New Google scene + contract + review | 4,325 |
+| Content-led PPTX + selected component + review | 4,467 |
+| Optional image guidance + download result | 2,097 |
 
-Intake, workspace and brand integration load only when needed. Native-template
+Intake, workspace, brand integration and image guidance load only when needed. Native-template
 authoring skips the scene contract; scene routes include its actual helper output.
 Only the selected delivery format enters context. Brand contracts, source content,
-images, other helper results and conversation add separately. The JSON report
+image pixels, other helper results and conversation add separately. The image route
+includes one normalized compact download result; it adds no provider code or logs. The JSON report
 also exposes direct-handoff paths without the standalone bootstrap/start response.
 <!-- CONTEXT-USAGE:END -->
+
+See the [image implementation and before/after measurement](docs/measurements/2026-10-07-gemini-images.md).
 
 Run `npm run context:update` after changing guidance and `npm run context:check`
 to check the recorded counts.

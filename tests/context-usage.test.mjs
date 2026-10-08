@@ -29,6 +29,10 @@ test('reported paths count each input once and README reflects the tested instru
     assert.equal(new Set(route.helpers.map(x => x.name)).size, route.helpers.length);
     assert.equal(route.total, [...route.files, ...route.helpers].reduce((n, x) => n + x.tokens, 0));
   }
+  for (const [name, route] of Object.entries(data.readingPaths)) {
+    assert.equal(route.files.some(x => x.path === 'references/images.md'), name === 'customImages');
+    assert.equal(route.helpers.some(x => x.name === 'imageDownload'), name === 'customImages');
+  }
   assert.equal(readingPath(['entry', 'entry'], { entry: 3 }).total, 3);
   assert.throws(() => readingPath(['missing'], {}), /Unknown instruction/);
   for (const name of ['newPptxNative', 'newGoogleNative']) assert.equal(data.readingPaths[name].helpers.some(x => x.name === 'sceneContract'), false);

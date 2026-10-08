@@ -28,6 +28,8 @@ export async function measureContext() {
   const guidanceResult = JSON.stringify({ freshness: 'current-at-start', revision: createHash('sha256').update('sample guidance revision').digest('hex').slice(0, 40), task: createHash('sha256').update('sample guidance task').digest('hex').slice(0, 32), guidance: '<guidance>/SKILL.md', runtime: '<runtime>' }, null, 2) + '\n';
   const outputs = { guidanceStart: guidanceResult };
   outputs.sceneContract = (await exec(process.execPath, [fileURLToPath(new URL('scripts/harness-slides.mjs', root)), 'scene', 'contract'], { timeout: 30000 })).stdout;
+  outputs.comparisonContract = (await exec(process.execPath, [fileURLToPath(new URL('scripts/harness-slides.mjs', root)), 'deck', 'contract','--id','comparison'], {timeout:30000})).stdout;
+  outputs.imageDownload = JSON.stringify({status:'downloaded',id:'deck-slide-04-v1',path:'<project>/assets/slide-04.png',width:1536,height:1024,sha256:createHash('sha256').update('sample image bytes').digest('hex'),metadata:'<project>/assets/slide-04.image.json'}) + '\n';
   const samples = Object.fromEntries(Object.entries(outputs).map(([name, value]) => [name, count(value)]));
   const path = (paths, helpers = []) => readingPath(paths, files, samples, helpers);
   const entry = ['SKILL.md'];
@@ -40,20 +42,22 @@ export async function measureContext() {
     newGoogleNative: path([...design, 'references/templates.md', google, review]),
     newPptxScene: path([...design, 'references/authoring-pptx.md', review], ['sceneContract']),
     newGoogleScene: path([...design, 'references/authoring-google.md', google, review], ['sceneContract']),
+    contentLedPptx: path([...design,'references/content-components.md','references/brand-addons.md',review],['comparisonContract']),
     intake: path([...entry, 'references/intake.md']),
+    customImages: path([...entry, 'references/images.md'], ['imageDownload']),
   };
   const standalone = Object.fromEntries(Object.entries(readingPaths).map(([name, route]) => [name, path(['bootstrap/SKILL.md', ...route.files.map(x => x.path)], ['guidanceStart', ...route.helpers.map(x => x.name)])]));
   const description = contents['SKILL.md'].match(/^name:.*\n.*description:.*$/m)?.[0];
   if (!description) throw new Error('Missing skill metadata');
   const activation = files['bootstrap/SKILL.md'] + files['SKILL.md'];
   const routes = { 'Discovery metadata': count(description), 'Installed bootstrap': files['bootstrap/SKILL.md'], 'Bootstrap + current guidance entry': activation,
-    ...Object.fromEntries(Object.entries({ scopedPptx: 'Scoped PPTX edit + final review', scopedGoogle: 'Scoped Google edit + final review', newPptxNative: 'New PPTX deck from native template + review', newGoogleNative: 'New Google deck from native template + review', newPptxScene: 'New PPTX scene + contract + review', newGoogleScene: 'New Google scene + contract + review' }).map(([name, label]) => [label, standalone[name].total])) };
+    ...Object.fromEntries(Object.entries({ scopedPptx: 'Scoped PPTX edit + final review', scopedGoogle: 'Scoped Google edit + final review', newPptxNative: 'New PPTX deck from native template + review', newGoogleNative: 'New Google deck from native template + review', newPptxScene: 'New PPTX scene + contract + review', newGoogleScene: 'New Google scene + contract + review', contentLedPptx: 'Content-led PPTX + selected component + review', customImages: 'Optional image guidance + download result' }).map(([name, label]) => [label, standalone[name].total])) };
   const hashes = Object.fromEntries(paths.map(path => [path, createHash('sha256').update(contents[path]).digest('hex')]));
   const inputDigest = createHash('sha256').update(JSON.stringify({ hashes, outputs, readingPaths, routes })).digest('hex');
   return { tokenizer: 'cl100k_base', inputDigest, files, samples, readingPaths, standalone, routes };
 }
 export function renderReport(data) {
-  return 'Measured with `cl100k_base`; cumulative instruction counts, including a normalized\nrepresentative guidance-start response. Bootstrap activation is shown separately.\n\n| Reading path | Tokens |\n| --- | ---: |\n' + Object.entries(data.routes).map(([label, value]) => `| ${label} | ${value.toLocaleString('en-US')} |`).join('\n') + '\n\nIntake, workspace and brand integration load only when needed. Native-template\nauthoring skips the scene contract; scene routes include its actual helper output.\nOnly the selected delivery format enters context. Brand contracts, source content,\nimages, other helper results and conversation add separately. The JSON report\nalso exposes direct-handoff paths without the standalone bootstrap/start response.\n';
+  return 'Measured with `cl100k_base`; cumulative instruction counts, including a normalized\nrepresentative guidance-start response. Bootstrap activation is shown separately.\n\n| Reading path | Tokens |\n| --- | ---: |\n' + Object.entries(data.routes).map(([label, value]) => `| ${label} | ${value.toLocaleString('en-US')} |`).join('\n') + '\n\nIntake, workspace, brand integration and image guidance load only when needed. Native-template\nauthoring skips the scene contract; scene routes include its actual helper output.\nOnly the selected delivery format enters context. Brand contracts, source content,\nimage pixels, other helper results and conversation add separately. The image route\nincludes one normalized compact download result; it adds no provider code or logs. The JSON report\nalso exposes direct-handoff paths without the standalone bootstrap/start response.\n';
 }
 export async function main() {
   const args = process.argv.slice(2);
