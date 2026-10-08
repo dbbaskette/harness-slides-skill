@@ -25,7 +25,7 @@ export async function install({source=packageRoot,shared=process.platform==='dar
   const previous=await state(current);
   if(previous&&(!previous.link||!/^versions\/[\w.-]+$/.test(previous.link)))throw new Error('Unrecognized shared pointer; preserve it');
   for(const target of targets){const s=await state(target);if(s&&s.link!==current)throw new Error(`Existing unrelated skill: ${target}. Preserve or move it before installing.`);}
-  if(dryRun)return {status:'dry run',shared,runtime,targets,contentDigest};
+  if(dryRun)return {status:'dry run',shared,runtime,targets,contentDigest,runtimeVersion:version};
   await safeParent(shared);const lock=await open(join(shared,'.install-lock'),'wx',0o600),created=[];
   try{
     await safeParent(join(shared,'versions'));
@@ -40,7 +40,7 @@ export async function install({source=packageRoot,shared=process.platform==='dar
     for(const target of targets){await safeParent(dirname(target));if(!await state(target)){await symlink(current,target);created.push(target);}}
     if(JSON.stringify(await state(current))!==JSON.stringify(previous))throw new Error('Installer pointer changed concurrently');
     const temp=join(shared,`.pointer-${randomUUID()}`);await symlink(`versions/${id}`,temp);try{await rename(temp,current);}finally{await rm(temp,{force:true});}
-    return {status:'installed',shared,runtime,targets,contentDigest,next:`For PPTX authoring: cd "${runtime}" && npm ci --omit=dev --ignore-scripts`};
+    return {status:'installed',shared,runtime,targets,contentDigest,runtimeVersion:version,next:`For PPTX authoring: cd "${runtime}" && npm ci --omit=dev --ignore-scripts`};
   }catch(error){for(const target of created)if((await state(target))?.link===current)await rm(target);throw error;}
   finally{await lock.close();await rm(join(shared,'.install-lock'));}
 }

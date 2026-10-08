@@ -30,6 +30,17 @@ export HARNESS_IMAGE_TEST_PYTHON="$(cat "$work/image-python.txt")"
 HARNESS_BROWSER_TESTS=1 HARNESS_RENDER_TESTS=1 npm test 2>&1 | tee "$results_dir/tests.log"
 npm run context:check 2>&1 | tee "$results_dir/context.log"
 bash scripts/Install-Harness-Slides.sh --home "$work/home" --shared "$work/shared" 2>&1 | tee "$results_dir/installer.log"
+# Inspect the newly installed immutable runtime, not the source checkout.
+node --input-type=module - "$results_dir/installer.log" <<'JS' | tee "$results_dir/installed-version.log"
+import {readFile} from 'node:fs/promises';
+import {execFileSync} from 'node:child_process';
+import {join} from 'node:path';
+const installed=JSON.parse(await readFile(process.argv[2],'utf8'));
+const expected=JSON.parse(await readFile('package.json','utf8')).version;
+const reported=JSON.parse(execFileSync(process.execPath,[join(installed.runtime,'scripts/harness-slides.mjs'),'version'],{encoding:'utf8'}));
+if(installed.runtimeVersion!==expected||reported.runtimeVersion!==expected||reported.runtime!==installed.runtime)throw new Error('Installed runtime version mismatch');
+console.log(JSON.stringify(reported));
+JS
 node scripts/harness-slides.mjs workspace init --project "$work/deck-work" --file examples/scene.json --format pptx
 node scripts/harness-slides.mjs workspace build --project "$work/deck-work"
 node scripts/harness-slides.mjs review --file "$work/deck-work/versions/v000001/build/deck.pptx" --output "$work/deck-work/versions/v000001/build/review"

@@ -22,7 +22,7 @@ PowerPoint inspection also needs **Python 3.9 or newer**.
 Run these commands in your terminal:
 
 ```sh
-git clone https://github.com/dbbaskette/harness-slides-skill.git
+git clone --branch v0.5.1 --depth 1 https://github.com/dbbaskette/harness-slides-skill.git
 cd harness-slides-skill
 bash scripts/Install-Harness-Slides.sh
 ```
@@ -30,6 +30,26 @@ bash scripts/Install-Harness-Slides.sh
 Installation succeeds when the output contains `"status": "installed"`. The
 installer registers the skill with all three agents and preserves unrelated
 skills. To preview the changes first, add `--dry-run` to the installer command.
+
+## Know which version you are using
+
+The current published release is [v0.5.1](https://github.com/dbbaskette/harness-slides-skill/releases/tag/v0.5.1).
+The skill reports “Using Harness Slides v0.5.1” when starting or resuming work.
+A resumed deck may use its older saved runtime and will report that version.
+Guidance can refresh independently; its revision does not replace the runtime version.
+
+Ask your agent “Which Harness Slides version are you using?” It can check the
+actual executing runtime without Google access. For a manual check:
+
+```sh
+node "<installed-runtime>/scripts/harness-slides.mjs" --version
+```
+
+`version` returns the version and resolved runtime path as JSON. The installer
+also reports the version it installed. Update executable helpers from the
+published release with the trusted installer; new guidance cannot upgrade code.
+Release ZIP checksums and validation notes are on the release page. Keep earlier
+runtimes for saved work; reinstall a prior release to return new work to it.
 
 ## 2. Open your project
 
@@ -218,17 +238,17 @@ representative guidance-start response. Bootstrap activation is shown separately
 | Reading path | Tokens |
 | --- | ---: |
 | Discovery metadata | 39 |
-| Installed bootstrap | 385 |
-| Bootstrap + current guidance entry | 1,163 |
-| Scoped PPTX edit + final review | 2,486 |
-| Scoped Google edit + final review | 3,073 |
-| New PPTX deck from native template + review | 3,438 |
-| New Google deck from native template + review | 4,465 |
-| New PPTX scene + contract + review | 3,660 |
-| New Google scene + contract + review | 4,795 |
-| Content-led PPTX + selected component + review | 5,222 |
-| Font screening + structured critique + review | 2,733 |
-| Optional image guidance + download result | 2,097 |
+| Installed bootstrap | 412 |
+| Bootstrap + current guidance entry | 1,239 |
+| Scoped PPTX edit + final review | 2,616 |
+| Scoped Google edit + final review | 3,203 |
+| New PPTX deck from native template + review | 3,568 |
+| New Google deck from native template + review | 4,595 |
+| New PPTX scene + contract + review | 3,790 |
+| New Google scene + contract + review | 4,925 |
+| Content-led PPTX + selected component + review | 5,352 |
+| Font screening + structured critique + review | 2,863 |
+| Optional image guidance + download result | 2,227 |
 
 Intake, workspace, brand integration and image guidance load only when needed. Native-template
 authoring skips the scene contract; scene routes include its actual helper output.

@@ -59,7 +59,7 @@ function version(value) {
 }
 function compatible(required, actual) {
   const a = version(required), b = version(actual);
-  if (a.some((n, i) => n > b[i] && a.slice(0, i).every((v, j) => v === b[j]))) throw new Error('Current guidance needs a newer installed runtime. Update with this skill’s trusted installer.');
+  if (a.some((n, i) => n > b[i] && a.slice(0, i).every((v, j) => v === b[j]))) throw new Error(`Current guidance needs a newer installed runtime: requires ${required} or newer; installed ${actual}. Update with this skill’s trusted installer.`);
 }
 async function runtimeHashes(runtime) {
   const hashes = {};
@@ -122,7 +122,7 @@ export async function start({ project, runtime = root, source, revision } = {}) 
     const pin = { schema: 1, skill: config.skill, repository: config.repository, revision: commit, task, createdAt: new Date().toISOString(), runtime: config.runtime, runtimeVersion: config.version, runtimeFiles: await runtimeHashes(config.runtime), files: hashes };
     await writeFile(join(stage, 'pin.json'), JSON.stringify(pin, null, 2) + '\n', { flag: 'wx', mode: 0o400 });
     const snapshot = join(cache, 'tasks', task); await rename(stage, snapshot); stage = null;
-    return { freshness: 'current-at-start', revision: commit, task, guidance: join(snapshot, 'SKILL.md'), runtime: config.runtime };
+    return { freshness: 'current-at-start', revision: commit, task, guidance: join(snapshot, 'SKILL.md'), runtime: config.runtime, runtimeVersion: config.version, runtimeDigest: sha(JSON.stringify(pin.runtimeFiles)) };
   } finally { if (stage) await rm(stage, { recursive: true, force: true }); await lock.close(); await rm(join(cache, '.sync-lock')); }
 }
 export async function resume({ project, task, runtime = root, cached = false } = {}) {
@@ -140,7 +140,7 @@ export async function resume({ project, task, runtime = root, cached = false } =
   }
   const saved = await settings(pin.runtime);
   if (saved.skill !== config.skill || saved.version !== pin.runtimeVersion || JSON.stringify(await runtimeHashes(saved.runtime)) !== JSON.stringify(pin.runtimeFiles)) throw new Error('Saved executable runtime changed or is unavailable; restore it with its trusted installer.');
-  return { freshness: cached ? 'cached-by-choice' : 'pinned', revision: pin.revision, task, guidance: join(snapshot, 'SKILL.md'), runtime: saved.runtime };
+  return { freshness: cached ? 'cached-by-choice' : 'pinned', revision: pin.revision, task, guidance: join(snapshot, 'SKILL.md'), runtime: saved.runtime, runtimeVersion: saved.version, runtimeDigest: sha(JSON.stringify(pin.runtimeFiles)) };
 }
 async function main() {
   const { values, positionals } = parseArgs({ options: { project: { type: 'string' }, task: { type: 'string' }, revision: { type: 'string' }, help: { type: 'boolean' } }, allowPositionals: true });

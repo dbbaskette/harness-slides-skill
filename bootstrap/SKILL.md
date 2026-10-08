@@ -17,8 +17,10 @@ Resolve this installed directory once. For new work, run:
 node "<installed-skill>/scripts/sync-guidance.mjs" start --project "<content-project>"
 ```
 
-The compact result returns the guidance entry, exact revision, task ID, and
-installed runtime. Read that entry, then only the references for this task.
+The result returns guidance entry/revision, task, runtime path/version and digest.
+Tell the user “Using Harness Slides v<runtimeVersion>” once when starting or
+resuming; saved work uses its pinned runtime. Read the entry, then only the
+references for this task.
 References are relative to the fetched guidance directory; every executable
 command uses the returned **runtime**, never the fetched directory. The AI owns
 helper JSON and commands; do not require users to run them or repeat settled intake.
