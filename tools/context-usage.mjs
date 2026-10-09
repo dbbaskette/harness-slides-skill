@@ -29,6 +29,7 @@ export async function measureContext() {
   const guidanceResult = JSON.stringify({ freshness: 'current-at-start', revision: createHash('sha256').update('sample guidance revision').digest('hex').slice(0, 40), task: createHash('sha256').update('sample guidance task').digest('hex').slice(0, 32), guidance: '<guidance>/SKILL.md', runtime: '<runtime>', runtimeVersion:pkg.version, runtimeDigest:createHash('sha256').update('sample runtime identity').digest('hex') }, null, 2) + '\n';
   const outputs = { guidanceStart: guidanceResult };
   outputs.sceneContract = (await exec(process.execPath, [fileURLToPath(new URL('scripts/harness-slides.mjs', root)), 'scene', 'contract'], { timeout: 30000 })).stdout;
+  outputs.outlineContract = (await exec(process.execPath, [fileURLToPath(new URL('scripts/harness-slides.mjs', root)), 'outline', 'contract'], {timeout:30000})).stdout;
   outputs.composeContract = (await exec(process.execPath, [fileURLToPath(new URL('scripts/harness-slides.mjs', root)), 'compose', 'contract'], {timeout:30000})).stdout;
   outputs.comparisonContract = (await exec(process.execPath, [fileURLToPath(new URL('scripts/harness-slides.mjs', root)), 'deck', 'contract','--id','comparison'], {timeout:30000})).stdout;
   outputs.imageDownload = JSON.stringify({status:'downloaded',id:'deck-slide-04-v1',path:'<project>/assets/slide-04.png',width:1536,height:1024,sha256:createHash('sha256').update('sample image bytes').digest('hex'),metadata:'<project>/assets/slide-04.image.json'}) + '\n';
@@ -45,7 +46,8 @@ export async function measureContext() {
     newGoogleNative: path([...design, 'references/templates.md', google, 'references/native-critique.md', review]),
     newPptxScene: path([...design, 'references/authoring-pptx.md', review], ['sceneContract']),
     newGoogleScene: path([...design, 'references/authoring-google.md', google, review], ['sceneContract']),
-    composedDeck: path([...creative,'references/compositions.md'],['composeContract']),
+    composedDeck: path([...creative,'references/draft.md','references/compositions.md'],['outlineContract','composeContract']),
+    draftOnly: path([...creative,'references/draft.md'],['outlineContract']),
     parallelLead: path([...creative,'references/compositions.md','references/parallel-build.md'],['composeContract']),
     parallelWorker: path(['references/design.md','references/compositions.md','references/parallel-build.md'],['composeContract']),
     contentLedPptx: path([...design,'references/content-components.md','references/brand-addons.md','references/quality.md',review],['comparisonContract']),
@@ -58,7 +60,7 @@ export async function measureContext() {
   if (!description) throw new Error('Missing skill metadata');
   const activation = files['bootstrap/SKILL.md'] + files['SKILL.md'];
   const routes = { 'Discovery metadata': count(description), 'Installed bootstrap': files['bootstrap/SKILL.md'], 'Bootstrap + current guidance entry': activation,
-    ...Object.fromEntries(Object.entries({ scopedPptx: 'Scoped PPTX edit + final review', scopedGoogle: 'Scoped Google edit + final review', newPptxNative: 'New PPTX deck from native template + review', newGoogleNative: 'New Google deck from native template + review', composedDeck: 'New composed deck + contract', parallelLead: 'Parallel build, lead', parallelWorker: 'Parallel build, each worker', newPptxScene: 'New PPTX scene + contract + review', newGoogleScene: 'New Google scene + contract + review', contentLedPptx: 'Content-led PPTX + selected component + review', contentCritique:'Font screening + structured critique + review', customImages: 'Optional image guidance + download result' }).map(([name, label]) => [label, standalone[name].total])) };
+    ...Object.fromEntries(Object.entries({ scopedPptx: 'Scoped PPTX edit + final review', scopedGoogle: 'Scoped Google edit + final review', newPptxNative: 'New PPTX deck from native template + review', newGoogleNative: 'New Google deck from native template + review', draftOnly: 'Draft stage only: outline + contract', composedDeck: 'New composed deck: draft, then build', parallelLead: 'Parallel build, lead', parallelWorker: 'Parallel build, each worker', newPptxScene: 'New PPTX scene + contract + review', newGoogleScene: 'New Google scene + contract + review', contentLedPptx: 'Content-led PPTX + selected component + review', contentCritique:'Font screening + structured critique + review', customImages: 'Optional image guidance + download result' }).map(([name, label]) => [label, standalone[name].total])) };
   const hashes = Object.fromEntries(paths.map(path => [path, createHash('sha256').update(contents[path]).digest('hex')]));
   const inputDigest = createHash('sha256').update(JSON.stringify({ hashes, outputs, readingPaths, routes })).digest('hex');
   return { tokenizer: 'cl100k_base', inputDigest, files, samples, readingPaths, standalone, routes };

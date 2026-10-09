@@ -1,9 +1,10 @@
 # Compose slides
 
 For new slides in a brand template. You describe each slide's structure; the
-compiler places it, fits the text and builds editable native objects. Approve
-[the per-slide proposal](design-walkthrough.md) first, and decide what each slide
-must make the audience understand before choosing its structure. The `direction`
+compiler places it, fits the text and builds editable native objects. Get the
+[draft](draft.md) approved first, or [the per-slide proposal](design-walkthrough.md)
+where there is no draft, and decide what each slide must make the audience
+understand before choosing its structure. The `direction`
 and each slide's `brief` are the only record of those [design](design.md)
 decisions that a composition needs.
 

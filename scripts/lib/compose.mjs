@@ -211,6 +211,13 @@ async function measurer(contract,options) {
 }
 
 // The brand's own numbers, so fit can be planned instead of found by failed compiles.
+export const relationNames=relations,rhythmNames=rhythms;
+// How many lines each title runs to at the brand's title size, and how many the title box holds.
+export async function titleLines(contract,titles,{fonts}={}) {
+  validateBrandContract(contract,{medium:'slides'});
+  const measure=await measurer(contract,fonts),sl=contract.design.slides,t=sl.typography.title,one=measure.height('Ag',t,1e4),line=measure.height('Ag\nAg',t,1e4)-one;
+  return {fit:Math.max(1,Math.floor((sl.titleBox.height-one+.5)/line)+1),lines:titles.map(x=>Math.round((measure.height(x,t,sl.titleBox.width)-one)/line)+1)};
+}
 export async function composeSizes(contract,{fonts}={}) {
   validateBrandContract(contract,{medium:'slides'});
   const sl=contract.design.slides,sp=sl.spacing??{},inset=sp.inset??16,measure=await measurer(contract,fonts),t=sl.typography;

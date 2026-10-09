@@ -1,6 +1,7 @@
 # Draft, then build
 
-Status: proposed, not built. Written 2026-10-09 after the 0.11.0 trials.
+Status: built as described, with one change noted under "How it is built".
+Written 2026-10-09 after the 0.11.0 trials.
 
 ## Why
 
@@ -112,11 +113,13 @@ is to carry the words, and the build stage redraws every slide.
 
 ## How it is built
 
-- The outline is turned into a plain composition by one rule per relation, then
-  laid out by the existing compiler in a draft mode that shrinks text instead
-  of failing.
-- The page is rendered by the existing `renderSceneHtml`, with a wireframe
-  theme and the slides tiled as a contact sheet.
+- As built, the draft has its own small layout, one rule per relation, and its
+  own page renderer; it does not go through the compiler. That was simpler
+  than adding a draft mode, and it is what lets a draft render whatever the
+  length of the text. The page shrinks over-long text in the browser.
+- `check` measures titles with the brand font through the compiler's measurer
+  and counts body words against a budget of 60 for a live deck and 90 for
+  reading.
 - Nothing in the build path changes. `outline start` writes ordinary files that
   `compose` and the parallel build already understand.
 

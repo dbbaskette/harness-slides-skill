@@ -6,6 +6,11 @@ checkpoint, not an installation/command permission prompt. Preserve an explicitl
 requested autonomous workflow and prior approval of the same unchanged plan.
 Brand-only, polish and read-only audits do not require a new full-deck walkthrough.
 
+For a new deck the proposal is a [draft](draft.md): an outline the user sees as
+wireframes and changes until the story is right. The rest of this page says
+what a proposal must contain when there is no draft, and how to ask and wait
+in either case.
+
 ## Make the proposal reviewable
 
 Draft every slide from its own content. For each slide give its number/title,

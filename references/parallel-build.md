@@ -28,6 +28,8 @@ back, at the quality of a one-line sketch.
    are labelled. Do not say what a card looks like or cap what a slide may
    hold; that turns every section into the same boxes.
 3. **Brief each worker** with everything below. A worker knows only its brief.
+   `outline start` writes these briefs from an approved [draft](draft.md); add
+   what it cannot know, the guidance entry and each worker's preview file.
 4. **Write your own file** while they work: cover, section breaks, closing.
 5. **Merge, then review as a deck.** List the files in deck order and join them:
 
