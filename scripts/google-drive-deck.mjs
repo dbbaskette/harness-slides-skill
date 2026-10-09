@@ -143,18 +143,24 @@ export async function importDeck({ file, name, folderId }, deps = {}) {
   return { id: created.id, name: created.name ?? title, url: created.webViewLink ?? `https://docs.google.com/presentation/d/${created.id}/edit` };
 }
 
+export const previewPrefix = 'Preview: ';
+
 // Replace an existing native deck's content in place, so repeated previews reuse one Drive file.
 export async function updateDeck({ fileId, file }, deps = {}) {
   validId(fileId, 'Presentation ID');
   if (!file?.toLowerCase().endsWith('.pptx')) throw new Error('Input must be a .pptx path.');
   const bytes = await readFile(file);
   if (!isZip(bytes)) throw new Error('Input is not a PPTX ZIP.');
+  // Replacing content is destructive, so only a file this tool created for previews may be overwritten.
+  const current = await (await request(`https://www.googleapis.com/drive/v3/files/${fileId}?supportsAllDrives=true&fields=id,name,mimeType`, {}, deps)).json();
+  if (current.mimeType !== slidesType || !String(current.name ?? '').startsWith(previewPrefix)) throw new Error(`Refusing to overwrite a Drive file that is not a "${previewPrefix}…" Google Slides deck. Omit --file-id to create a new preview file.`);
   const url = new URL(`https://www.googleapis.com/upload/drive/v3/files/${fileId}`);
   url.searchParams.set('uploadType', 'media');
   url.searchParams.set('supportsAllDrives', 'true');
   url.searchParams.set('fields', 'id,name,mimeType,webViewLink');
-  const response = await request(url, { method: 'PATCH', headers: { 'Content-Type': pptxType }, body: bytes }, deps);
-  const updated = await response.json();
+  let updated;
+  try { updated = await (await request(url, { method: 'PATCH', headers: { 'Content-Type': pptxType }, body: bytes }, deps)).json(); }
+  catch (error) { throw new Error(`${error.message} Inspect the preview file in Drive before retrying.`, { cause: error }); }
   if (updated.id !== fileId || updated.mimeType !== slidesType) throw new Error('Drive did not confirm the native Google Slides file was updated. Inspect Drive before retrying.');
   return { id: updated.id, name: updated.name, url: updated.webViewLink ?? `https://docs.google.com/presentation/d/${updated.id}/edit` };
 }
