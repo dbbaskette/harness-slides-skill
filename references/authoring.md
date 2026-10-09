@@ -1,6 +1,12 @@
 # Choose the authoring method
 
 Approve [the creative proposal](design-walkthrough.md) first for new/redesigned decks.
+
+**New slides in a brand template: [compose them](compositions.md).** Describe each
+slide's structure and let the compiler place, fit and build it as editable native
+objects. This is the default for new decks, redesigns and reworks. The methods
+below are for what compositions cannot yet express.
+
 For a native template, copy it and reuse its real layouts, masters and elements.
 Read [template reuse](templates.md); no scene contract is needed. Keep complex
 or unsupported native content in native tools rather than flattening it.
