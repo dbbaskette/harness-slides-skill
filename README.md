@@ -259,7 +259,7 @@ representative guidance-start response. Bootstrap activation is shown separately
 | Scoped Google edit + final review | 3,609 |
 | New PPTX deck from native template + review | 6,853 |
 | New Google deck from native template + review | 7,880 |
-| New composed deck + contract + review | 7,950 |
+| New composed deck + contract + review | 8,098 |
 | New PPTX scene + contract + review | 6,112 |
 | New Google scene + contract + review | 7,251 |
 | Content-led PPTX + selected component + review | 8,109 |

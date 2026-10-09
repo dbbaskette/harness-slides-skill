@@ -42,11 +42,13 @@ export async function screenComposition({scene,structure={groups:[],connectors:[
   let run=0;
   for(const slide of scene.slides) {
     const brief=briefs.get(slide.id);
-    run=(brief?.rhythm??(templated.has(slide.id)?'anchor':'dense'))==='dense'?run+1:0;
+    // A slide with no brief has no declared rhythm, so it neither extends nor is blamed for a dense run.
+    run=brief?.rhythm==='dense'?run+1:0;
     if(run>=4)findings.push({slide:slide.id,severity:'info',code:'dense-run',detail:`${run} dense slides in a row. Give the audience a pause: a section break, one large statement or a single image.`});
     if(templated.has(slide.id))continue;
     if(!brief?.relation)findings.push({slide:slide.id,severity:'info',code:'no-brief',detail:'This slide has no brief. Name the relation between its parts and its focal node, so the form follows from the content.'});
-    if(slide.title.trim().split(/\s+/).length<4)findings.push({slide:slide.id,severity:'info',code:'label-title',detail:'The title reads as a label. Write the claim as a sentence the slide then supports.'});
+    // Only short titles in a spaced script are judged; a three-word claim with a number is still a claim.
+    if(/^[\x20-\x7E]+$/.test(slide.title)&&slide.title.trim().split(/\s+/).length<3&&!/\d/.test(slide.title))findings.push({slide:slide.id,severity:'info',code:'label-title',detail:'The title reads as a label. Write the claim as a sentence the slide then supports.'});
   }
   scene.slides.forEach((slide,index)=>{
     if(templated.has(slide.id))return;

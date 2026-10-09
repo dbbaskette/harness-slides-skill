@@ -20,9 +20,12 @@ Before the first slide, write a `direction` for the whole deck:
 | `meanings` | What each other color stands for, such as one product or one state |
 | `motif` | One recurring device and the job it does, if the deck has one |
 
-Every slide then follows it. Boxes start neutral. A color in `meanings` keeps that
-meaning on every slide; never borrow it for decoration. Nothing uses the focal
-color except the one node a slide names as its point.
+Every slide then follows it. Boxes start neutral, and fills come only from the
+neutral, the meanings and the brand's canvas color. A color in `meanings` keeps
+that meaning on every slide; never borrow it for decoration. Nothing uses the
+focal color except the one node a slide names as its point: not another box, not
+text, not an arrow. Arrows are drawn in an ink color. The focal color does not
+count toward the brand's limit on fill colors per slide.
 
 ## Give every content slide a brief
 
@@ -37,19 +40,23 @@ color except the one node a slide names as its point.
 
 | Relation | The parts are | Draw it as |
 | --- | --- | --- |
-| `order` | steps in sequence | nodes joined by edges, or chevrons |
+| `order` | steps in sequence | nodes joined by edges, chevrons, or steps stacked in a column |
 | `dependency` | things that rely on or feed each other | nodes joined by edges |
 | `hierarchy` | levels, parents and children | edges, nested boxes or stacked layers |
-| `membership` | a group and its members | a box holding its members |
+| `membership` | a group and its members | a box holding two or more members |
 | `contrast` | things compared | side by side |
 | `overlap` | things that share a part | intersecting shapes |
 | `quantity` | a number that matters | the `metric` text role, with its context |
 | `none` | words best read directly | text, a quote or an image |
 
-4. **Name the focal node**, the one that carries the claim. The compiler colors
-   it. A slide that compares equals may have none.
+4. **Name the focal node**, the box or text that carries the claim. The compiler
+   colors it: a box gets the focal fill, a text gets the focal color. Leave its own
+   fill and color unset. A slide that compares equals may have none. A focal node
+   needs a direction.
 5. **Tag the rhythm:** `anchor` for structure, `dense` for information, `breathing`
-   for a pause. Four dense slides in a row is a finding.
+   for a pause. Content slides default to dense; cover, section and closing slides
+   are anchors and take only `rhythm` in their brief. Four dense slides in a row is
+   a finding.
 
 `compile` refuses a relation that is not drawn, a second node in the focal color,
 and a fill outside the direction, for every slide in one pass. Choose `none` when

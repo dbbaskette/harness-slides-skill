@@ -22,7 +22,7 @@ const str=v=>typeof v==='string'&&v.trim()&&v.length<=20000;
 const relations=['order','dependency','hierarchy','membership','contrast','overlap','quantity','none'],rhythms=['anchor','dense','breathing'];
 // How each relation must show up in the structure, and what to tell the author when it does not.
 const drawn={
-  order:[f=>f.edges>0||f.chevrons>1,'Join nodes with edges or use chevrons in sequence'],
+  order:[f=>f.edges>0||f.chevrons>1||f.layers,'Join nodes with edges, use chevrons in sequence or stack the steps in a column'],
   dependency:[f=>f.edges>0,'Join the nodes with edges'],
   hierarchy:[f=>f.edges>0||f.nested||f.layers,'Use edges, nested boxes or stacked layers'],
   membership:[f=>f.members,'Put the members inside a box'],
@@ -43,8 +43,8 @@ EDGE: {id,from:NODE id,to:NODE id,label?,arrow?:boolean,color?}.
 DIRECTION, decided once for the deck: {focal:color role that means "look here",neutral:panel color role,meanings?:{color role:what it stands for in this deck},motif?:text}.
 With a direction, fills come only from the neutral, the meanings and white; boxes default to the neutral.
 BRIEF, per content slide: {relation:order|dependency|hierarchy|membership|contrast|overlap|quantity|none,focal?:NODE id,rhythm?:anchor|dense|breathing}.
-The title is the claim. The relation must be drawn: edges or chevrons for order, edges for dependency, edges, nesting or layers for hierarchy, a box holding its members for membership, side by side for contrast, intersecting shapes for overlap, the metric text role for quantity.
-The compiler gives the focal node the focal color; no other node may use it. Text on a dark fill is given a readable color unless you set one.
+The title is the claim. The relation must be drawn: edges, chevrons or a column of steps for order, edges for dependency, edges, nesting or layers for hierarchy, a box holding two or more members for membership, side by side for contrast, intersecting shapes for overlap, the metric text role for quantity.
+The focal node is a box or text; the compiler gives it the focal color and no other node, text or edge may use it. Text inside a filled box is given a readable color unless you set one.
 A labelled edge needs room: its label must fit the gap between the two nodes, so put a spacer between them.
 Generated IDs are reserved: <slide>_title, <slide>_subtitle, <slide>_detail, <box with children>_group, <labelled edge>_label.
 A card's align has no effect when it holds a box, grid or image, because those fill the spare space.
@@ -68,7 +68,9 @@ export function validateComposition(comp,contract) {
       if(!Object.hasOwn(colors,role))throw new Error(`direction.meanings uses ${role}, which is not a brand color role`);
       if(role===dir.focal)throw new Error('the focal color cannot also carry a meaning');
       if(!str(meaning))throw new Error(`direction.meanings: say what ${role} means`);
+      if(colors[role].toUpperCase()===colors[dir.focal].toUpperCase())throw new Error(`direction.meanings.${role} is the same color as the focal; choose a different one`);
     }
+    if(colors[dir.neutral].toUpperCase()===colors[dir.focal].toUpperCase())throw new Error('direction.neutral is the same color as the focal; choose a different one');
     if(dir.motif!==undefined&&!str(dir.motif))throw new Error('direction.motif describes one recurring device, or is omitted');
   }
   const allowedFills=dir?[...new Set([dir.neutral,...Object.keys(dir.meanings??{}),...(Object.hasOwn(colors,'canvasPrimary')?['canvasPrimary']:[])])]:null;
@@ -98,6 +100,7 @@ export function validateComposition(comp,contract) {
       if(n.gap!==undefined&&!gapNames.includes(n.gap))fail(where,`gap must be one of ${gapNames.join('|')}`);
       if(n.align!==undefined&&!aligns.includes(n.align))fail(where,`align must be one of ${aligns.join('|')}`);
       for(const key of ['fill','color'])if(n[key]!==undefined&&!Object.hasOwn(colors,n[key]))fail(where,`${key} must be a brand color role: ${Object.keys(colors).join(', ')}`);
+      if(dir&&n.color!==undefined){if(n.id===focalId)fail(where,'the focal node takes the focal color; remove its color');if(n.color===dir.focal)fail(where,`only the focal node may use the focal color${focalId?'':'; name it in brief.focal'}`);}
       if(n.textRole!==undefined&&!Object.hasOwn(roles,n.textRole))fail(where,`textRole must be one of ${Object.keys(roles).join(', ')}`);
       if(n.type==='stack'&&!['row','column'].includes(n.direction))fail(where,'stack needs direction row|column');
       if(n.type==='grid'&&(!Number.isInteger(n.columns)||n.columns<1||n.columns>6))fail(where,'grid needs 1–6 columns');
@@ -108,7 +111,9 @@ export function validateComposition(comp,contract) {
         if(!Object.hasOwn(shapeKinds,n.shape??'rect'))fail(where,`shape must be one of ${Object.keys(shapeKinds).join('|')}`);
         if(n.children!==undefined){if(n.align==='stretch')fail(where,'a box with children aligns its content start|center|end');claim(`${n.id}_group`,where);}
         if(n.shape==='chevron')facts.chevrons++;
-        if(n.children!==undefined&&Array.isArray(n.children)){const inside=JSON.stringify(n.children);if((inside.match(/"type":"(box|text|icon|image)"/g)??[]).length>1)facts.members=true;if(inside.includes('"type":"box"'))facts.nested=true;}
+        // A heading and a body are a card, not a group: membership needs two drawn members, or three or more parts.
+        if(n.children!==undefined&&Array.isArray(n.children)){const inside=JSON.stringify(n.children),parts=(inside.match(/"type":"(box|text|icon|image)"/g)??[]).length,solid=(inside.match(/"type":"(box|icon|image)"/g)??[]).length;if(solid>1||parts>2)facts.members=true;if(inside.includes('"type":"box"'))facts.nested=true;}
+        if(n.textRole==='metric'&&n.text!==undefined)facts.metric=true;
         // The focal node takes the focal color; every other fill must come from the deck direction.
         if(dir) {
           if(n.id===focalId){if(n.fill!==undefined)fail(where,'the focal node takes the focal color; remove its fill');}
@@ -117,9 +122,10 @@ export function validateComposition(comp,contract) {
         }
         fills.add(dir&&n.id===focalId?dir.focal:n.fill??dir?.neutral??'canvasSecondary');
       }
-      if(['box','text','icon','image'].includes(n.type))leaves.add(n.id);
+      if(['box','text'].includes(n.type))leaves.add(n.id);
       if(n.type==='text'&&n.textRole==='metric')facts.metric=true;
-      if((n.type==='stack'||n.type==='grid')&&Array.isArray(n.children)&&n.children.filter(k=>k?.type==='box').length>1){if(n.type==='stack'&&n.direction==='column')facts.layers=true;else facts.pair=true;}
+      // Two or more comparable siblings: side by side they are a pair, in a single column they are layers.
+      if(['stack','grid','free'].includes(n.type)&&Array.isArray(n.children)&&n.children.filter(k=>['box','text','stack','grid'].includes(k?.type)).length>1){const column=n.type==='stack'&&n.direction==='column'||n.type==='grid'&&n.columns===1;if(column){if(n.children.filter(k=>k?.type==='box').length>1)facts.layers=true;}else facts.pair=true;}
       if(n.type==='icon'&&(!str(n.icon)||n.icon.length>80||!/^[\w.-]+$/.test(n.icon)))fail(where,'icon needs a stable icon ID from the brand icon search');
       if(n.type==='image'){if(!str(n.src)||!str(n.alt))fail(where,'image needs src and alt');if(!['contain','cover'].includes(n.fit??'contain'))fail(where,'fit must be contain|cover');}
       const kids=n.children;
@@ -134,7 +140,7 @@ export function validateComposition(comp,contract) {
       if(s.canvas!==undefined||s.connect!==undefined)fail(s.id,'a slide with a template layout has no canvas or edges; put content on a standard slide');
       for(const key of ['subtitle','detail'])if(s[key]!==undefined){if(!str(s[key]))fail(s.id,`provide ${key} text or omit it`);claim(`${s.id}_${key}`,s.id);}
       if(s.detail!==undefined&&s.subtitle===undefined)fail(s.id,'detail needs a subtitle before it');
-      if(brief!==undefined&&(Object.keys(brief).some(k=>k!=='rhythm')||!rhythms.includes(brief.rhythm)))fail(s.id,'a template layout slide takes only brief.rhythm (anchor|dense|breathing)');
+      if(brief!==undefined&&(!brief||typeof brief!=='object'||Object.keys(brief).some(k=>k!=='rhythm')||!rhythms.includes(brief.rhythm)))fail(s.id,'a template layout slide takes only brief.rhythm (anchor|dense|breathing)');
       summary.push({id:s.id,nodes:0,fills:[],edges:0,layout:s.layout});continue;
     }
     if(s.subtitle!==undefined||s.detail!==undefined)fail(s.id,'subtitle and detail belong to a slide with a template layout');
@@ -146,9 +152,11 @@ export function validateComposition(comp,contract) {
     }
     walk(s.canvas,1,false);
     facts.edges=Array.isArray(s.connect)?s.connect.length:0;
-    if(focalId!==undefined&&!leaves.has(focalId))fail(s.id,`brief.focal names ${focalId}, which is not a box, text, icon or image on this slide`);
+    if(focalId!==undefined&&!leaves.has(focalId))fail(s.id,`brief.focal names ${focalId}, which is not a box or text on this slide`);
     if(brief&&drawn[brief.relation]&&!drawn[brief.relation][0](facts))fail(s.id,`relation "${brief.relation}" is not drawn. ${drawn[brief.relation][1]}, or set the relation to "none" if the words are enough`);
-    if(fills.size>maxFills)fail(s.id,`uses ${fills.size} fill colors; the brand allows ${maxFills} per slide`);
+    // The focal color is the one planned emphasis, so it does not use up the slide's color allowance.
+    const counted=[...fills].filter(role=>!dir||role!==dir.focal).length;
+    if(counted>maxFills)fail(s.id,`uses ${counted} fill colors; the brand allows ${maxFills} per slide`);
     if(s.connect!==undefined&&(!Array.isArray(s.connect)||s.connect.length>40))fail(s.id,'connect must be a list of at most 40 edges');
     for(const c of s.connect??[]) {
       if(!c||typeof c!=='object')fail(s.id,'each edge must be an object');
@@ -157,12 +165,13 @@ export function validateComposition(comp,contract) {
       if(!local.has(c.from)||!local.has(c.to)||c.from===c.to)fail(`${s.id}/${c.id}`,'edges connect two distinct nodes on this slide');
       if(c.label!==undefined){if(!str(c.label))fail(`${s.id}/${c.id}`,'provide an edge label or omit it');claim(`${c.id}_label`,`${s.id}/${c.id}`);}
       if(c.color!==undefined&&!Object.hasOwn(colors,c.color))fail(`${s.id}/${c.id}`,'edge color must be a brand color role');
+      if(dir&&c.color===dir.focal)fail(`${s.id}/${c.id}`,'an edge cannot use the focal color; it belongs to the focal node');
       if(c.arrow!==undefined&&typeof c.arrow!=='boolean')fail(`${s.id}/${c.id}`,'arrow must be boolean');
     }
     summary.push({id:s.id,nodes,fills:[...fills],edges:(s.connect??[]).length});
   } catch(error){invalid.push(error.message);}
   // Report every slide that breaks a rule in one pass, so the author fixes them together.
-  if(invalid.length)throw new Error(invalid.length===1?invalid[0]:`${invalid.length} slides need changes:\n${invalid.join('\n')}`);
+  if(invalid.length)throw new Error(invalid.length===1?invalid[0]:`${invalid.length} problems to fix:\n${invalid.join('\n')}`);
   return {slides:summary};
 }
 
@@ -223,11 +232,11 @@ export async function compileComposition(comp,contract,{fonts}={}) {
   for(const s of comp.slides) try {
     const elements=[],rects=new Map(),labels=[],focalId=s.brief?.focal;
     // Text keeps its role color where that is readable on the surface behind it; otherwise it takes the brand's on-color.
-    const ink=(wanted,surface)=>contrastRatio(wanted,surface)>=4.5?wanted:[colors.onAccent,colors.canvasPrimary,colors.inkDeep].filter(Boolean).sort((a,b)=>contrastRatio(b,surface)-contrastRatio(a,surface))[0];
+    const ink=(wanted,surface,st)=>contrastRatio(wanted,surface)>=(st.size>=18||st.bold&&st.size>=14?3:4.5)?wanted:[colors.onAccent,colors.canvasPrimary,colors.inkDeep].filter(Boolean).sort((a,b)=>contrastRatio(b,surface)-contrastRatio(a,surface))[0];
     const fillRole=n=>dir&&n.id===focalId?dir.focal:n.fill??dir?.neutral??'canvasSecondary';
     const put=(element,members)=>{elements.push(element);members?.push(element.id);return element;};
     const short=(n,rect,required)=>!Number.isFinite(required)?fail(`${s.id}/${n.id??n.name??n.type}`,'has no usable room; use fewer siblings, less nesting or larger weights'):fail(`${s.id}/${n.id??n.name??n.type}`,`needs ${round(required)}pt of height but has ${round(rect.height)}pt at ${round(rect.width)}pt wide; shorten the text, split the slide or restructure`);
-    const textProps=(n,surface)=>{const st=style(n);return {fontSize:st.size,bold:st.bold,color:n.color?colors[n.color]:dir&&n.id===focalId&&n.type==='text'?colors[dir.focal]:ink(colors[st.colorRole],surface),...(n.align&&n.align!=='stretch'?{align:{start:'left',center:'center',end:'right'}[n.align]}:{})};};
+    const textProps=(n,surface)=>{const st=style(n);return {fontSize:st.size,bold:st.bold,color:n.color?colors[n.color]:dir&&n.id===focalId&&n.type==='text'?colors[dir.focal]:ink(colors[st.colorRole],surface,st),...(n.align&&n.align!=='stretch'?{align:{start:'left',center:'center',end:'right'}[n.align]}:{})};};
     const box=r=>({x:round(r.x),y:round(r.y),width:round(r.width),height:round(r.height)});
 
     const place=(n,rect,members,surface=colors.canvasPrimary??'#FFFFFF')=>{
@@ -307,7 +316,7 @@ export async function compileComposition(comp,contract,{fonts}={}) {
       const horizontal=Math.abs(bc.x-ac.x)>=Math.abs(bc.y-ac.y);
       const p1=horizontal?{x:bc.x>ac.x?a.x+a.width:a.x,y:ac.y}:{x:ac.x,y:bc.y>ac.y?a.y+a.height:a.y};
       const p2=horizontal?{x:bc.x>ac.x?b.x:b.x+b.width,y:bc.y}:{x:bc.x,y:bc.y>ac.y?b.y:b.y+b.height};
-      put({id:c.id,type:'line',x:round(Math.min(p1.x,p2.x)),y:round(Math.min(p1.y,p2.y)),width:round(Math.max(1,Math.abs(p2.x-p1.x))),height:round(Math.max(1,Math.abs(p2.y-p1.y))),color:colors[c.color??'headingPrimary'],weight:2,arrow:c.arrow??true,flipH:p2.x<p1.x,flipV:p2.y<p1.y});
+      put({id:c.id,type:'line',x:round(Math.min(p1.x,p2.x)),y:round(Math.min(p1.y,p2.y)),width:round(Math.max(1,Math.abs(p2.x-p1.x))),height:round(Math.max(1,Math.abs(p2.y-p1.y))),color:colors[c.color??(dir?(Object.hasOwn(colors,'inkSecondary')?'inkSecondary':'inkDeep'):'headingPrimary')],weight:2,arrow:c.arrow??true,flipH:p2.x<p1.x,flipV:p2.y<p1.y});
       const record={slide:s.id,id:c.id,from:c.from,to:c.to};
       if(c.label) {
         const st=roles.caption,width=measure.width(c.label,st)+1,height=measure.height(c.label,st,width),mid={x:(p1.x+p2.x)/2,y:(p1.y+p2.y)/2},cb=sl.contentBox;
@@ -338,7 +347,7 @@ export async function compileComposition(comp,contract,{fonts}={}) {
     scene.slides.push({id:s.id,title:s.title,sources:s.sources,elements,...(s.notes!==undefined?{notes:s.notes}:{}),...(s.intent?{intent:s.intent}:{}),...(s.layoutId?{layoutId:s.layoutId}:{})});
   } catch(error){problems.push(error.message.startsWith(`${s.id}`)?error.message:`${s.id}: ${error.message}`);}
   // Report every slide that does not fit in one pass, so the author fixes them together.
-  if(problems.length)throw new Error(problems.length===1?problems[0]:`${problems.length} slides need changes:\n${problems.join('\n')}`);
+  if(problems.length)throw new Error(problems.length===1?problems[0]:`${problems.length} problems to fix:\n${problems.join('\n')}`);
   validateScene(scene);
   return {scene,structure,report:{schema:1,brandRevision:contract.revision,measurement:measure.exact?'exact brand font':'estimated; brand font unavailable',slides:summary.slides}};
 }

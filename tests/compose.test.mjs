@@ -189,7 +189,7 @@ test('a card places its content at the top, middle or bottom',async()=>{
 test('every slide that does not fit is reported in one pass',async()=>{
   const long='This sentence repeats to overflow its box. '.repeat(40),comp={version:1,title:'Deck',slides:['slide_aa','slide_bb','slide_cc'].map((id,i)=>({id,title:'T',sources:['brief:test'],canvas:{type:'box',id:`box_${id}`,text:i===1?'fits':long}}))};
   const error=await compileComposition(comp,brand()).catch(e=>e);
-  assert.match(error.message,/^2 slides need changes:/);assert.match(error.message,/slide_aa\/box_slide_aa: needs/);assert.match(error.message,/slide_cc\/box_slide_cc: needs/);assert.doesNotMatch(error.message,/slide_bb/);
+  assert.match(error.message,/^2 problems to fix:/);assert.match(error.message,/slide_aa\/box_slide_aa: needs/);assert.match(error.message,/slide_cc\/box_slide_cc: needs/);assert.doesNotMatch(error.message,/slide_bb/);
 });
 
 test('a label on a slanted arrow sits clear of the line and of every node',async()=>{
@@ -256,7 +256,7 @@ test('the compiler colors the one focal node and refuses a second emphasis',asyn
   assert.throws(bad(pair({fill:'headingPrimary'}),{relation:'contrast',focal:'node_b'}),/slide_one\/node_a: only the focal node may use the focal color/);
   assert.throws(bad(pair({fill:'headingPrimary'})),/slide_one\/node_a: only the focal node may use the focal color; name it in brief\.focal/);
   assert.throws(bad(pair({},{fill:'accentAqua'}),{relation:'contrast',focal:'node_b'}),/slide_one\/node_b: the focal node takes the focal color; remove its fill/);
-  assert.throws(bad(pair(),{relation:'contrast',focal:'missing_node'}),/brief\.focal names missing_node, which is not a box, text, icon or image on this slide/);
+  assert.throws(bad(pair(),{relation:'contrast',focal:'missing_node'}),/brief\.focal names missing_node, which is not a box or text on this slide/);
 });
 
 test('text on a dark fill gets a readable color unless the author chose one',async()=>{
@@ -269,8 +269,8 @@ test('text on a dark fill gets a readable color unless the author chose one',asy
 test('a relation other than none must be drawn',async()=>{
   const c=brand(),ok=(canvas,relation,extra)=>validateComposition(directed(canvas,{relation},extra),c),no=(canvas,relation,pattern,extra)=>assert.throws(()=>ok(canvas,relation,extra),pattern);
   const edge={connect:[{id:'edge_ab',from:'node_a',to:'node_b'}]},column={type:'stack',direction:'column',children:[{type:'box',id:'node_a',text:'A'},{type:'box',id:'node_b',text:'B'}]};
-  const words={type:'text',id:'only_text',text:'First this, then that.'},card={type:'box',id:'card_main',children:[{type:'text',id:'member_a',text:'A'},{type:'text',id:'member_b',text:'B'}]};
-  no(words,'order',/slide_one: relation "order" is not drawn\. Join nodes with edges or use chevrons in sequence/);ok(pair(),'order',edge);ok(pair({shape:'chevron'},{shape:'chevron'}),'order');
+  const words={type:'text',id:'only_text',text:'First this, then that.'},card={type:'box',id:'card_main',children:[{type:'box',id:'member_a',text:'A'},{type:'box',id:'member_b',text:'B'}]};
+  no(words,'order',/slide_one: relation "order" is not drawn\. Join nodes with edges, use chevrons in sequence or stack the steps in a column/);ok(pair(),'order',edge);ok(pair({shape:'chevron'},{shape:'chevron'}),'order');
   no(pair(),'dependency',/relation "dependency" is not drawn\. Join the nodes with edges/);ok(pair(),'dependency',edge);
   no(words,'hierarchy',/relation "hierarchy" is not drawn/);ok(column,'hierarchy');ok({type:'box',id:'outer_box',children:[{type:'box',id:'inner_box',text:'x'}]},'hierarchy');
   no(pair(),'membership',/relation "membership" is not drawn\. Put the members inside a box/);ok(card,'membership');
@@ -287,4 +287,42 @@ test('a relation other than none must be drawn',async()=>{
 test('compositions without a direction or briefs still compile unchanged',async()=>{
   const {scene,structure}=await compileComposition(deck(pair({fill:'inkSecondary'})),brand());
   assert.equal(byId(scene,'node_a').fill,'#555555');assert.equal(structure.direction,null);assert.deepEqual(structure.briefs,[]);
+});
+
+test('large accent text keeps its color; only unreadable text is changed',async()=>{
+  const c=brand(),{scene}=await compileComposition(deck({type:'stack',direction:'column',children:[{type:'text',id:'big_number',text:'42%',textRole:'metric'},{type:'box',id:'dark_box',fill:'headingPrimary',text:'On blue'}]}),c);
+  assert.equal(byId(scene,'big_number').color,'#0091DA');assert.equal(byId(scene,'dark_box').color,'#FFFFFF');
+});
+
+test('the focal color cannot leak through text, edges or a color alias',async()=>{
+  const c=brand(),bad=(canvas,brief,extra)=>()=>validateComposition(directed(canvas,brief,extra),c);
+  assert.throws(bad(pair({color:'headingPrimary'})),/slide_one\/node_a: only the focal node may use the focal color/);
+  assert.throws(bad(pair(),undefined,{connect:[{id:'edge_ab',from:'node_a',to:'node_b',color:'headingPrimary'}]}),/slide_one\/edge_ab: an edge cannot use the focal color/);
+  const {scene}=await compileComposition(directed(pair(),{relation:'dependency'},{connect:[{id:'edge_ab',from:'node_a',to:'node_b'}]}),c);
+  assert.equal(byId(scene,'edge_ab').color,'#555555');
+  const alias=brand();alias.design.colors.brandBlue=alias.design.colors.headingPrimary;alias.revision=contractRevision(alias);
+  assert.throws(()=>validateComposition({...directed(pair()),direction:{...direction,meanings:{brandBlue:'Us'}}},alias),/direction\.meanings\.brandBlue is the same color as the focal/);
+  const image={type:'stack',direction:'row',children:[{type:'image',id:'side_image',src:'a.png',alt:'x'},{type:'box',id:'node_b',text:'B'}]};
+  assert.throws(bad(image,{relation:'none',focal:'side_image'}),/brief\.focal names side_image, which is not a box or text on this slide/);
+  assert.throws(bad({type:'text',id:'only_text',text:'Words',color:'inkSecondary'},{relation:'none',focal:'only_text'}),/slide_one\/only_text: the focal node takes the focal color; remove its color/);
+  const {scene:focalText}=await compileComposition(directed({type:'text',id:'only_text',text:'Words'},{relation:'none',focal:'only_text'}),c);
+  assert.equal(byId(focalText,'only_text').color,'#2867B2');
+});
+
+test('relations accept the ordinary ways of drawing them and reject look-alikes',()=>{
+  const c=brand(),ok=(canvas,relation)=>validateComposition(directed(canvas,{relation}),c),no=(canvas,relation)=>assert.throws(()=>ok(canvas,relation),/is not drawn/);
+  const boxes=n=>Array.from({length:n},(_,i)=>({type:'box',id:`item_${i}x`,text:`${i+1}. Step`}));
+  ok({type:'stack',direction:'column',children:boxes(3)},'order');
+  ok({type:'stack',direction:'row',children:[{type:'text',id:'left_text',text:'Before'},{type:'text',id:'right_text',text:'After'}]},'contrast');
+  ok({type:'free',children:boxes(2).map((b,i)=>({...b,at:{x:i*.5,y:0,width:.4,height:.5}}))},'contrast');
+  no({type:'grid',columns:1,children:boxes(2)},'contrast');
+  ok({type:'box',id:'big_box',text:'42%',textRole:'metric'},'quantity');
+  no({type:'box',id:'plain_card',children:[{type:'text',id:'card_head',text:'Heading',textRole:'label'},{type:'text',id:'card_body',text:'Body'}]},'membership');
+  ok({type:'box',id:'full_card',children:[{type:'text',id:'card_head',text:'Group'},{type:'text',id:'member_a',text:'A'},{type:'text',id:'member_b',text:'B'}]},'membership');
+});
+
+test('the focal color does not count against the fill limit, and a null brief is located',()=>{
+  const c=brand(),four={type:'grid',columns:2,children:[{type:'box',id:'node_a',text:'A'},{type:'box',id:'node_b',text:'B',fill:'accentAqua'},{type:'box',id:'node_c',text:'C',fill:'canvasPrimary'},{type:'box',id:'node_d',text:'D'}]};
+  validateComposition(directed(four,{relation:'contrast',focal:'node_d'}),c);
+  assert.throws(()=>validateComposition({version:1,title:'D',slides:[{id:'cover_slide',title:'T',layout:'Cover',sources:['brief:test'],brief:null}]},c),/cover_slide: a template layout slide takes only brief\.rhythm/);
 });
