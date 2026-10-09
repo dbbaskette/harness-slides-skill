@@ -13,7 +13,7 @@ export async function compileCompositionFile({file,brand,output,fonts,'design-pr
   await checkBrandSources(contract);
   const {scene,structure,report}=await compileComposition(JSON.parse(bytes),contract,{fonts:fonts?JSON.parse(await readFile(fonts)):undefined});
   // Unknown or picture-only icons are caught now, not when the deck is rendered.
-  await (await import('./pptx-native.mjs')).checkIcons(structure,contract);
+  const native=await import('./pptx-native.mjs');await native.checkIcons(structure,contract);await native.checkLayouts(structure,contract);
   const approved=await requireSceneDesign(scene,designProject);
   if(approved)report.designRevision=approved.revision;
   const assets=[];
@@ -37,6 +37,7 @@ export async function renderCompositionDir({file,output}) {
   const dir=resolve(file),load=async name=>JSON.parse(await readFile(join(dir,name),'utf8'));
   const scene=await load('scene.json'),structure=await load('structure.json'),brand=await load('brand-contract.json');
   if(structure.icons?.length&&!brand.design.nativeTemplate)throw new Error('This composition uses icons, which need a brand with a native template');
+  if(structure.layouts?.length&&!brand.design.nativeTemplate)throw new Error('This composition uses template layouts, which need a brand with a native template');
   if(brand.design.nativeTemplate)return (await import('./pptx-native.mjs')).emitNativePptx({scene,structure,brand,output,base:dir});
   const {inventory,...result}=await (await import('./pptx-render.mjs')).renderPptxScene(scene,resolve(output),{base:dir});
   return {...result,emitter:'generated deck; the brand contract has no native template'};

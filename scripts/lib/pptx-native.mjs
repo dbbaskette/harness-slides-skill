@@ -53,7 +53,8 @@ export async function emitNativePptx({scene,structure={groups:[],connectors:[]},
     // Icons take their recorded place in the drawing order, so they sit and group with their neighbours.
     // Each order was recorded against the scene's own elements, so earlier insertions shift later ones by one.
     for(const [n,icon] of (structure.icons??[]).filter(i=>i.slide===s.id).sort((a,b)=>a.order-b.order).entries()){const {slide:_,order,...rest}=icon;elements.splice(Math.min(order+n,elements.length),0,{type:'icon',...rest});}
-    slides.push({id:s.id,elements,...(s.notes?{notes:s.notes}:{}),groups:structure.groups.filter(g=>g.slide===s.id).map(({id,members})=>({id,members})),connectors:structure.connectors.filter(c=>c.slide===s.id).map(({id,from,to})=>({id,from,to}))});
+    const chosen=(structure.layouts??[]).find(l=>l.slide===s.id);
+    slides.push({id:s.id,...(chosen?{layout:chosen.layout,placeholders:chosen.placeholders}:{}),elements,...(s.notes?{notes:s.notes}:{}),groups:structure.groups.filter(g=>g.slide===s.id).map(({id,members})=>({id,members})),connectors:structure.connectors.filter(c=>c.slide===s.id).map(({id,from,to})=>({id,from,to}))});
   }
   const iconLibrary=await checkIcons(structure,brand);
   const plan={layoutPart:native.layoutPart,...(iconLibrary?{iconLibrary}:{}),font:brand.design.fontFamily,shapeInset:sl.spacing?.inset??16,slides};
@@ -66,4 +67,29 @@ export async function emitNativePptx({scene,structure={groups:[],connectors:[]},
     const emitted=JSON.parse(stdout),inventory=await pptxTool('inspect',[resolve(output)]);
     return {output:resolve(output),slides:emitted.slides,sha256:inventory.sha256,editable:true,status:'unreviewed draft',emitter:'native template',layoutPart:emitted.layoutPart,titlePlaceholder:emitted.titlePlaceholder,removedTemplateParts:emitted.removedTemplateParts,icons:emitted.report.flatMap(r=>r.icons),native:emitted.report};
   } finally{await rm(dir,{recursive:true,force:true});}
+}
+
+// The template's layouts by name, with the placeholders a composition can fill.
+export async function templateLayouts(brand) {
+  if(!brand)throw new Error('Provide --brand brand-contract.json');
+  validateBrandContract(brand,{medium:'slides'});await checkBrandSources(brand);
+  const native=brand.design.nativeTemplate;
+  if(!native)throw new Error('This brand contract has no native template, so there are no template layouts to choose');
+  let stdout;
+  try{({stdout}=await exec('python3',['-B',fileURLToPath(new URL('./pptx-native.py',import.meta.url)),'layouts',resolve(native.path),native.layoutPart],{timeout:60000,maxBuffer:4*1024*1024}));}
+  catch(error){throw new Error(error.code==='ENOENT'?'Python 3.9+ is required. Run harness-slides doctor.':error.stderr?.trim()||error.message);}
+  const found=JSON.parse(stdout);
+  return {default:found.default,layouts:found.layouts.map(l=>({name:l.name,title:Boolean(l.title),subtitles:l.subtitles.length,pictures:l.pictures,canvas:l.default})),use:'A slide on the default layout has a canvas. A slide that names another layout fills its title and up to that many subtitle lines, and has no canvas. A layout with pictures reserves an area for a photo that compositions cannot fill yet, so it renders as an empty panel; prefer layouts with pictures: 0. A layout with title: false shows no title.'};
+}
+
+// Catch a misspelled or overfilled template layout at compile, not at render.
+export async function checkLayouts(structure,brand) {
+  const wanted=structure.layouts??[];if(!wanted.length)return;
+  if(!brand.design.nativeTemplate)throw new Error('This composition uses template layouts, which need a brand with a native template');
+  const {layouts}=await templateLayouts(brand),tidy=name=>String(name).replace(/\s+/g,' ').trim();
+  for(const w of wanted) {
+    const match=layouts.find(l=>tidy(l.name)===tidy(w.layout));
+    if(!match)throw new Error(`${w.slide}: the template has no layout named ${w.layout}. Available: ${layouts.map(l=>l.name).join(', ')}`);
+    if(w.placeholders.length>match.subtitles)throw new Error(`${w.slide}: layout ${match.name} has ${match.subtitles} subtitle placeholders; remove the extra text`);
+  }
 }

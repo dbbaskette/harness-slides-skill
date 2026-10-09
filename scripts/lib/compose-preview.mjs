@@ -8,21 +8,46 @@ import {auditSceneQuality} from './slide-quality.mjs';
 import {renderCompositionDir} from './compose-file.mjs';
 import {importDeck,updateDeck,exportPdf,previewPrefix} from '../google-drive-deck.mjs';
 import {hash} from './common.mjs';
+import {themeFor,color} from './scene.mjs';
 
 // Wording that states an order or a dependency. Everyday words such as "after" or "next" alone are not enough.
 const relational=/→|->|=>|\b(?:and then|, then|first\b.{1,80}\bthen|leads? to|results? in|depends? on|flows? (?:to|into|through|from)|sends? (?:\w+ ){1,4}to|hands? off to|followed by|versus|vs\.?|step \d|stage \d|phase \d)\b/i;
 const numbered=/^\s*(?:(?:step|stage|phase)\s*)?\d+[.):]?\s/i;
 const signature=slide=>JSON.stringify(slide.elements.filter(e=>e.role!=='title').map(e=>[e.type,...['x','y','width','height'].map(k=>Math.round(e[k]/20))]));
 
+const luminance=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255).map(v=>v<=.03928?v/12.92:((v+.055)/1.055)**2.4).reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);
+const contrast=(a,b)=>{const [hi,lo]=[luminance(a),luminance(b)].sort((x,y)=>y-x);return (hi+.05)/(lo+.05);};
+// The filled shape drawn beneath a box, if any: the last one before it in drawing order that contains it.
+const backdrop=(slide,box,before=slide.elements.length)=>slide.elements.slice(0,before).filter(e=>e.type==='shape'&&e.fill&&e.x<=box.x+.5&&e.y<=box.y+.5&&e.x+e.width>=box.x+box.width-.5&&e.y+e.height>=box.y+box.height-.5).at(-1);
+
 // Screens that need no render. They point at slides to look at; they do not approve anything.
 export async function screenComposition({scene,structure={groups:[],connectors:[]},native=[],fonts}) {
-  const audit=await auditSceneQuality(scene,{fonts}),findings=[...audit.findings];
+  const audit=await auditSceneQuality(scene,{fonts}),theme=themeFor(scene);
+  // The audit judges text against the slide background. Text on a filled card is judged against that card instead.
+  const findings=audit.findings.filter(f=>{
+    if(f.code!=='contrast'||!f.object)return true;
+    const slide=scene.slides.find(x=>x.id===f.slide),index=slide?.elements.findIndex(e=>e.id===f.object)??-1,e=slide?.elements[index];
+    // A shape's own text is already judged against that shape's fill.
+    if(!e||e.type==='shape'&&e.fill)return true;
+    const card=backdrop(slide,e,index);
+    if(!card)return true;
+    const size=e.fontSize??theme.bodySize,large=size>=18||e.bold&&size>=14;
+    return contrast(color(e.color??'text',theme),color(card.fill,theme))<(large?3:4.5);
+  });
+  // Cover, section and closing slides are text by design and repeat on purpose.
+  const templated=new Set((structure.layouts??[]).map(l=>l.slide));
+  for(let i=findings.length-1;i>=0;i--)if(templated.has(findings[i].slide)&&['text-only','similar-geometry','density','measured-text-overflow'].includes(findings[i].code))findings.splice(i,1);
   scene.slides.forEach((slide,index)=>{
+    if(templated.has(slide.id))return;
     const body=slide.elements.filter(e=>e.role!=='title'),words=body.map(e=>e.text??'').join(' '),edges=structure.connectors.filter(c=>c.slide===slide.id).length;
     const drawn=body.filter(e=>['shape','image','table','chart'].includes(e.type)).length+(structure.icons??[]).filter(i=>i.slide===slide.id).length,ordered=body.filter(e=>e.type==='shape'&&numbered.test(e.text??'')).length;
     if(ordered>=2&&!edges)findings.push({slide:slide.id,severity:'info',code:'sequence-without-edges',detail:'Numbered boxes with nothing joining them. Add edges if the order matters, or drop the numbers if it does not.'});
     if(relational.test(words)&&!edges&&drawn<=1)findings.push({slide:slide.id,severity:'warn',code:'relational-text-only',detail:'The wording describes a sequence or relationship, but nothing on the slide shows it. Consider nodes joined by edges, or regions that show ownership.'});
-    if(index>0&&body.length>1&&signature(slide)===signature(scene.slides[index-1])&&!findings.some(f=>f.slide===slide.id&&f.code==='similar-geometry'))findings.push({slide:slide.id,severity:'info',code:'repeats-previous-layout',relatedSlides:[scene.slides[index-1].id],detail:'Same geometry as the previous slide. Keep it only when the two slides are meant to be compared.'});
+    if(index>0&&body.length>1&&!templated.has(scene.slides[index-1].id)&&signature(slide)===signature(scene.slides[index-1])&&!findings.some(f=>f.slide===slide.id&&f.code==='similar-geometry'))findings.push({slide:slide.id,severity:'info',code:'repeats-previous-layout',relatedSlides:[scene.slides[index-1].id],detail:'Same geometry as the previous slide. Keep it only when the two slides are meant to be compared.'});
+    for(const icon of (structure.icons??[]).filter(i=>i.slide===slide.id)) {
+      const card=backdrop(slide,icon),drawn=native.find(n=>n.id===slide.id)?.icons?.find(i=>i.id===icon.id);
+      if(card&&drawn?.colors?.includes(color(card.fill,theme).slice(1).toUpperCase()))findings.push({slide:slide.id,object:icon.id,severity:'warn',code:'icon-blends-into-fill',detail:`Part of this icon is the same color as the ${card.id} fill behind it, so that part disappears. Use a different fill for the card.`});
+    }
     for(const id of native.find(n=>n.id===slide.id)?.unattached??[])findings.push({slide:slide.id,object:id,severity:'info',code:'unattached-connector',detail:'This arrow is positioned but not attached, so it will not follow its shapes. Attach works for rect, roundRect, diamond and ellipse.'});
   });
   return findings;
