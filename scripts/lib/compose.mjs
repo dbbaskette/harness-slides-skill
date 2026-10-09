@@ -50,6 +50,7 @@ A labelled edge needs room: its label must fit the gap between the two nodes, so
 Generated IDs are reserved: <slide>_title, <slide>_subtitle, <slide>_detail, <box with children>_group, <labelled edge>_label.
 A card's align has no effect when it holds a box, grid or image, because those fill the spare space.
 IDs match [a-zA-Z_][a-zA-Z0-9_-]{4,40} and are unique across the deck.
+Nest at most 6 levels. Run compose contract --brand brand-contract.json for the brand's content area, gap, padding and line sizes.
 Text is measured with the brand font. Content that cannot fit at its role's size fails with the shortfall; rewrite, split or restructure.`;
 
 export function validateComposition(comp,contract) {
@@ -193,6 +194,17 @@ async function measurer(contract,options) {
   return {height,width,exact};
 }
 
+// The brand's own numbers, so fit can be planned instead of found by failed compiles.
+export async function composeSizes(contract,{fonts}={}) {
+  validateBrandContract(contract,{medium:'slides'});
+  const sl=contract.design.slides,sp=sl.spacing??{},inset=sp.inset??16,measure=await measurer(contract,fonts),t=sl.typography;
+  const line=role=>round(measure.height('Ag',t[role],400)),lines=Math.max(1,[1,2,3].filter(n=>measure.height(Array(n).fill('Ag').join('\n'),t.title,sl.titleBox.width)<=sl.titleBox.height+.5).pop()??1);
+  const body=contract.medium.delivery==='live'?'body':'bodyReference';
+  return `Sizes for ${contract.identity.id}, in points.
+Content area ${round(sl.contentBox.width)} wide by ${round(sl.contentBox.height)} high. The title holds ${lines} line${lines>1?'s':''} at ${t.title.size}pt across ${round(sl.titleBox.width)}.
+Gaps: tight ${inset/2}, normal ${inset}, wide ${sp.column??28}. A box pads its content by ${inset} on each side. An icon is ${sl.icon?.size??48} square.
+One line of text needs: ${Object.keys(t).filter(k=>k!=='title').map(k=>`${k} ${line(k)}`).join(', ')}. Text with no textRole uses ${body}.`;
+}
 export async function compileComposition(comp,contract,{fonts}={}) {
   const summary=validateComposition(comp,contract);
   const d=contract.design,sl=d.slides,roles=sl.typography,colors=d.colors,sp=sl.spacing??{},inset=sp.inset??16;

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {contractRevision} from '../scripts/lib/brand-contract.mjs';
-import {validateComposition,compileComposition,composeContract} from '../scripts/lib/compose.mjs';
+import {validateComposition,compileComposition,composeContract,composeSizes} from '../scripts/lib/compose.mjs';
 
 function brand(extra={}) {
   const colors={canvasPrimary:'#FFFFFF',canvasSecondary:'#F0F2F5',inkDeep:'#202124',inkSecondary:'#555555',headingPrimary:'#2867B2',accentAqua:'#0091DA'};
@@ -331,4 +331,10 @@ test('the focal color does not count against the fill limit, and a null brief is
   const c=brand(),four={type:'grid',columns:2,children:[{type:'box',id:'node_a',text:'A'},{type:'box',id:'node_b',text:'B',fill:'accentAqua'},{type:'box',id:'node_c',text:'C',fill:'canvasPrimary'},{type:'box',id:'node_d',text:'D'}]};
   validateComposition(directed(four,{relation:'contrast',focal:'node_d'}),c);
   assert.throws(()=>validateComposition({version:1,title:'D',slides:[{id:'cover_slide',title:'T',layout:'Cover',sources:['brief:test'],brief:null}]},c),/cover_slide: a template layout slide takes only brief\.rhythm/);
+});
+
+test('the contract can report the brand sizes that decide fit',async()=>{
+  const sizes=await composeSizes(brand());
+  assert.match(sizes,/Gaps: tight 9, normal 18, wide 30\. A box pads its content by 18 on each side/);
+  assert.match(sizes,/The title holds \d line/);assert.match(sizes,/caption [\d.]+/);
 });

@@ -35,7 +35,7 @@ export async function screenComposition({scene,structure={groups:[],connectors:[
   });
   // Cover, section and closing slides are text by design and repeat on purpose.
   const templated=new Set((structure.layouts??[]).map(l=>l.slide));
-  for(let i=findings.length-1;i>=0;i--)if(templated.has(findings[i].slide)&&['text-only','similar-geometry','density','measured-text-overflow'].includes(findings[i].code))findings.splice(i,1);
+  for(let i=findings.length-1;i>=0;i--)if(templated.has(findings[i].slide)&&['text-only','similar-geometry','density','measured-text-overflow','title-value-needs-support'].includes(findings[i].code))findings.splice(i,1);
   // Deck-level discipline: one direction for the whole deck, a brief per content slide, and a rhythm that varies.
   const briefs=new Map((structure.briefs??[]).map(b=>[b.slide,b])),content=scene.slides.filter(s=>!templated.has(s.id));
   if(!structure.direction&&content.length)findings.push({slide:content[0].id,severity:'info',code:'no-direction',detail:'This deck has no direction. Decide once which color means "look here", which is the neutral and what each other color stands for, so every slide follows the same rules.'});

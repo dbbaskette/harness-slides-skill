@@ -1,8 +1,7 @@
 # Other authoring methods
 
 New slides in a brand template are [composed](compositions.md). Use a method
-below only for what compositions cannot express, and only for the slides that
-need it. Approve [the proposal](design-walkthrough.md) first; these methods keep
+below only for a deck compositions cannot express; one build uses one method. Approve [the proposal](design-walkthrough.md) first; these methods keep
 it in [checkpoint records](design-records.md).
 
 | Need | Method |

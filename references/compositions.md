@@ -11,8 +11,12 @@ Keep a `presentation-brief.md` beside the composition: the request, audience,
 delivery, the direction, and the user's approval in their own words.
 
 ```sh
-node scripts/harness-slides.mjs compose contract
+node scripts/harness-slides.mjs compose contract --brand brand-contract.json
 ```
+
+With `--brand` it ends with that brand's sizes: the content area, how many
+lines a title holds, gaps, padding and the height of a line in each text role.
+Plan fit from those numbers before compiling.
 
 ## Decide the deck's direction once
 
@@ -38,7 +42,8 @@ many colors a slide uses; each one has to be in the direction, with a meaning.
 "brief": {"relation": "order", "focal": "step_three", "rhythm": "dense"}
 ```
 
-1. **The title is the claim.** Write it as a sentence the slide then supports.
+1. **The title is the claim.** Write it as a sentence the slide then supports,
+   short enough for the title lines the brand allows; most allow one.
 2. **Count the real units.** How many things are on this slide? Take the number
    from the content, never from a layout.
 3. **Name the relation between them.** It decides the form:
@@ -143,7 +148,8 @@ proposal file. Add `--design-project CONTENT` to `compile` only when slides carr
 
 Open every image. Because `compile` checks every slide in the file, either add
 slides one at a time or draft them all and then take them in turn with
-`--slide`. Either way, look at each slide and revise it once before the next. Findings point at things to look at: wording that describes a relationship
+`--slide`. Either way, look at each slide, revise it once and look at the
+revision before the next. Findings point at things to look at: wording that describes a relationship
 with nothing drawn, a layout repeated from the previous slide, an arrow that
 could not be attached, an icon that blends into the card behind it, a deck with
 no direction, a slide with no brief, a title that reads as a label. They are not approval, and no finding does not mean the
@@ -159,7 +165,8 @@ node scripts/harness-slides.mjs drive import --file deck.pptx --name TITLE
 
 Before delivering, run `compose preview` on the finished build without `--slide`
 and open every image, in order: each slide, then the run of slides as a deck.
-That is the final review for a composed deck. Show the user those images and
+Name the three weakest slides and what is wrong with each, fix them, and
+preview again. That is the final review for a composed deck. Show the user those images and
 wait, as [the walkthrough](design-walkthrough.md#show-rendered-output-and-pause-again)
 describes. The preview file and the delivered file are imports of the same
 build.
@@ -169,5 +176,7 @@ placeholder, labels sit inside their shapes, arrows are attached, and each card
 is one group. All of that survives the import into Google Slides. Read
 [review](review.md) only for a requested PDF export or an editability check.
 
-Tables, charts and hyperlinks are not available in compositions yet. Use
-[typed components](content-components.md) or a native template slide for those.
+Native tables, charts and hyperlinks are not available in compositions yet. A
+small comparison table can be built as a grid of boxes and text. A deck that
+needs a real table or chart is built with [another method](authoring.md); the
+methods cannot yet be mixed in one build.

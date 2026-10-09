@@ -9,8 +9,8 @@ The AI owns story and design unless supplied. A user can provide a brief, source
 documents or an existing deck; never require them to design an outline or JSON.
 Default to native Google Slides, honoring explicit PowerPoint requests.
 
-For new creative work, retain a concise content/asset decision per slide and
-review what the visual explains; generated art is one option, not a quota.
+For new creative work, decide each slide's content and assets on its own merits
+and review what the visual explains; generated art is one option, not a quota.
 Choose each slide's composition and visual assets from its own content. Carry
 the theme and narrative across the deck; do not carry a list or layout choice
 across slides by default. Follow [design](references/design.md) for creative work. Before building,
@@ -43,7 +43,7 @@ this engine. Apply its selected contract and assets; do not mix identities.
 | Task | Read |
 | --- | --- |
 | New deck, redesign or full rework | [Design](references/design.md) and [walkthrough](references/design-walkthrough.md), then [compositions](references/compositions.md) |
-| A table, a chart, or a slide compositions cannot express | [Other methods](references/authoring.md); load only the one chosen |
+| A deck that needs a native table or chart, or that compositions cannot express | [Other methods](references/authoring.md); load only the one chosen |
 | Polish, content-preserving patch or selected-slide edit | [PPTX editing](references/editing.md) or [Google operations](references/google-slides.md), matching the destination |
 | Native Google access/operations | [Google Slides](references/google-slides.md) |
 | Writing a brand add-on or choosing among templates | [Brand add-ons](references/brand-addons.md); [template reuse](references/templates.md) only for inspection/composition. A deck that only uses an exported brand contract needs neither |
