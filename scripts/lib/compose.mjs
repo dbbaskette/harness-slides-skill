@@ -12,14 +12,15 @@ const fields={
   box:['text','shape','fill','color','textRole','align','children','gap'],
   text:['text','textRole','color','align'],
   image:['src','alt','fit'],
-  icon:['icon'],
+  icon:['icon','color','style'],
   spacer:[],
 };
 const common=['id','type','weight','at'],gapNames=['none','tight','normal','wide'],aligns=['start','center','end','stretch'];
 const round=n=>Math.round(n*100)/100;
 const fail=(where,message)=>{throw new Error(`${where}: ${message}`);};
 const str=v=>typeof v==='string'&&v.trim()&&v.length<=20000;
-const relations=['order','dependency','hierarchy','membership','contrast','overlap','quantity','none'],rhythms=['anchor','dense','breathing'];
+const iconStyles=['solid','outline','plain'];
+const relations=['order','dependency','hierarchy','membership','contrast','parallel','overlap','quantity','none'],rhythms=['anchor','dense','breathing'];
 // How each relation must show up in the structure, and what to tell the author when it does not.
 const drawn={
   order:[f=>f.edges>0||f.chevrons>1||f.layers,'Join nodes with edges, use chevrons in sequence or stack the steps in a column'],
@@ -27,6 +28,7 @@ const drawn={
   hierarchy:[f=>f.edges>0||f.nested||f.layers,'Use edges, nested boxes or stacked layers'],
   membership:[f=>f.members,'Put the members inside a box'],
   contrast:[f=>f.pair,'Place the things compared side by side'],
+  parallel:[f=>f.peers,'Place the peers in a grid, a row or a column of like nodes'],
   quantity:[f=>f.metric,'Show the number with the metric text role'],
 };
 const luminance=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255).map(v=>v<=.03928?v/12.92:((v+.055)/1.055)**2.4).reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);
@@ -36,15 +38,17 @@ export const composeContract=`Composition v1 (AI-owned; describe structure, neve
 {version:1,title,direction?:DIRECTION,slides:[{id,title,sources:[one or more IDs],canvas:NODE,connect?:[EDGE],brief?:BRIEF,notes?,intent?,layoutId?} | {id,title,sources,layout:TEMPLATE LAYOUT NAME,subtitle?,detail?,notes?}]}
 A slide with layout uses that template layout's own placeholders (cover, section break, closing) and has no canvas; run compose layouts for the names.
 NODE containers: {type:stack,direction:row|column,gap?,align?,children:[NODE]} | {type:grid,columns:1-6,gap?,children:[NODE]} | {type:free,children:[NODE with at:{x,y,width,height} as 0-1 fractions]}.
-NODE leaves: {type:icon,id,icon:STABLE ICON ID from the brand's icon search} | {type:box,id,text?|children?,shape?:rect|ellipse|roundRect|diamond|hexagon|chevron|can,fill?,color?,textRole?,align?} | {type:text,id,text,textRole?,color?,align?} | {type:image,id,src,alt,fit?} | {type:spacer}.
+NODE leaves: {type:icon,id,icon:STABLE ICON ID from the brand's icon search,color?,style?:solid|outline|plain} | {type:box,id,text?|children?,shape?:rect|ellipse|roundRect|diamond|hexagon|chevron|can,fill?,color?,textRole?,align?} | {type:text,id,text,textRole?,color?,align?} | {type:image,id,src,alt,fit?} | {type:spacer}.
 sources name what a slide rests on: a document section, a finding, or one ID such as request or author_knowledge when it comes from the brief or general knowledge.
-Any node may set weight (relative share, above 0 up to 10, default 1). A node never goes below the size its content needs, so a small weight can be overridden; check proportions in the render. Containers may set group:true and an id.
-gap: none|tight|normal|wide. align: start|center|end|stretch. On a box with children, align (start|center|end) places its content vertically. fill/color: a brand color role name. textRole: a brand typography role name.
+Any node may set weight (relative share, above 0 up to 10, default 1). A node never goes below the size its content needs; when that overrides a weight you set, compile and preview report it as weight-overridden. An empty box has no minimum, so use empty boxes for bars drawn to scale.
+An icon keeps the library's own colors unless you set color (a brand color role) or style: solid is a light icon on a colored disc, outline a colored icon in a ring, plain a colored icon with no container. On a filled card use plain or outline with a color that reads on the fill.
+A card's content sits inside its shape's text area, so a diamond, ellipse or hexagon holds much less than a rectangle of the same size. Containers may set group:true and an id.
+gap: none|tight|normal|wide. align: start|center|end|stretch. In a row, stretch (the default) makes every child fill the row's height; start, center or end gives each child the height its content needs. On a box with children, align (start|center|end) places its content vertically. fill/color: a brand color role name. textRole: a brand typography role name.
 EDGE: {id,from:NODE id,to:NODE id,label?,arrow?:boolean,color?}.
 DIRECTION, decided once for the deck: {focal:color role that means "look here",neutral:panel color role,meanings?:{color role:what it stands for in this deck},motif?:text}.
 With a direction, fills come only from the neutral, the meanings and white; boxes default to the neutral.
-BRIEF, per content slide: {relation:order|dependency|hierarchy|membership|contrast|overlap|quantity|none,focal?:NODE id,rhythm?:anchor|dense|breathing}.
-The title is the claim. The relation must be drawn: edges, chevrons or a column of steps for order, edges for dependency, edges, nesting or layers for hierarchy, a box holding two or more members for membership, side by side for contrast, intersecting shapes for overlap, the metric text role for quantity.
+BRIEF, per content slide: {relation:order|dependency|hierarchy|membership|contrast|parallel|overlap|quantity|none,focal?:NODE id,rhythm?:anchor|dense|breathing}.
+The title is the claim. The relation must be drawn: edges, chevrons or a column of steps for order, edges for dependency, edges, nesting or layers for hierarchy, a box holding two or more members for membership, side by side for contrast, a grid, row or column of like nodes for parallel, intersecting shapes for overlap, the metric text role for quantity.
 The focal node is a box or text; the compiler gives it the focal color and no other node, text or edge may use it. Text inside a filled box is given a readable color unless you set one.
 A labelled edge needs room: its label must fit the gap between the two nodes, so put a spacer between them.
 Generated IDs are reserved: <slide>_title, <slide>_subtitle, <slide>_detail, <box with children>_group, <labelled edge>_label.
@@ -86,7 +90,7 @@ export function validateComposition(comp,contract) {
     claim(s.id,'slide');claim(`${s.id}_title`,s.id);
     if(!str(s.title))fail(s.id,'provide a slide title');
     if(!Array.isArray(s.sources)||!s.sources.length||s.sources.some(x=>!str(x)))fail(s.id,'provide source references');
-    const local=new Set(),fills=new Set(),leaves=new Set(),facts={edges:0,chevrons:0,members:false,pair:false,nested:false,layers:false,metric:false},brief=s.brief,focalId=brief?.focal;let nodes=0;
+    const local=new Set(),fills=new Set(),leaves=new Set(),facts={edges:0,chevrons:0,members:false,pair:false,peers:false,nested:false,layers:false,metric:false},brief=s.brief,focalId=brief?.focal;let nodes=0;
     const walk=(n,depth,inFree)=>{
       const where=`${s.id}/${n?.id??n?.type}`;
       if(!n||typeof n!=='object'||!fields[n.type])fail(where,'unknown node type');
@@ -127,8 +131,9 @@ export function validateComposition(comp,contract) {
       if(['box','text'].includes(n.type))leaves.add(n.id);
       if(n.type==='text'&&n.textRole==='metric')facts.metric=true;
       // Two or more comparable siblings: side by side they are a pair, in a single column they are layers.
-      if(['stack','grid','free'].includes(n.type)&&Array.isArray(n.children)&&n.children.filter(k=>['box','text','stack','grid'].includes(k?.type)).length>1){const column=n.type==='stack'&&n.direction==='column'||n.type==='grid'&&n.columns===1;if(column){if(n.children.filter(k=>k?.type==='box').length>1)facts.layers=true;}else facts.pair=true;}
+      if(['stack','grid','free'].includes(n.type)&&Array.isArray(n.children)&&n.children.filter(k=>['box','text','stack','grid'].includes(k?.type)).length>1){const column=n.type==='stack'&&n.direction==='column'||n.type==='grid'&&n.columns===1;if(n.children.filter(k=>['box','stack','grid'].includes(k?.type)).length>1)facts.peers=true;if(column){if(n.children.filter(k=>k?.type==='box').length>1)facts.layers=true;}else facts.pair=true;}
       if(n.type==='icon'&&(!str(n.icon)||n.icon.length>80||!/^[\w.-]+$/.test(n.icon)))fail(where,'icon needs a stable icon ID from the brand icon search');
+      if(n.type==='icon'&&n.style!==undefined&&!iconStyles.includes(n.style))fail(where,`style must be one of ${iconStyles.join('|')}`);
       if(n.type==='image'){if(!str(n.src)||!str(n.alt))fail(where,'image needs src and alt');if(!['contain','cover'].includes(n.fit??'contain'))fail(where,'fit must be contain|cover');}
       const kids=n.children;
       if(['stack','grid','free'].includes(n.type)||kids!==undefined) {
@@ -211,7 +216,7 @@ export async function compileComposition(comp,contract,{fonts}={}) {
   const gapSize={none:0,tight:inset/2,normal:inset,wide:sp.column??28};
   const bodyRole=contract.medium.delivery==='live'?'body':'bodyReference',measure=await measurer(contract,fonts);
   const iconSize=sl.icon?.size??48;
-  const scene={version:2,title:comp.title,mode:'new',canvas:sl.canvas,theme:brandTheme(contract),slides:[]},structure={groups:[],connectors:[],icons:[],layouts:[],direction:comp.direction??null,briefs:[]},problems=[],dir=comp.direction;
+  const scene={version:2,title:comp.title,mode:'new',canvas:sl.canvas,theme:brandTheme(contract),slides:[]},structure={groups:[],connectors:[],icons:[],layouts:[],adjusted:[],direction:comp.direction??null,briefs:[]},problems=[],dir=comp.direction;
 
   const style=n=>roles[n.textRole??bodyRole];
   // Text and icons keep their own size; everything else shares the space that is left.
@@ -231,8 +236,13 @@ export async function compileComposition(comp,contract,{fonts}={}) {
         if(fx===1&&fy===1)return measure.height(n.text,style(n),width-inset*2)+inset*2;
         return fx*width>7.2?measure.height(n.text,style(n),fx*width)/fy:Infinity;
       }
-      if(n.children)return need({type:'stack',direction:'column',gap:n.gap,children:n.children},Math.max(1,width-inset*2))+inset*2;
-      return inset*2;
+      if(n.children) {
+        // A card's content sits inside the shape's own text area, so a diamond or an ellipse holds less than its bounds.
+        const [,,,fx,fy]=shapeKinds[n.shape??'rect'],column={type:'stack',direction:'column',gap:n.gap,children:n.children};
+        return fx===1&&fy===1?need(column,Math.max(1,width-inset*2))+inset*2:need(column,Math.max(1,fx*width))/fy;
+      }
+      // An empty box is a drawn area, such as one segment of a bar, and can be as small as its share.
+      return 0;
     }
     if(n.type==='grid'){const rows=Math.ceil(n.children.length/n.columns),w=(width-gapOf(n)*(n.columns-1))/n.columns;return rows*Math.max(...n.children.map(k=>need(k,w)))+gapOf(n)*(rows-1);}
     if(n.direction==='row'){const widths=rowWidths(n,width);return Math.max(...n.children.map((k,i)=>need(k,widths[i])));}
@@ -250,7 +260,9 @@ export async function compileComposition(comp,contract,{fonts}={}) {
     };
     const fillRole=n=>dir&&n.id===focalId?dir.focal:n.fill??dir?.neutral??'canvasSecondary';
     const put=(element,members)=>{elements.push(element);members?.push(element.id);return element;};
-    const short=(n,rect,required)=>!Number.isFinite(required)?fail(`${s.id}/${n.id??n.name??n.type}`,'has no usable room; use fewer siblings, less nesting or larger weights'):fail(`${s.id}/${n.id??n.name??n.type}`,`needs ${round(required)}pt of height but has ${round(rect.height)}pt at ${round(rect.width)}pt wide; shorten the text, split the slide or restructure`);
+    // A column's shortfall is the sum of its parts, so the message lists them: the part to change is rarely the column itself.
+    const parts=(n,width)=>{const kids=n.type==='box'?n.children:n.type==='stack'&&n.direction==='column'?n.children:null;if(!kids||kids.length<2)return '';const g=gapOf(n),w=n.type==='box'?Math.max(1,width-inset*2):width;return ` (${kids.map(k=>`${k.id??k.type} ${round(need(k,w))}`).join(' + ')}${g?`, plus ${kids.length-1} gap${kids.length>2?'s':''} of ${g}`:''}${n.type==='box'?`, plus padding of ${inset*2}`:''})`;};
+    const short=(n,rect,required)=>!Number.isFinite(required)?fail(`${s.id}/${n.id??n.name??n.type}`,'has no usable room; use fewer siblings, less nesting or larger weights'):fail(`${s.id}/${n.id??n.name??n.type}`,`needs ${round(required)}pt of height but has ${round(rect.height)}pt at ${round(rect.width)}pt wide${parts(n,rect.width)}; shorten the text, split the slide or restructure`);
     const textProps=(n,surface)=>{const st=style(n);return {fontSize:st.size,bold:st.bold,color:n.color?colors[n.color]:dir&&n.id===focalId&&n.type==='text'?colors[dir.focal]:ink(colors[st.colorRole],surface,st),...(n.align&&n.align!=='stretch'?{align:{start:'left',center:'center',end:'right'}[n.align]}:{})};};
     const box=r=>({x:round(r.x),y:round(r.y),width:round(r.width),height:round(r.height)});
 
@@ -269,14 +281,18 @@ export async function compileComposition(comp,contract,{fonts}={}) {
         if(!sl.icon?.library)fail(`${s.id}/${n.id}`,'uses an icon, but the brand contract names no icon library');
         const side=Math.min(rect.width,rect.height,iconSize*2),slot={x:rect.x+(rect.width-side)/2,y:rect.y+(rect.height-side)/2,width:side,height:side};
         // order is the icon's place in the slide's drawing order, so the emitter can draw and group it with its neighbours.
-        rects.set(n.id,slot);structure.icons.push({slide:s.id,id:n.id,icon:n.icon,order:elements.length,...box(slot)});own?.push(n.id);return;
+        const iconStyle=n.style??sl.icon?.style,role=n.color??sl.icon?.colorRole,tint=role?colors[role]:undefined;
+        // A solid disc takes whichever of the on-color and the ink reads better on it; the other styles draw the icon itself in the color.
+        const glyph=tint&&(iconStyle??'solid')==='solid'?[onColor,colors.inkDeep].filter(Boolean).sort((a,b)=>contrastRatio(b,tint)-contrastRatio(a,tint))[0]:undefined;
+        rects.set(n.id,slot);structure.icons.push({slide:s.id,id:n.id,icon:n.icon,order:elements.length,...box(slot),...(iconStyle?{style:iconStyle}:{}),...(tint?{color:tint}:{}),...(glyph?{glyph}:{}),...(iconStyle&&iconStyle!=='solid'?{surface}:{})});own?.push(n.id);return;
       }
       if(n.type==='image'){put({id:n.id,type:'image',...box(rect),src:n.src,alt:n.alt,fit:n.fit??'contain'},own);return;}
       if(n.type==='box') {
         const base={id:n.id,type:'shape',...box(rect),shape:n.shape??'rect',fill:colors[fillRole(n)]};
         if(n.text!==undefined){put({...base,text:n.text,...textProps(n,base.fill)},own);return;}
         const inner=[];put(base,inner);
-        if(n.children)place({type:'stack',direction:'column',gap:n.gap,align:n.align,children:n.children,name:n.id},{x:rect.x+inset,y:rect.y+inset,width:rect.width-inset*2,height:rect.height-inset*2},inner,base.fill);
+        const [,,,fx,fy]=shapeKinds[base.shape],area=fx===1&&fy===1?{x:rect.x+inset,y:rect.y+inset,width:rect.width-inset*2,height:rect.height-inset*2}:{x:rect.x+rect.width*(1-fx)/2,y:rect.y+rect.height*(1-fy)/2,width:rect.width*fx,height:rect.height*fy};
+        if(n.children)place({type:'stack',direction:'column',gap:n.gap,align:n.align,children:n.children,name:n.id},area,inner,base.fill);
         if(inner.length>1)structure.groups.push({slide:s.id,id:`${n.id}_group`,members:inner});
         own?.push(...inner);return;
       }
@@ -292,7 +308,9 @@ export async function compileComposition(comp,contract,{fonts}={}) {
           if(!(widths[i]>inset))fail(`${s.id}/${k.id??k.type}`,'has no usable room; use fewer siblings, less nesting or larger weights');
           const min=need(k,widths[i]);
           if(min>rect.height+.5)short(k,{width:widths[i],height:rect.height},min);
-          const h=flexible(k)||(n.align??'stretch')==='stretch'?rect.height:min;
+          // Stretch fills the row. Any other alignment gives a child the height its content needs; a child with nothing to measure still fills.
+          const hug=(n.align??'stretch')!=='stretch'&&(!flexible(k)||['box','stack','grid'].includes(k.type)&&min>0);
+          const h=hug?min:rect.height;
           const y=rect.y+{start:0,stretch:0,center:(rect.height-h)/2,end:rect.height-h}[n.align??'stretch'];
           place(k,{x,y,width:widths[i],height:h},own,surface);x+=widths[i]+g;
         });
@@ -301,7 +319,11 @@ export async function compileComposition(comp,contract,{fonts}={}) {
         const kids=n.children,mins=kids.map(k=>need(k,rect.width)),flex=kids.map(flexible),gaps=g*(kids.length-1);
         const fixed=mins.reduce((a,m,i)=>a+(flex[i]?0:m),0),weight=kids.reduce((a,k,i)=>a+(flex[i]?k.weight??1:0),0),pool=rect.height-gaps-fixed;
         let heights=kids.map((k,i)=>flex[i]?pool*(k.weight??1)/weight:mins[i]);
-        if(heights.some((h,i)=>h<mins[i]-.5)){const spare=rect.height-gaps-mins.reduce((a,m)=>a+m,0);heights=kids.map((k,i)=>flex[i]?mins[i]+spare*(k.weight??1)/weight:mins[i]);}
+        if(heights.some((h,i)=>h<mins[i]-.5)) {
+          const asked=heights,spare=rect.height-gaps-mins.reduce((a,m)=>a+m,0);heights=kids.map((k,i)=>flex[i]?mins[i]+spare*(k.weight??1)/weight:mins[i]);
+          // Explicit weights are a stated proportion. When content forces a different one, say so instead of drawing it silently.
+          if(kids.some((k,i)=>flex[i]&&k.weight!==undefined))kids.forEach((k,i)=>{if(flex[i]&&Math.abs(heights[i]-asked[i])>1)structure.adjusted.push({slide:s.id,id:k.id??k.type,asked:round(asked[i]),got:round(heights[i])});});
+        }
         const used=heights.reduce((a,h)=>a+h,0)+gaps;
         let y=rect.y+(weight?0:{start:0,stretch:0,center:(rect.height-used)/2,end:rect.height-used}[n.align??'start']);
         kids.forEach((k,i)=>{place(k,{x:rect.x,y,width:rect.width,height:heights[i]},own,surface);y+=heights[i]+g;});

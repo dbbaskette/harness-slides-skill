@@ -55,6 +55,7 @@ many colors a slide uses; each one has to be in the direction, with a meaning.
 | `hierarchy` | levels, parents and children | edges, nested boxes or stacked layers |
 | `membership` | a group and its members | a box holding two or more members |
 | `contrast` | things compared | side by side |
+| `parallel` | peers of equal standing | a grid, or a row or column of like nodes |
 | `overlap` | things that share a part | intersecting shapes |
 | `quantity` | a number that matters | the `metric` text role, with its context |
 | `none` | words best read directly | text, a quote or an image |
@@ -89,6 +90,16 @@ from three containers and five leaves:
 A box that holds other nodes is a card. Its content starts at the top; set
 `align` to `center` or `end` to place it lower. Centre only when every card in a
 row holds the same amount of text, or their icons and headings stop lining up.
+A card in a shape other than a rectangle holds much less: its content sits
+inside the shape's text area, about half the width of a diamond.
+
+In a row, every child fills the row's height. Set the row's `align` to `start`,
+`center` or `end` and each child takes only the height its content needs.
+
+`weight` shares space between siblings. A node never goes below the size its
+content needs; when that overrides a weight you set, `compile` and `preview`
+report `weight-overridden`. For bars drawn to scale use empty boxes, which have
+no minimum, and put the labels beside them.
 
 `connect` joins two nodes with an arrow. A label on an arrow needs room: on a
 straight arrow it must fit the gap between the two nodes, so leave a spacer; on a
@@ -121,7 +132,11 @@ renders as an empty panel. Content slides stay on the default layout.
 
 Colours and type sizes are the brand contract's role names. The contract text
 lists them; raw colours and font sizes are refused. Search the brand's icon
-library for icon IDs. Shapes: `rect`, `roundRect`, `ellipse`, `diamond`,
+library for icon IDs. An icon keeps the library's colors unless you set its
+`color` and `style`: `solid` is a light icon on a colored disc, `outline` a
+colored icon in a ring, `plain` a colored icon with no container. On a filled
+card use `plain` or `outline` in a color that reads on the fill. Follow the
+brand's own icon rules where it has them. Shapes: `rect`, `roundRect`, `ellipse`, `diamond`,
 `hexagon`, `chevron`, `can`. Arrows attach to the first four.
 
 ## Build, look, fix
@@ -151,7 +166,8 @@ slides one at a time or draft them all and then take them in turn with
 `--slide`. Either way, look at each slide, revise it once and look at the
 revision before the next. Findings point at things to look at: wording that describes a relationship
 with nothing drawn, a layout repeated from the previous slide, an arrow that
-could not be attached, an icon that blends into the card behind it, a deck with
+could not be attached, an icon that blends into the card behind it, a weight
+the content overrode, a deck with
 no direction, a slide with no brief, a title that reads as a label. They are not approval, and no finding does not mean the
 slide is good. A card that is mostly empty, a diagram crowded into a corner or
 an arrow crossing a label are yours to see.

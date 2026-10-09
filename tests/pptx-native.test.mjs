@@ -254,6 +254,24 @@ test('icons are copied from the brand library as grouped native geometry, fitted
   const ids=[...xml.matchAll(/<p:cNvPr id="(\d+)"/g)].map(m=>m[1]);assert.equal(new Set(ids).size,ids.length);
 });
 
+test('an icon can be recolored, drawn as a ring or drawn as bare geometry',async t=>{
+  const dir=await temporary(t),c=await withIcons(dir,await brand(dir));
+  const emit=async(extra,name)=>{const deck=iconDeck('fi-test-s001-l001');Object.assign(deck.slides[0].canvas.children[0],extra);const compiled=await compileComposition(deck,c),output=join(dir,name),result=await emitNativePptx({...compiled,brand:c,output,base:dir}),xml=await part(output,'ppt/slides/harnessSlide1.xml');assert.deepEqual(await audit(output),[]);return {icon:compiled.structure.icons[0],result,group:xml.match(/<p:grpSp(?: [^>]*)?>(?:(?!<\/p:grpSp>).)*name="lead_icon".*?<\/p:grpSp>/s)[0]};};
+  // Solid: the disc takes the color and the geometry takes whichever of light and ink reads on it.
+  const solid=await emit({color:'accentAqua'},'solid.pptx');
+  assert.equal(solid.icon.color,'#0091DA');const has=(r,...colors)=>colors.every(c=>r.result.icons[0].colors.includes(c)),lacks=(r,...colors)=>colors.every(c=>!r.result.icons[0].colors.includes(c));
+  assert.ok(has(solid,'0091DA','202124')&&lacks(solid,'2867B2','FFFFFF'));
+  const light=await emit({color:'canvasSecondary'},'light.pptx');assert.ok(has(light,'202124','F0F2F5')&&lacks(light,'2867B2'));
+  // Outline: the disc becomes an unfilled ring and the geometry takes the color.
+  const ring=await emit({color:'accentAqua',style:'outline'},'ring.pptx');
+  assert.match(ring.group,/prst="ellipse".*?<a:noFill ?\/><a:ln w="25400"><a:solidFill><a:srgbClr val="0091DA"/s);assert.ok(has(ring,'0091DA')&&lacks(ring,'2867B2','FFFFFF'));
+  // Plain: no disc, and the geometry alone is fitted to the slot.
+  const plain=await emit({color:'headingPrimary',style:'plain'},'plain.pptx');
+  assert.doesNotMatch(plain.group,/prst="ellipse"/);assert.ok(has(plain,'2867B2')&&lacks(plain,'FFFFFF'));
+  const [,cx,cy]=plain.group.match(/<a:ext cx="(\d+)" cy="(\d+)"/);assert.equal(Math.round(cx/12700),Math.round(cy/12700));
+  await assert.rejects(()=>emit({style:'neon'},'bad.pptx'),/style must be one of solid\|outline\|plain/);
+});
+
 test('icon problems are reported against the composition node and leave no output',async t=>{
   const dir=await temporary(t),plain=await brand(dir),c=await withIcons(dir,plain),{readdir}=await import('node:fs/promises');
   const emit=async(icon,contract,name)=>emitNativePptx({...await compileComposition(iconDeck(icon),contract),brand:contract,output:join(dir,name),base:dir});

@@ -28,7 +28,7 @@ export async function compileCompositionFile({file,brand,output,fonts,'design-pr
     for(const [name,value] of [['scene.json',scene],['structure.json',structure],['compose-report.json',report],['brand-contract.json',contract]])
       await writeFile(join(output,name),JSON.stringify(value,null,2)+'\n',{flag:'wx',mode:0o600});
   } catch(error){await rm(output,{recursive:true,force:true});throw error;}
-  return {output,slides:scene.slides.length,brandRevision:contract.revision,sceneDigest:report.sceneDigest,measurement:report.measurement,groups:structure.groups.length,connectors:structure.connectors.length,icons:structure.icons.length};
+  return {output,slides:scene.slides.length,brandRevision:contract.revision,sceneDigest:report.sceneDigest,measurement:report.measurement,groups:structure.groups.length,connectors:structure.connectors.length,icons:structure.icons.length,...(structure.adjusted?.length?{weightOverridden:structure.adjusted}:{})};
 }
 
 // Render a folder written by compileCompositionFile. A brand with a native template gets the native emitter.

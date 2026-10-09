@@ -283,7 +283,9 @@ test('a relation other than none must be drawn',async()=>{
   ok({type:'box',id:'pack_box',children:[{type:'text',id:'pack_name',text:'Bundle'},{type:'grid',columns:2,children:[{type:'box',id:'pack_one',text:'JSON'},{type:'box',id:'pack_two',text:'Search'}]}]},'membership');
   no(column,'contrast',/relation "contrast" is not drawn\. Place the things compared side by side/);ok(pair(),'contrast');
   no(pair(),'quantity',/relation "quantity" is not drawn\. Show the number with the metric text role/);ok({type:'text',id:'big_number',text:'42%',textRole:'metric'},'quantity');
-  ok(words,'none');assert.throws(()=>ok(words,'sequence'),/brief\.relation must be one of order\|dependency\|hierarchy\|membership\|contrast\|overlap\|quantity\|none/);
+  no(words,'parallel',/relation "parallel" is not drawn\. Place the peers in a grid, a row or a column of like nodes/);ok(pair(),'parallel');ok(column,'parallel');
+  ok({type:'stack',direction:'column',children:[0,1,2].map(i=>({type:'stack',direction:'row',children:[{type:'text',id:`peer_name${i}`,text:'Name'},{type:'text',id:`peer_note${i}`,text:'Note'}]}))},'parallel');
+  ok(words,'none');assert.throws(()=>ok(words,'sequence'),/brief\.relation must be one of order\|dependency\|hierarchy\|membership\|contrast\|parallel\|overlap\|quantity\|none/);
   assert.throws(()=>validateComposition(directed(words,{relation:'none',rhythm:'busy'}),c),/brief\.rhythm must be one of anchor\|dense\|breathing/);
   const apart={type:'free',children:[{type:'box',id:'node_a',text:'A',shape:'ellipse',at:{x:0,y:0,width:.4,height:.6}},{type:'box',id:'node_b',text:'B',shape:'ellipse',at:{x:.5,y:0,width:.4,height:.6}}]};
   await assert.rejects(()=>compileComposition(directed(apart,{relation:'overlap'}),c),/relation "overlap" is not drawn\. Make two shapes intersect/);
@@ -337,4 +339,43 @@ test('the contract can report the brand sizes that decide fit',async()=>{
   const sizes=await composeSizes(brand());
   assert.match(sizes,/Gaps: tight 9, normal 18, wide 30\. A box pads its content by 18 on each side/);
   assert.match(sizes,/The title holds \d line/);assert.match(sizes,/caption [\d.]+/);
+});
+
+test('empty boxes take exactly their share, and an overridden weight is reported',async()=>{
+  const bars=deck({type:'stack',direction:'column',gap:'none',children:[{type:'box',id:'bar_small',weight:1},{type:'box',id:'bar_large',weight:9}]});
+  const exact=await compileComposition(bars,brand());
+  assert.equal(byId(exact.scene,'bar_small').height,36);assert.equal(byId(exact.scene,'bar_large').height,324);assert.deepEqual(exact.structure.adjusted,[]);
+  bars.slides[0].canvas.children[0].text='A label that needs room';
+  const forced=await compileComposition(bars,brand());
+  assert.ok(byId(forced.scene,'bar_small').height>36);assert.deepEqual(forced.structure.adjusted.map(a=>[a.slide,a.id,a.asked]),[['slide_one','bar_small',36],['slide_one','bar_large',324]]);
+  // Default weights promise nothing, so sharing unequal content is not reported.
+  const plain=await compileComposition(deck({type:'stack',direction:'column',children:[{type:'box',id:'tall_box',text:'Line. '.repeat(60)},{type:'box',id:'short_box',text:'x'}]}),brand());
+  assert.deepEqual(plain.structure.adjusted,[]);
+});
+
+test('a card shaped as a diamond keeps its content inside the diamond text area',async()=>{
+  const {scene}=await compileComposition(deck({type:'box',id:'choice_card',shape:'diamond',children:[{type:'text',id:'choice_text',text:'Yes?'}]}),brand());
+  const card=byId(scene,'choice_card'),text=byId(scene,'choice_text');
+  assert.equal(text.width,round(card.width*.5));assert.equal(text.x,round(card.x+card.width*.25));assert.ok(text.y>=card.y+card.height*.25-.01);
+  await assert.rejects(()=>compileComposition(deck({type:'stack',direction:'row',children:[{type:'spacer',weight:6},{type:'box',id:'tiny_choice',shape:'diamond',children:[{type:'text',id:'long_choice',text:'A question that is far too long to sit inside a small diamond shape. '.repeat(3)}]}]}),brand()),/needs [\d.]+pt of height/);
+});
+
+test('a column that cannot fit lists what each part needs',async()=>{
+  const tall=deck({type:'stack',direction:'column',children:[{type:'text',id:'intro_text',text:'Intro'},{type:'box',id:'main_box',text:'Body line. '.repeat(120)},{type:'text',id:'foot_text',text:'Foot'}]});
+  await assert.rejects(()=>compileComposition(tall,brand()),/slide_one\/stack: needs [\d.]+pt of height but has 360pt at 864pt wide \(intro_text [\d.]+ \+ main_box [\d.]+ \+ foot_text [\d.]+, plus 2 gaps of 18\)/);
+});
+
+test('a row aligned start, center or end gives boxes the height their content needs',async()=>{
+  const row=align=>deck({type:'stack',direction:'row',align,children:[{type:'box',id:'short_box',text:'Short'},{type:'box',id:'tall_box',text:'Line. '.repeat(30)}]});
+  const stretched=(await compileComposition(row(),brand())).scene,centred=(await compileComposition(row('center'),brand())).scene;
+  assert.equal(byId(stretched,'short_box').height,360);
+  const short=byId(centred,'short_box');assert.ok(short.height<100);assert.equal(Math.round(short.y+short.height/2),306);
+});
+
+test('an icon carries its color, style and the surface it sits on',async()=>{
+  const c=brand({icon:{size:54,library:{path:'/synthetic/icons.pptx',index:'/synthetic/index.json'}}});
+  const comp=deck({type:'box',id:'dark_card',fill:'headingPrimary',children:[{type:'icon',id:'card_icon',icon:'fi-x',color:'canvasPrimary',style:'plain'},{type:'icon',id:'disc_icon',icon:'fi-y',color:'accentAqua'}]});
+  const {structure}=await compileComposition(comp,c),[plain,disc]=structure.icons;
+  assert.deepEqual([plain.color,plain.style,plain.surface],['#FFFFFF','plain','#2867B2']);assert.deepEqual([disc.color,disc.style,disc.glyph],['#0091DA',undefined,'#202124']);
+  assert.throws(()=>validateComposition(deck({type:'icon',id:'bad_icon',icon:'fi-x',style:'neon'}),c),/style must be one of solid\|outline\|plain/);
 });
