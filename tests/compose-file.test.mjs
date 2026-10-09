@@ -53,3 +53,14 @@ test('compose merge joins section files in order and refuses a part that disagre
   await assert.rejects(()=>exec('node',[cli,'compose','merge','--file',join(dir,'bad.json'),'--output',join(dir,'other.json')]),e=>/3 problems to fix:/.test(e.stderr)&&/c\.json: its direction differs/.test(e.stderr)&&/c\.json: ID sec_a_box is already used in a\.json/.test(e.stderr)&&/missing\.json: cannot be read/.test(e.stderr));
   await assert.rejects(()=>exec('node',[cli,'compose','merge','--file',join(dir,'parts.json'),'--output',join(dir,'composition.json')]),/EEXIST/);
 });
+
+test('every gallery example compiles on the neutral brand and draws the relation it is filed under',async()=>{
+  const dir=fileURLToPath(new URL('../references/gallery/',import.meta.url)),names=(await readdir(dir)).filter(n=>n.endsWith('.json')).sort(),index=await readFile(fileURLToPath(new URL('../references/gallery.md',import.meta.url)),'utf8');
+  assert.deepEqual(names,['contrast','dependency','hierarchy','membership','none','order','overlap','parallel','quantity'].map(n=>`${n}.json`));
+  for(const name of names) {
+    const {stdout}=await exec('node',[cli,'compose','compile','--file',join(dir,name)]),result=JSON.parse(stdout),comp=JSON.parse(await readFile(join(dir,name)));
+    assert.match(result.status,/^fits/,name);assert.equal(result.weightOverridden,undefined,name);
+    assert.equal(comp.slides.length,1);assert.equal(comp.slides[0].brief.relation,name.replace('.json',''));assert.ok(comp.slides[0].notes,name);
+    assert.ok(index.includes(`(gallery/${name})`),name);
+  }
+});

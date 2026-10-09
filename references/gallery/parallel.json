@@ -1,0 +1,82 @@
+{
+ "version": 1,
+ "title": "Gallery: parallel",
+ "direction": {
+  "focal": "headingPrimary",
+  "neutral": "canvasSecondary"
+ },
+ "slides": [
+  {
+   "id": "checks_slide",
+   "title": "Every change passes the same three checks",
+   "sources": [
+    "example"
+   ],
+   "notes": "These are peers, not steps: all three run at once, and all three must pass.",
+   "brief": {
+    "relation": "parallel"
+   },
+   "caveat": "All three must pass; none can be waived.",
+   "canvas": {
+    "type": "grid",
+    "columns": 3,
+    "children": [
+     {
+      "type": "box",
+      "id": "checks_test",
+      "style": "outline",
+      "children": [
+       {
+        "type": "text",
+        "id": "checks_h1",
+        "text": "Tests",
+        "textRole": "label"
+       },
+       {
+        "type": "text",
+        "id": "checks_t1",
+        "text": "Does it still do what it did?"
+       }
+      ]
+     },
+     {
+      "type": "box",
+      "id": "checks_scan",
+      "style": "outline",
+      "children": [
+       {
+        "type": "text",
+        "id": "checks_h2",
+        "text": "Security scan",
+        "textRole": "label"
+       },
+       {
+        "type": "text",
+        "id": "checks_t2",
+        "text": "Does it add a known weakness?"
+       }
+      ]
+     },
+     {
+      "type": "box",
+      "id": "checks_cost",
+      "style": "outline",
+      "children": [
+       {
+        "type": "text",
+        "id": "checks_h3",
+        "text": "Cost check",
+        "textRole": "label"
+       },
+       {
+        "type": "text",
+        "id": "checks_t3",
+        "text": "Does it raise the monthly bill?"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

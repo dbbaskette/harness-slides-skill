@@ -70,8 +70,9 @@ Tell the user which preview files the build left in their Drive.
 
 ## If you are a worker
 
-The claims are settled; the drawing is yours. Read [design](design.md) from
-"Choose each slide from its content" and [compositions](compositions.md), and
+The claims are settled; the drawing is yours. Read [design](design.md) and
+[compositions](compositions.md), open the [gallery](gallery.md) example for
+each relation you are drawing, and
 run `compose contract --brand` for the sizes. Design each slide from what it
 must make the audience understand, not from the nearest row of boxes. Keep the
 brand's body size for this deck's delivery; a section that shrinks its text to

@@ -1,0 +1,44 @@
+{
+ "version": 1,
+ "title": "Gallery: none",
+ "direction": {
+  "focal": "headingPrimary",
+  "neutral": "canvasSecondary"
+ },
+ "slides": [
+  {
+   "id": "words_slide",
+   "title": "One sentence to take away",
+   "sources": [
+    "example"
+   ],
+   "notes": "Pause here. Read it once and let it sit.",
+   "brief": {
+    "relation": "none",
+    "focal": "words_quote",
+    "rhythm": "breathing"
+   },
+   "canvas": {
+    "type": "stack",
+    "direction": "column",
+    "align": "center",
+    "children": [
+     {
+      "type": "text",
+      "id": "words_quote",
+      "text": "Make the change easy, then make the easy change.",
+      "textRole": "quote",
+      "align": "center"
+     },
+     {
+      "type": "text",
+      "id": "words_who",
+      "text": "Kent Beck",
+      "textRole": "caption",
+      "align": "center"
+     }
+    ]
+   }
+  }
+ ]
+}

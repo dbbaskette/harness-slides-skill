@@ -157,7 +157,8 @@ Show a sequence, a dependency or a
 hand-off with nodes and edges, not with a sentence that describes it. Show
 ownership with regions. Use plain text when reading the wording is the point.
 
-Let the content choose the structure. Repeat a layout when two slides hold the
+The [gallery](gallery.md) has one finished example for each relation. Let the
+content choose the structure. Repeat a layout when two slides hold the
 same kind of content or are meant to be compared, not because the last slide
 used it.
 

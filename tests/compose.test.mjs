@@ -465,7 +465,7 @@ test('a box can be drawn as an outline or as a card with a bar of its color',asy
   assert.equal(e('meaning_box').stroke,'#0091DA');assert.deepEqual([e('point_box').stroke,e('point_box').strokeWeight],['#2867B2',3]);
   // A bar card stays neutral and carries its color in a strip, grouped with it.
   assert.equal(e('bar_box').fill,'#F0F2F5');assert.deepEqual([e('bar_box_bar').fill,e('bar_box_bar').width,e('bar_box_bar').x,e('bar_box_bar').height],['#0091DA',6,e('bar_box').x,e('bar_box').height]);
-  assert.ok(structure.groups.some(g=>g.id==='bar_box_group'&&g.members.join()==='bar_box,bar_box_bar'));assert.ok(structure.groups.some(g=>g.id==='bar_card_group'&&g.members.join()==='bar_card,bar_card_bar,bar_text'));
+  assert.ok(structure.groups.some(g=>g.id==='bar_box_group'&&g.members.join()==='bar_box,bar_box_bar,bar_box_text'));assert.equal(e('bar_box').text,undefined);assert.deepEqual([e('bar_box_text').text,e('bar_box_text').x],['Barred',e('bar_box').x+18]);assert.ok(structure.groups.some(g=>g.id==='bar_card_group'&&g.members.join()==='bar_card,bar_card_bar,bar_text'));
   const bad=node=>()=>validateComposition(slide([node,{type:'box',id:'other_box',text:'x'}]),c);
   assert.throws(bad({type:'box',id:'odd_box',text:'x',style:'dotted'}),/style must be one of solid\|outline\|bar/);assert.throws(bad({type:'box',id:'round_bar',text:'x',style:'bar',shape:'ellipse'}),/a bar card is a rectangle/);
   assert.throws(()=>validateComposition(slide([{type:'box',id:'bar_box',text:'x',style:'bar'},{type:'box',id:'bar_box_bar',text:'y'}]),c),/invalid or repeated ID: bar_box_bar/);

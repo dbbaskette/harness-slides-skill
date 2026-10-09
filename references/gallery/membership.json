@@ -1,0 +1,65 @@
+{
+ "version": 1,
+ "title": "Gallery: membership",
+ "direction": {
+  "focal": "headingPrimary",
+  "neutral": "canvasSecondary"
+ },
+ "slides": [
+  {
+   "id": "member_slide",
+   "title": "The platform team runs four shared services",
+   "sources": [
+    "example"
+   ],
+   "notes": "Name the four. Anything outside this box is owned by the product teams.",
+   "brief": {
+    "relation": "membership"
+   },
+   "source": "Source: service catalogue, June",
+   "canvas": {
+    "type": "box",
+    "id": "member_group",
+    "style": "outline",
+    "children": [
+     {
+      "type": "text",
+      "id": "member_head",
+      "text": "Platform team",
+      "textRole": "label"
+     },
+     {
+      "type": "grid",
+      "columns": 4,
+      "children": [
+       {
+        "type": "box",
+        "id": "member_one",
+        "text": "Sign-in",
+        "align": "center"
+       },
+       {
+        "type": "box",
+        "id": "member_two",
+        "text": "Logging",
+        "align": "center"
+       },
+       {
+        "type": "box",
+        "id": "member_three",
+        "text": "Build",
+        "align": "center"
+       },
+       {
+        "type": "box",
+        "id": "member_four",
+        "text": "Secrets",
+        "align": "center"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

@@ -65,7 +65,7 @@ BRIEF, per content slide: {relation:order|dependency|hierarchy|membership|contra
 The title is the claim. The relation must be drawn: edges, chevrons or a column of steps for order, edges for dependency, edges, nesting or layers for hierarchy, a box holding two or more members for membership, side by side for contrast, a grid, row or column of like nodes for parallel, intersecting shapes for overlap, the metric text role for quantity.
 The focal node is a box or text; the compiler gives it the focal color and no other node, text or edge may use it. Text inside a filled box is given a readable color unless you set one.
 A labelled edge needs room: its label must fit the gap between the two nodes, so put a spacer between them.
-Generated IDs are reserved: <box with style bar>_bar, <metric>_label, <slide>_rule1 and up, <slide>_title, <slide>_subtitle, <slide>_detail, <slide>_caveat, <slide>_caveat_label, <slide>_caveat_rule, <slide>_source, <box with children>_group, <labelled edge>_label.
+Generated IDs are reserved: <box with style bar>_bar and _text, <metric>_label, <slide>_rule1 and up, <slide>_title, <slide>_subtitle, <slide>_detail, <slide>_caveat, <slide>_caveat_label, <slide>_caveat_rule, <slide>_source, <box with children>_group, <labelled edge>_label.
 A card's align has no effect when it holds a box, grid or image, because those fill the spare space.
 IDs match [a-zA-Z_][a-zA-Z0-9_-]{4,40} and are unique across the deck.
 Nest at most 8 levels. Run compose contract --brand brand-contract.json for the brand's content area, gap, padding and line sizes.
@@ -138,7 +138,7 @@ export function validateComposition(comp,contract,{collect}={}) {
         if(n.text!==undefined&&!str(n.text))fail(where,'provide box text');
         if(!Object.hasOwn(shapeKinds,n.shape??'rect'))fail(where,`shape must be one of ${Object.keys(shapeKinds).join('|')}`);
         if(n.style!==undefined&&!boxStyles.includes(n.style))fail(where,`style must be one of ${boxStyles.join('|')}`);
-        if(n.style==='bar'){if((n.shape??'rect')!=='rect')fail(where,'a bar card is a rectangle; remove its shape');claim(`${n.id}_bar`,where);if(n.children===undefined)claim(`${n.id}_group`,where);}
+        if(n.style==='bar'){if((n.shape??'rect')!=='rect')fail(where,'a bar card is a rectangle; remove its shape');claim(`${n.id}_bar`,where);if(n.children===undefined){claim(`${n.id}_group`,where);claim(`${n.id}_text`,where);}}
         if(n.children!==undefined){if(n.align==='stretch')fail(where,'a box with children aligns its content start|center|end');claim(`${n.id}_group`,where);}
         if(n.shape==='chevron')facts.chevrons++;
         // A heading and a body are a card, not a group: membership needs two drawn members, or three or more parts.
@@ -394,9 +394,12 @@ export async function compileComposition(comp,contract,{fonts}={}) {
           :{id:n.id,type:'shape',...box(rect),shape:n.shape??'rect',fill:colors[look==='bar'?dir?.neutral??'canvasSecondary':fillRole(n)]};
         const behind=base.fill??surface,strip=look==='bar'?{id:`${n.id}_bar`,type:'shape',shape:'rect',x:round(rect.x),y:round(rect.y),width:barWidth,height:round(rect.height),fill:colors[accent]}:null;
         if(n.text!==undefined) {
-          sized(n);put({...base,text:n.text,...textProps(n,behind)},own);
-          if(strip){put(strip,own);structure.groups.push({slide:s.id,id:`${n.id}_group`,members:[n.id,strip.id]});}
-          return;
+          sized(n);
+          if(!strip){put({...base,text:n.text,...textProps(n,behind)},own);return;}
+          // The words sit in their own box, clear of the strip, so every emitter insets them the same way.
+          const members=[];put(base,members);put(strip,members);
+          put({id:`${n.id}_text`,type:'text',x:round(rect.x+inset),y:round(rect.y),width:round(rect.width-inset*2),height:round(rect.height),text:n.text,...textProps(n,behind)},members);
+          structure.groups.push({slide:s.id,id:`${n.id}_group`,members});own?.push(...members);return;
         }
         const inner=[];put(base,inner);if(strip)put(strip,inner);
         const [,,,fx,fy]=shapeKinds[base.shape],area=fx===1&&fy===1?{x:rect.x+inset,y:rect.y+inset,width:rect.width-inset*2,height:rect.height-inset*2}:{x:rect.x+rect.width*(1-fx)/2,y:rect.y+rect.height*(1-fy)/2,width:rect.width*fx,height:rect.height*fy};

@@ -1,0 +1,61 @@
+{
+ "version": 1,
+ "title": "Gallery: quantity",
+ "direction": {
+  "focal": "headingPrimary",
+  "neutral": "canvasSecondary"
+ },
+ "slides": [
+  {
+   "id": "number_slide",
+   "title": "A third of every incident is spent switching tools",
+   "sources": [
+    "example"
+   ],
+   "notes": "Say the number first, then where it comes from. The three items on the right are what the time goes on.",
+   "brief": {
+    "relation": "quantity",
+    "focal": "number_big"
+   },
+   "source": "Source: incident reviews, last quarter. Figures are illustrative.",
+   "canvas": {
+    "type": "stack",
+    "direction": "row",
+    "gap": "wide",
+    "children": [
+     {
+      "type": "metric",
+      "id": "number_big",
+      "value": "17 min",
+      "label": "of a 48-minute incident"
+     },
+     {
+      "type": "stack",
+      "direction": "column",
+      "weight": 1.4,
+      "children": [
+       {
+        "type": "box",
+        "id": "number_one",
+        "style": "bar",
+        "text": "Finding the right dashboard"
+       },
+       {
+        "type": "box",
+        "id": "number_two",
+        "style": "bar",
+        "text": "Copying an ID between tools"
+       },
+       {
+        "type": "box",
+        "id": "number_three",
+        "style": "bar",
+        "text": "Lining up two timelines by hand"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

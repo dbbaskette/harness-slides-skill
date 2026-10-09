@@ -1,0 +1,107 @@
+{
+ "version": 1,
+ "title": "Gallery: hierarchy",
+ "direction": {
+  "focal": "headingPrimary",
+  "neutral": "canvasSecondary"
+ },
+ "slides": [
+  {
+   "id": "levels_slide",
+   "title": "A rule set at the top applies to every team below",
+   "sources": [
+    "example"
+   ],
+   "notes": "Read from the outside in. The company sets the rule once; a division can add to it; every team inside inherits both.",
+   "brief": {
+    "relation": "hierarchy",
+    "focal": "levels_top"
+   },
+   "canvas": {
+    "type": "box",
+    "id": "levels_top",
+    "style": "outline",
+    "children": [
+     {
+      "type": "text",
+      "id": "levels_h1",
+      "text": "Company: data stays in region",
+      "textRole": "label"
+     },
+     {
+      "type": "stack",
+      "direction": "row",
+      "children": [
+       {
+        "type": "box",
+        "id": "levels_div1",
+        "children": [
+         {
+          "type": "text",
+          "id": "levels_h2",
+          "text": "Division A inherits it",
+          "textRole": "label"
+         },
+         {
+          "type": "stack",
+          "direction": "row",
+          "gap": "tight",
+          "children": [
+           {
+            "type": "box",
+            "id": "levels_team1",
+            "text": "Team 1",
+            "fill": "canvasPrimary",
+            "align": "center"
+           },
+           {
+            "type": "box",
+            "id": "levels_team2",
+            "text": "Team 2",
+            "fill": "canvasPrimary",
+            "align": "center"
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "type": "box",
+        "id": "levels_div2",
+        "children": [
+         {
+          "type": "text",
+          "id": "levels_h3",
+          "text": "Division B adds encryption",
+          "textRole": "label"
+         },
+         {
+          "type": "stack",
+          "direction": "row",
+          "gap": "tight",
+          "children": [
+           {
+            "type": "box",
+            "id": "levels_team3",
+            "text": "Team 3",
+            "fill": "canvasPrimary",
+            "align": "center"
+           },
+           {
+            "type": "box",
+            "id": "levels_team4",
+            "text": "Team 4",
+            "fill": "canvasPrimary",
+            "align": "center"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

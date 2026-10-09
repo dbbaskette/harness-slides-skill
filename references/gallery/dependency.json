@@ -1,0 +1,83 @@
+{
+ "version": 1,
+ "title": "Gallery: dependency",
+ "direction": {
+  "focal": "headingPrimary",
+  "neutral": "canvasSecondary"
+ },
+ "slides": [
+  {
+   "id": "depend_slide",
+   "title": "Three services fail when sign-in fails",
+   "sources": [
+    "example"
+   ],
+   "notes": "Start at sign-in and follow each arrow. Every customer-facing service waits on it.",
+   "brief": {
+    "relation": "dependency",
+    "focal": "depend_hub"
+   },
+   "canvas": {
+    "type": "stack",
+    "direction": "row",
+    "gap": "wide",
+    "children": [
+     {
+      "type": "stack",
+      "direction": "column",
+      "weight": 1.2,
+      "children": [
+       {
+        "type": "box",
+        "id": "depend_shop",
+        "style": "bar",
+        "text": "Checkout cannot take an order"
+       },
+       {
+        "type": "box",
+        "id": "depend_help",
+        "style": "bar",
+        "text": "Support cannot open an account"
+       },
+       {
+        "type": "box",
+        "id": "depend_bill",
+        "style": "bar",
+        "text": "Billing cannot show an invoice"
+       }
+      ]
+     },
+     {
+      "type": "spacer",
+      "weight": 0.5
+     },
+     {
+      "type": "box",
+      "id": "depend_hub",
+      "text": "Sign-in service",
+      "textRole": "label",
+      "align": "center"
+     }
+    ]
+   },
+   "connect": [
+    {
+     "id": "depend_e1",
+     "from": "depend_shop",
+     "to": "depend_hub",
+     "label": "waits on"
+    },
+    {
+     "id": "depend_e2",
+     "from": "depend_help",
+     "to": "depend_hub"
+    },
+    {
+     "id": "depend_e3",
+     "from": "depend_bill",
+     "to": "depend_hub"
+    }
+   ]
+  }
+ ]
+}
