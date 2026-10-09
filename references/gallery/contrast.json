@@ -1,0 +1,91 @@
+{
+ "version": 1,
+ "title": "Gallery: contrast",
+ "direction": {
+  "focal": "headingPrimary",
+  "neutral": "canvasSecondary"
+ },
+ "slides": [
+  {
+   "id": "versus_slide",
+   "title": "Buying starts sooner; building costs less to run",
+   "sources": [
+    "example"
+   ],
+   "notes": "Compare row by row. Neither wins on both, which is the point of the line underneath.",
+   "brief": {
+    "relation": "contrast",
+    "focal": "versus_point"
+   },
+   "canvas": {
+    "type": "stack",
+    "direction": "column",
+    "children": [
+     {
+      "type": "stack",
+      "direction": "row",
+      "gap": "wide",
+      "children": [
+       {
+        "type": "box",
+        "id": "versus_buy",
+        "style": "bar",
+        "children": [
+         {
+          "type": "text",
+          "id": "versus_h1",
+          "text": "Buy",
+          "textRole": "label"
+         },
+         {
+          "type": "text",
+          "id": "versus_t1",
+          "text": "Live in four weeks"
+         },
+         {
+          "type": "text",
+          "id": "versus_t2",
+          "text": "Higher yearly fee"
+         }
+        ]
+       },
+       {
+        "type": "box",
+        "id": "versus_make",
+        "style": "bar",
+        "children": [
+         {
+          "type": "text",
+          "id": "versus_h2",
+          "text": "Build",
+          "textRole": "label"
+         },
+         {
+          "type": "text",
+          "id": "versus_t3",
+          "text": "Live in six months"
+         },
+         {
+          "type": "text",
+          "id": "versus_t4",
+          "text": "Lower running cost"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "rule"
+     },
+     {
+      "type": "text",
+      "id": "versus_point",
+      "text": "The choice is time against money",
+      "textRole": "quote",
+      "align": "center"
+     }
+    ]
+   }
+  }
+ ]
+}

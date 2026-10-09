@@ -42,9 +42,10 @@ back, at the quality of a one-line sketch.
    A part whose direction differs, or that reuses another part's IDs, is refused.
    Then compile, preview the whole deck and do the final review in
    [compositions](compositions.md). Rhythm, a layout echoed across a section
-   boundary and one concept drawn two ways only show up here. Name the three
-   weakest slides in the whole deck. Fix small things yourself; send a slide
-   back to the worker that owns it when it needs redesigning.
+   boundary and one concept drawn two ways only show up here, on the contact
+   sheet. Have the deck critiqued and name its three weakest slides. Fix small
+   things yourself; send a slide back to the worker that owns it when it needs
+   redesigning.
 
 Tell the user which preview files the build left in their Drive.
 
@@ -70,8 +71,9 @@ Tell the user which preview files the build left in their Drive.
 
 ## If you are a worker
 
-The claims are settled; the drawing is yours. Read [design](design.md) from
-"Choose each slide from its content" and [compositions](compositions.md), and
+The claims are settled; the drawing is yours. Read [design](design.md) and
+[compositions](compositions.md), open the [gallery](gallery.md) example for
+each relation you are drawing, and
 run `compose contract --brand` for the sizes. Design each slide from what it
 must make the audience understand, not from the nearest row of boxes. Keep the
 brand's body size for this deck's delivery; a section that shrinks its text to

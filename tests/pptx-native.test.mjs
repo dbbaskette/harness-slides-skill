@@ -71,10 +71,12 @@ test('edges attach to the facing connection sites and box children form a group'
   const ids=[...xml.matchAll(/<p:cNvPr id="(\d+)"/g)].map(m=>m[1]);assert.equal(new Set(ids).size,ids.length);
 });
 
-test('an edge to a shape without known connection sites is drawn but reported unattached',async t=>{
-  const comp=flow();comp.slides[0].canvas.children[0].shape='hexagon';
+test('an edge to something with no connection site is drawn but reported unattached',async t=>{
+  const comp=flow(),first=comp.slides[0].canvas.children[0];comp.slides[0].canvas.children[0]={type:'text',id:first.id,text:'Edge'};
   const {output,result}=await build(t,comp),xml=await part(output,'ppt/slides/harnessSlide1.xml');
   assert.deepEqual(result.native[0].unattached,['edge_one']);assert.match(xml,/<p:cxnSp>/);assert.doesNotMatch(xml,/stCxn/);
+  // A hexagon, a chevron and a cylinder attach on the sides they have sites for.
+  for(const shape of ['hexagon','chevron','can']){const sided=flow();sided.slides[0].canvas.children[0].shape=shape;const built=await build(t,sided);assert.deepEqual(built.result.native[0].unattached,[],shape);assert.match(await part(built.output,'ppt/slides/harnessSlide1.xml'),/stCxn/,shape);}
 });
 
 test('nested groups are written inside their parent group',async t=>{
@@ -109,8 +111,8 @@ test('images are embedded with alt text, fitted for contain and cropped for cove
 
 test('unsupported scene objects and a missing template are refused by name',async t=>{
   const dir=await temporary(t),c=await brand(dir),{scene,structure}=await compileComposition(flow(),c);
-  const table=structuredClone(scene);table.slides[0].elements.push({id:'data_table',type:'table',x:48,y:300,width:400,height:80,rows:[['a','b'],['c','d']]});
-  await assert.rejects(()=>emitNativePptx({scene:table,structure,brand:c,output:join(dir,'t.pptx')}),/data_table: the native emitter does not write table objects yet/);
+  const chart=structuredClone(scene);chart.slides[0].elements.push({id:'data_chart',type:'chart',x:48,y:300,width:400,height:80,chartType:'bar',series:[{name:'a',labels:['x'],values:[1]}],source:'s'});
+  await assert.rejects(()=>emitNativePptx({scene:chart,structure,brand:c,output:join(dir,'t.pptx')}),/data_chart: the native emitter does not write chart objects yet/);
   const plain=structuredClone(c);delete plain.design.nativeTemplate;plain.revision=contractRevision(plain);
   await assert.rejects(()=>emitNativePptx({scene,structure,brand:plain,output:join(dir,'p.pptx')}),/needs a brand contract with a native template/);
   await emitNativePptx({scene,structure,brand:c,output:join(dir,'once.pptx')});
@@ -229,7 +231,8 @@ async function iconLibrary(dir) {
   const objects=(await pptxTool('inspect',[path])).slides[0].objects,ids=['icon_ring','icon_core'].map(name=>objects.find(o=>o.name===name).id);
   await writeFile(index,JSON.stringify({schemaVersion:1,sourceSha256:hash(await readFile(path)),entries:[
     {id:'fi-test-s001-l001',slide:1,labelIndex:1,label:'Test ring',shapeIds:ids,bounds:[100*12700,100*12700,80*12700,40*12700],native:true},
-    {id:'fi-test-s001-l002',slide:1,labelIndex:2,label:'A picture',shapeIds:ids,bounds:[0,0,12700,12700],native:false}]}));
+    {id:'fi-test-s001-l002',slide:1,labelIndex:2,label:'A picture',shapeIds:ids,bounds:[0,0,12700,12700],native:false},
+    {id:'fi-test-s001-l003',slide:1,labelIndex:3,label:'Only a disc',shapeIds:ids.slice(0,1),bounds:[100*12700,100*12700,80*12700,40*12700],native:true}]}));
   return {path,index};
 }
 async function withIcons(dir,c) {
@@ -279,7 +282,8 @@ test('icon problems are reported against the composition node and leave no outpu
   await assert.rejects(()=>emit('fi-test-s001-l001',plain,'a.pptx'),/names no icon library/);
   await assert.rejects(()=>emit('fi-missing',c,'b.pptx'),/lead_icon: unknown icon fi-missing/);
   await assert.rejects(()=>emit('fi-test-s001-l002',c,'c.pptx'),/lead_icon: icon fi-test-s001-l002 is a picture/);
-  assert.deepEqual((await readdir(dir)).filter(n=>/^[abc]\.pptx$/.test(n)),[]);
+  await assert.rejects(()=>emit('fi-test-s001-l003',c,'d.pptx'),/lead_icon: icon fi-test-s001-l003 has no drawing in the library index, only its disc/);
+  assert.deepEqual((await readdir(dir)).filter(n=>/^[abcd]\.pptx$/.test(n)),[]);
   await assert.rejects(()=>compileComposition(iconDeck('not an id!'),c),/stable icon ID/);
   const narrow={version:1,title:'Icons',slides:[{id:'icon_slide',title:'t',sources:['brief:test'],canvas:{type:'grid',columns:6,gap:'wide',children:Array.from({length:6},(_,i)=>({type:'stack',direction:'row',gap:'wide',children:[{type:'icon',id:`tiny_icon${i}`,icon:'fi-test-s001-l001'},{type:'spacer'},{type:'spacer'},{type:'spacer'}]}))}}]};
   await assert.rejects(()=>compileComposition(narrow,c),/needs 54pt of width for an icon/);
@@ -321,7 +325,9 @@ test('a slide can use another template layout, filling its title and subtitle pl
   const dir=await temporary(t),c=await brand(dir),source=c.design.nativeTemplate.path,layout=await part(source,'ppt/slideLayouts/slideLayout1.xml'),master=await part(source,'ppt/slideMasters/slideMaster1.xml');
   // Give the fixture a second layout, "Cover", with a centred title and two subtitle placeholders.
   const ph=(type,idx)=>`<p:sp><p:nvSpPr><p:cNvPr id="${90+(idx??0)}" name="${type}"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr><p:ph type="${type}"${idx?` idx="${idx}"`:''}/></p:nvPr></p:nvSpPr><p:spPr><a:xfrm><a:off x="609600" y="${1000000*(1+(idx??0))}"/><a:ext cx="10972800" cy="838200"/></a:xfrm></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr lang="en-US"/></a:p></p:txBody></p:sp>`;
-  const cover=layout.replace(/<p:cSld[^>]*>/,'<p:cSld name="Cover &amp; open">').replace(/<p:sp>(?:(?!<\/p:sp>).)*<p:ph type="title"\/>.*?<\/p:sp>/s,'').replace('</p:spTree>',ph('ctrTitle')+ph('subTitle',1)+ph('subTitle',2)+'</p:spTree>');
+  // The cover also has a tall picture slot, a quarter as wide as it is high.
+  const picSlot='<p:sp><p:nvSpPr><p:cNvPr id="99" name="pic"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr><p:ph type="pic" idx="7"/></p:nvPr></p:nvSpPr><p:spPr><a:xfrm><a:off x="9000000" y="0"/><a:ext cx="1714500" cy="6858000"/></a:xfrm></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr lang="en-US"/></a:p></p:txBody></p:sp>';
+  const cover=layout.replace(/<p:cSld[^>]*>/,'<p:cSld name="Cover &amp; open">').replace(/<p:sp>(?:(?!<\/p:sp>).)*<p:ph type="title"\/>.*?<\/p:sp>/s,'').replace('</p:spTree>',ph('ctrTitle')+ph('subTitle',1)+ph('subTitle',2)+picSlot+'</p:spTree>');
   // And a third, the default layout with one subtitle line added: the layout a content slide with a subtitle moves to.
   const lineLayout=layout.replace(/<p:cSld[^>]*>/,'<p:cSld name="Title and line">').replace('</p:spTree>',ph('subTitle',1)+'</p:spTree>');
   const withCover=join(dir,'two-layouts.pptx');
@@ -330,13 +336,24 @@ test('a slide can use another template layout, filling its title and subtitle pl
       '[Content_Types].xml':[['</Types>','<Override PartName="/ppt/slideLayouts/slideLayout2.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/><Override PartName="/ppt/slideLayouts/slideLayout3.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/></Types>']]}});
   assert.match(master,/sldLayoutIdLst/);
   const b=await rebrand(c,withCover),{templateLayouts}=await import('../scripts/lib/pptx-native.mjs');
-  assert.deepEqual((await templateLayouts(b)).layouts,[{name:'DEFAULT',title:true,subtitles:0,pictures:0,canvas:true},{name:'Cover & open',title:true,subtitles:2,pictures:0,canvas:false},{name:'Title and line',title:true,subtitles:1,pictures:0,canvas:false,subtitled:true}].map((l,i)=>i?l:{...l,name:(layout.match(/<p:cSld name="([^"]*)"/)?.[1])??'ppt/slideLayouts/slideLayout1.xml'}));
+  assert.deepEqual((await templateLayouts(b)).layouts,[{name:'DEFAULT',title:true,subtitles:0,pictures:0,canvas:true},{name:'Cover & open',title:true,subtitles:2,pictures:1,canvas:false},{name:'Title and line',title:true,subtitles:1,pictures:0,canvas:false,subtitled:true}].map((l,i)=>i?l:{...l,name:(layout.match(/<p:cSld name="([^"]*)"/)?.[1])??'ppt/slideLayouts/slideLayout1.xml'}));
   const comp={version:1,title:'Deck',slides:[{id:'cover_slide',title:'Opening',layout:'Cover & open',subtitle:'For architects',detail:'October 2026',sources:['brief:test']},{id:'body_slide',title:'Body',sources:['brief:test'],canvas:{type:'box',id:'body_box',text:'x'}}]};
   const compiled=await compileComposition(comp,b),output=join(dir,'layouts.pptx'),result=await emitNativePptx({...compiled,brand:b,output,base:dir});
   assert.deepEqual(result.native.map(n=>n.layout).slice(0,1),['Cover & open']);assert.deepEqual(await audit(output),[]);
   const first=await part(output,'ppt/slides/harnessSlide1.xml');
   assert.match(await part(output,'ppt/slides/_rels/harnessSlide1.xml.rels'),/slideLayouts\/slideLayout2\.xml/);assert.match(await part(output,'ppt/slides/_rels/harnessSlide2.xml.rels'),/slideLayouts\/slideLayout1\.xml/);
   assert.match(first,/<p:ph type="ctrTitle"\/>/);assert.match(first,/<p:ph type="subTitle" idx="1"\/>.*For architects.*<p:ph type="subTitle" idx="2"\/>.*October 2026/s);assert.doesNotMatch(first.split('</p:grpSpPr>')[1],/a:xfrm/);
+  // A picture fills the layout's own slot: no geometry of its own, cropped to the slot's shape. The 2:1 image keeps an eighth of its width.
+  await writeFile(join(dir,'wide.png'),png);
+  const pictured=structuredClone(comp);pictured.slides[0].picture={src:'wide.png',alt:'A ridge at dawn'};
+  const picturedOut=join(dir,'pictured.pptx');await emitNativePptx({...await compileComposition(pictured,b),brand:b,output:picturedOut,base:dir});
+  const withPicture=await part(picturedOut,'ppt/slides/harnessSlide1.xml');
+  assert.match(withPicture,/<p:pic><p:nvPicPr><p:cNvPr id="\d+" name="cover_slide_picture" descr="A ridge at dawn"\/>.*<p:ph type="pic" idx="7"\/>.*<a:srcRect l="43750" r="43750"\/>.*<p:spPr\/><\/p:pic>/s);
+  assert.deepEqual(await audit(picturedOut),[]);assert.equal((await names(picturedOut)).filter(n=>/^ppt\/media\/harness-[0-9a-f]{16}\.png$/.test(n)).length,1);
+  const {checkLayouts:checkSlots}=await import('../scripts/lib/pptx-native.mjs'),noSlot=structuredClone(pictured);noSlot.slides[0].layout='Title and line';delete noSlot.slides[0].detail;
+  await assert.rejects(async()=>checkSlots((await compileComposition(noSlot,b)).structure,b),/cover_slide: layout Title and line has no picture slot/);
+  await assert.rejects(()=>compileComposition({...comp,slides:[comp.slides[0],{...comp.slides[1],picture:{src:'wide.png',alt:'x'}}]},b),/body_slide: picture fills a template layout's picture slot/);
+  await assert.rejects(()=>compileComposition({...comp,slides:[{...comp.slides[0],picture:{src:'wide.png'}},comp.slides[1]]},b),/cover_slide: picture is \{src,alt\}/);
   // A content slide with a subtitle moves to the template's title-and-subtitle layout and keeps its canvas.
   const lined=structuredClone(comp);lined.slides[1].subtitle='Part one';
   const linedOut=join(dir,'lined.pptx');await emitNativePptx({...await compileComposition(lined,b),brand:b,output:linedOut,base:dir});
@@ -353,4 +370,31 @@ test('a slide can use another template layout, filling its title and subtitle pl
   await assert.rejects(async()=>checkLayouts((await compileComposition(unknown,b)).structure,b),/cover_slide: the template has no layout named Missing layout/);
   const crowded=structuredClone(comp);crowded.slides[0].layout=(await templateLayouts(b)).default;
   await assert.rejects(async()=>emitNativePptx({...await compileComposition(crowded,b),brand:b,output:join(dir,'many.pptx'),base:dir}),/has 0 subtitle placeholders/);
+});
+
+test('an outlined box is written with a line and no fill, and a bar card as one group',async t=>{
+  const dir=await temporary(t),c=await brand(dir),output=join(dir,'outline.pptx');
+  const comp={version:1,title:'Deck',slides:[{id:'look_slide',title:'Looks',sources:['brief:test'],canvas:{type:'stack',direction:'row',children:[{type:'box',id:'line_box',text:'Outlined',style:'outline'},{type:'box',id:'bar_box',text:'Barred',style:'bar'},{type:'badge',id:'step_one',text:'1'},{type:'rule'}]}}]};
+  await emitNativePptx({...await compileComposition(comp,c),brand:c,output,base:dir});
+  const xml=await part(output,'ppt/slides/harnessSlide1.xml'),shape=name=>xml.match(new RegExp(`<p:sp>(?:(?!</p:sp>).)*name="${name}".*?</p:sp>`,'s'))[0];
+  assert.match(shape('line_box'),/<a:noFill\/><a:ln w="19050"><a:solidFill><a:srgbClr val="555555"\/><\/a:solidFill><\/a:ln>/);
+  assert.match(shape('bar_box'),/<a:solidFill><a:srgbClr val="F0F2F5"\/><\/a:solidFill><a:ln><a:noFill\/><\/a:ln>/);assert.match(xml,/name="bar_box_group"/);assert.match(shape('step_one'),/prst="ellipse"/);
+  assert.deepEqual(await audit(output),[]);
+});
+
+test('bent connectors, a ring and a table are written as native objects',async t=>{
+  const dir=await temporary(t),c=await brand(dir),output=join(dir,'more.pptx');
+  const comp={version:1,title:'Deck',slides:[
+    {id:'fan_slide',title:'Fan',sources:['brief:test'],canvas:{type:'stack',direction:'row',gap:'wide',children:[{type:'box',id:'hub_node',text:'Hub'},{type:'stack',direction:'column',children:[{type:'box',id:'top_node',text:'Top'},{type:'box',id:'low_node',text:'Low'}]}]},connect:[{id:'edge_up',from:'hub_node',to:'top_node',route:'elbow'},{id:'edge_down',from:'hub_node',to:'low_node',route:'curve'}]},
+    {id:'ring_slide',title:'Ring',sources:['brief:test'],canvas:{type:'ring',children:['north','east','south','west'].map(n=>({type:'box',id:`ring_${n}`,text:n}))},connect:[{id:'ring_e1',from:'ring_north',to:'ring_east',route:'curve'},{id:'ring_e2',from:'ring_east',to:'ring_south',route:'curve'}]},
+    {id:'table_slide',title:'Table',sources:['brief:test'],canvas:{type:'table',id:'opt_table',rows:[['Option','Cost'],['Buy','High & rising'],['Build','Low']]}}]};
+  const result=await emitNativePptx({...await compileComposition(comp,c),brand:c,output,base:dir}),one=await part(output,'ppt/slides/harnessSlide1.xml'),two=await part(output,'ppt/slides/harnessSlide2.xml'),three=await part(output,'ppt/slides/harnessSlide3.xml');
+  assert.match(one,/prst="bentConnector3"/);assert.match(one,/prst="curvedConnector3"/);assert.equal((one.match(/<a:stCxn /g)??[]).length,2);
+  // Around a ring an edge turns once. North to east leads off across; east to south leads off down, so its frame is turned.
+  assert.equal((two.match(/prst="curvedConnector2"/g)??[]).length,2);assert.equal((two.match(/<a:xfrm rot="5400000"/g)??[]).length,1);assert.deepEqual(result.native[1].unattached,[]);
+  // North's right side to east's top, then east's bottom to south's right side.
+  assert.deepEqual([...two.matchAll(/<a:(stCxn|endCxn) id="\d+" idx="(\d)"\/>/g)].map(m=>Number(m[2])),[3,0,2,3]);
+  assert.match(three,/<p:graphicFrame>.*name="opt_table".*<a:tbl><a:tblPr firstRow="1"\/><a:tblGrid><a:gridCol w="\d+"\/><a:gridCol w="\d+"\/><\/a:tblGrid>/s);
+  assert.equal((three.match(/<a:tr /g)??[]).length,3);assert.equal((three.match(/<a:tc>/g)??[]).length,6);assert.match(three,/High &amp; rising/);
+  assert.deepEqual(await audit(output),[]);
 });

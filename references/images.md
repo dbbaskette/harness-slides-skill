@@ -1,81 +1,82 @@
 # Optional custom images
 
-Load only for custom raster images or `/harness-slides setup images`. Run helpers
-from the returned runtime. Users describe the visual; the agent handles commands.
-Use icons, editable shapes and diagrams where they convey the slide's content.
-Choose a generated image only when it serves that individual slide. Keep labels,
-claims and diagram relationships editable in the deck.
+Load only for custom raster images or image setup. Prefer icons, editable shapes
+and diagrams; generate an image only when it serves that slide, and keep labels
+and claims editable.
 
-## Setup and readiness
+Images come from the Gemini API, model `gemini-nano-banana-2.1`. **This provider
+is unverified:** built from Google's documentation and tested against stubs, never
+the live API. Treat the first `check` and `generate` with a real key as a trial and
+report exactly what they return. If Google refuses the model or the request,
+nothing was charged: rerun the same ID with `--api generate-content --model
+gemini-3.1-flash-image`, the earlier request shape, and report which one worked.
 
-```sh
-node scripts/harness-slides.mjs images status
-node scripts/harness-slides.mjs setup images
-node scripts/harness-slides.mjs images check
-```
+## Where an image belongs
 
-`status` is offline: configured does not prove current authentication. Setup
-installs optional dependencies in a private runtime and opens a dedicated Chrome
-profile. Tell the user to sign in to Google and **Quit the dedicated Chrome instance (Cmd+Q on Mac)**;
-closing its last window may leave Chrome running and will not save the session. It verifies
-Gemini and saves required cookies privately. No service, port, bridge install or
-API key is needed. Google Cloud CLI credentials do not replace Gemini cookies.
-Setup requires macOS/Linux, Chrome, Python 3.11+ and network access. Resolve local
-prerequisites within the existing authorization. The agent must not silently
-sign in to an account or spend quota without the user's authorized image work.
-The unofficial transport can change; report a live check failure accurately.
+- **Use one for:** a cover or a section break (the layout's picture slot), one
+  concept image on a slide about an idea, or a background behind a filled
+  panel of words.
+- **Never for:** data, a technical diagram, a logo, anything shown as a real
+  screenshot, or a named real product, place or person. Draw those or use the
+  real thing.
+- Before generating, write one line on what the image makes easier to
+  understand or feel. If there is nothing to write, the slide does not need it.
+- No text in the image. Words stay native, in a filled box when they sit over
+  the picture.
+- A missing key does not change whether an image is planned, only how it is
+  sourced: ask the user for a supplied image, or leave the slot for them.
 
-## Generate, place and review
+## Key and cost
 
-For new decks/redesigns, approve the specific art concept in [the walkthrough](design-walkthrough.md)
-before generating; include an explicit fallback if the approved route is unavailable.
-Write a brief file specifying subject, intended slide role, aspect ratio,
-composition, negative space, visual treatment and brand constraints. Ask for one
-original image, avoiding slide text baked into pixels. Reference images must be
-authorized local PNG/JPEG/WebP files (maximum five).
+`images status` is offline and says whether a key is set. If none is, tell the user:
+
+1. Open <https://aistudio.google.com/apikey> and choose **Create API key**.
+2. Put it in the environment as `GEMINI_API_KEY`. (`GOOGLE_API_KEY` also works and wins if both are set.)
+3. Run `images check`: one unbilled request that confirms the key and model, not billing.
+
+The key is a password. Never ask for it in chat, read it, print it or write it to
+a file. It belongs to a Google Cloud project, which carries the billing; a work
+account may not be allowed to create one.
+
+**Images cost money.** There is no free tier: about $0.05 per 2K image at October
+2026 list prices. Put the image count and cost in the plan the user approves, and
+generate only the image approved in [the walkthrough](design-walkthrough.md).
+
+## Style and brief
+
+Every image in a deck shares one style. Write it once as `art-style.txt` in the
+project: a few lines naming medium, palette words, lighting and what to avoid. It
+is sent verbatim before every brief. Agree it with the user, then leave it
+unchanged. Pass the first approved image as `--reference` to later ones.
+
+The brief file describes one image: subject, role on the slide, composition and
+where empty space must fall. Describe the scene wanted, not a list of exclusions.
+No slide text in the image; no style words in the brief.
 
 ```sh
 node scripts/harness-slides.mjs images generate --project ./deck-work \
-  --id deck-slide-04-v1 --prompt-file ./deck-work/image-brief.txt \
+  --id deck-slide-04-v1 --prompt-file ./deck-work/slide-04-brief.txt \
   --output assets/slide-04.png --design-project CONTENT --slide APPROVED_SLIDE_ID
 ```
 
-Optional: repeat `--reference PATH` for references; `--model NAME` selects an
-exact available model. Omission uses Google's account default, recorded as
-`account-default`. `images check` lists account-reported availability, not an
-image-capability guarantee. Request one image per operation.
+Options: `--aspect` (default `16:9`), `--size 1K|2K|4K` (default `2K`), up to five
+`--reference` images, `--style PATH`. One call makes one image. Google keeps the
+brief and references in the key's project for up to 55 days.
 
-The result contains a local PNG path, actual dimensions, SHA-256 and metadata
-path. The sidecar records provider, library pin, model selection, timestamp and
-brief/reference hashes. No raw prompt, cookies or authenticated URLs enter it.
-Inspect the image, place it with deliberate crop/fit and alt text, then review
-the native slide. A downloaded asset is not a reviewed slide. For Google native
-image insertion, use the selected Google delivery path's authorized asset
-transport; private local files are not publicly accessible URLs.
+The result gives the saved path, dimensions and a sidecar of hashes, never the
+brief or key. Use the returned path: a JPEG answer is saved as `.jpg`. Inspect the
+image, place it with deliberate crop and alt text, then review the native slide.
 
-## Recover without duplicate generation
+## Repeats and failures
 
-```sh
-node scripts/harness-slides.mjs images download --project ./deck-work \
-  --id deck-slide-04-v1
-```
+- Same ID and brief: the saved asset is returned; nothing is sent.
+- Any change to brief, style, references, size or model needs a new ID and the user's request.
+- API error (key, quota, billing, refusal): nothing was generated. Fix the cause; rerun the same ID.
+- `generation_uncertain`: Google may have generated and charged. It is never resent. Check AI Studio logs, then ask before using a new ID.
+- `download_failed`: the image is held privately. Run `images download` with the same `--project` and `--id`.
 
-Keep the same ID and brief when repeating a request. Successful repeats return
-the existing asset; failed downloads retain a private generation receipt.
-`download` needs no brief or references and never sends a generation prompt.
-Changed briefs cannot reuse an ID. An interrupted/uncertain send is never
-replayed: check Gemini history and obtain an explicit new-image request before
-choosing a new ID. A rejected web image is not substituted for a generated one.
+Receipts live in `~/.harness-slides-images`; never read them into context or commit them.
 
-State, Chrome profile, cookies and receipts live in `~/.harness-slides-images`,
-outside the deck. Operations lock that session; a busy result means wait. A new
-saved sign-in session can invalidate older receipts. Never read private state
-into context, commit it, or print provider logs. Runtime scripts and dependencies
-stay on disk. Return the compact helper result and relevant limitations.
-
-Diagnostics importing worker code must run Python with `-I -B`; environment
-bytecode flags alone are ignored by isolated Python. Do not create caches in the
-immutable installed runtime or exclude unexpected files from its integrity check.
-Setup keeps a separate profile, bounds its owned browser wait and preserves
-existing saved credentials when verification fails. Never quit unrelated Chrome
-processes or replace profiles as a routine retry.
+The older unofficial Gemini web route stays behind `--provider gemini-web` (first
+`setup images --provider gemini-web`). It is never chosen automatically and cannot
+apply the art style.

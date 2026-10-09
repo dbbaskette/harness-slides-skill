@@ -24,7 +24,7 @@ export async function auditSceneQuality(scene,{designReport,fonts,artifactDigest
   for(const slide of scene.slides) {
     const initialChoice=designReport?.choices.find(c=>c.id===slide.id),choice=initialChoice?{...initialChoice,intent:slide.intent??initialChoice.intent}:slide.intent?{component:'custom-scene',intent:slide.intent}:null,textObjects=slide.elements.filter(e=>e.text||e.type==='table');
     for(const e of textObjects) {
-      const cells=e.type==='table'?e.rows.flatMap((row,ri)=>row.map((text,ci)=>({text,bold:ri===0,cell:{row:ri,column:ci},width:(e.columnWidths??row.map(()=>e.width/row.length))[ci],height:e.height/e.rows.length,padding:e.padding??3.6}))):[{text:e.text,bold:e.bold??false,width:e.width,height:e.height,padding:3.6}];
+      const cells=e.type==='table'?e.rows.flatMap((row,ri)=>row.map((text,ci)=>({text,bold:ri===0,cell:{row:ri,column:ci},width:(e.columnWidths??row.map(()=>e.width/row.length))[ci],height:e.rowHeights?.[ri]??e.height/e.rows.length,padding:e.padding??3.6}))):[{text:e.text,bold:e.bold??false,width:e.width,height:e.height,padding:3.6}];
       for(const cell of cells){const {font}=await fontFor(cell.bold);if(!font){findings.push({slide:slide.id,object:e.id,...(cell.cell?{cell:cell.cell}:{}),severity:'warn',code:'font-unavailable',detail:`Exact ${theme.font} ${cell.bold?'bold':'regular'} unavailable; supply the font or verify in the target editor`});continue;}
         const metrics=measureText(cell.text,{font,fontSize:e.fontSize??(e.role==='title'?theme.titleSize:theme.bodySize),width:cell.width,height:cell.height,padding:cell.padding});
         measurements.push({slide:slide.id,object:e.id,...(cell.cell?{cell:cell.cell}:{}),...metrics});

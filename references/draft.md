@@ -58,25 +58,55 @@ as a whole, not one slide at a time.
 
 Ask what to change: claims, wording, order, emphasis. Edit the outline and run
 `draft` again to the same file. The [walkthrough](design-walkthrough.md) rules
-on asking and waiting apply: a draft shown is not a draft approved.
+on asking and waiting apply: a draft shown is not a draft approved. When they
+approve, add what they said to the outline's `approval`, in their words.
+
+## Choose the look from real slides
+
+The draft settled the words. Settle the look the same way, by seeing it, before
+the deck is built in a look the user did not choose. Approving the draft
+approves what the deck says; it does not choose a look.
+
+1. Pick one content slide that will show the look well: one with a relation to
+   draw and a point to mark.
+2. Build that slide two or three ways, each as its own one-slide
+   [composition](compositions.md) with its own `direction`: one safe, one
+   bolder, one unexpected. Keep the title, points and caveat as approved and
+   vary the look: the focal color and the neutral, solid, outline or bar
+   cards, the icon style, how much the one large element dominates, and
+   whether a slide carries its section as a subtitle. Where the harness runs
+   subagents, give each look to a worker.
+3. Preview each, then put the renders on one sheet and show it with a line on
+   what differs. Ask which they want, and wait.
+4. Their pick becomes the outline's `direction` and `house` style. Add what
+   they said to the outline's `approval`.
+
+```sh
+node scripts/harness-slides.mjs compose sheet --image A/slide-01.png --image B/slide-01.png --image C/slide-01.png --output looks.png
+```
+
+Previews that share one Drive file run one after another; the file then holds
+the last look, which does not matter.
+
+Showing looks is not choosing one. Choose for the user only when they asked
+you to work on your own, and then say which you chose and why. Skip this step
+when the look is already fixed: a house style was supplied, or the deck is
+being rebuilt in a look the user has approved before.
 
 ## Start the build
 
-Before starting, add what the build needs to the outline: the `direction`,
-the template `layouts` for cover, section and closing slides (run
-`compose layouts`), the `house` style and the source `material`. Tell the user
-the direction in a line, which color marks the point and what each other
-color stands for, and run `draft` once more so the page shows it. They are
-approving that along with the words.
+Before starting, add what the build needs to the outline: the `direction` and
+`house` style the user picked, the template `layouts` for cover, section and
+closing slides (run `compose layouts`), and the source `material`. Run `draft`
+once more so the page shows the direction.
 
 ```sh
 node scripts/harness-slides.mjs outline start --file outline.json --brand brand-contract.json --output NEW_DIR
 ```
 
 `start` writes the build's starting files: the cover, section and closing
-slides, `parts.json`, `presentation-brief.md`, and one brief per section of
-three or four content slides. Record the user's approval in
-`presentation-brief.md`, in their words.
+slides, `parts.json`, one brief per section of three or four content slides,
+and `presentation-brief.md`, which carries the outline's `approval`.
 
 Then build each section from its brief, following
 [compositions](compositions.md): hand the briefs to workers for a

@@ -6,12 +6,13 @@ import {temporary} from './fixtures.mjs';
 import {brand} from './native-fixtures.mjs';
 import {compileCompositionFile} from '../scripts/lib/compose-file.mjs';
 import {compileComposition} from '../scripts/lib/compose.mjs';
-import {previewComposition,screenComposition} from '../scripts/lib/compose-preview.mjs';
+import {previewComposition,screenComposition,recordCritique,criticQuestions} from '../scripts/lib/compose-preview.mjs';
+import {encodePng,decodePng} from '../scripts/lib/contact-sheet.mjs';
 import {updateDeck,exportPdf} from '../scripts/google-drive-deck.mjs';
 
 const slide=(id,title,canvas,connect)=>({id,title,sources:['brief:test'],canvas,...(connect?{connect}:{})});
 const deck=()=>({version:1,title:'Preview deck',slides:[
-  slide('flow_slide','Requests move through stages',{type:'stack',direction:'row',gap:'none',children:[{type:'box',id:'node_from',text:'Edge'},{type:'spacer',weight:.4},{type:'box',id:'node_to',shape:'hexagon',text:'App'}]},[{id:'edge_one',from:'node_from',to:'node_to'}]),
+  slide('flow_slide','Requests move through stages',{type:'stack',direction:'row',gap:'none',children:[{type:'box',id:'node_from',text:'Edge'},{type:'spacer',weight:.4},{type:'text',id:'node_to',text:'App'}]},[{id:'edge_one',from:'node_from',to:'node_to'}]),
   slide('prose_slide','How a request is handled',{type:'text',id:'prose_text',text:'The edge authenticates, then the router sends the request to a backend.'}),
   slide('cards_one','Three teams',{type:'grid',columns:3,children:['a','b','c'].map(n=>({type:'box',id:`one_${n}`,text:`Team ${n}`}))}),
   slide('cards_two','Three more teams',{type:'grid',columns:3,children:['a','b','c'].map(n=>({type:'box',id:`two_${n}`,text:`Team ${n}`}))})]});
@@ -21,12 +22,13 @@ async function compiled(t) {
   return {dir,c,output};
 }
 // Stand-ins for Drive and Poppler: record calls and write the files the real tools would.
+const tiny=encodePng({width:16,height:9,rgb:Buffer.alloc(16*9*3,200)});
 function fakes(pages=4) {
   const calls=[],drive={
     importDeck:async({file,name})=>{calls.push(['import',name]);return {id:'drive_file_1',url:'https://docs.google.com/presentation/d/drive_file_1/edit'};},
     updateDeck:async({fileId})=>{calls.push(['update',fileId]);return {id:fileId,url:`https://docs.google.com/presentation/d/${fileId}/edit`};},
     exportPdf:async({fileId,output})=>{calls.push(['pdf',fileId]);await writeFile(output,'%PDF-1.7 fake');return {output};}};
-  const run=async(command,args)=>{calls.push([command,...(command==='pdftoppm'?args.slice(0,4):[])]);if(args[0]==='-v')return {stdout:''};if(command==='pdfinfo')return {stdout:`Title: x\nPages:          ${pages}\n`};if(command==='pdftoppm'){await writeFile(args.at(-1)+'.png','png');return {stdout:''};}throw Object.assign(new Error('spawn ENOENT'),{code:'ENOENT'});};
+  const run=async(command,args)=>{calls.push([command,...(command==='pdftoppm'?args.slice(0,4):[])]);if(args[0]==='-v')return {stdout:''};if(command==='pdfinfo')return {stdout:`Title: x\nPages:          ${pages}\n`};if(command==='pdftoppm'){await writeFile(args.at(-1)+'.png',tiny);return {stdout:''};}throw Object.assign(new Error('spawn ENOENT'),{code:'ENOENT'});};
   return {calls,deps:{drive,run}};
 }
 
@@ -50,7 +52,11 @@ test('a preview builds the deck, imports it once, exports the render and returns
   const {dir,output}=await compiled(t),{calls,deps}=fakes(),result=await previewComposition({file:output,output:join(dir,'preview')},deps);
   assert.deepEqual(calls.slice(0,5),[['pdfinfo'],['pdftoppm','-v'],['import','Preview: Preview deck'],['pdf','drive_file_1'],['pdfinfo']]);
   assert.equal(result.fileId,'drive_file_1');assert.equal(result.slides.length,4);assert.equal(result.emitter,'native template');assert.match(result.next,/--file-id drive_file_1/);
-  assert.deepEqual((await readdir(join(dir,'preview'))).sort(),['deck.pdf','deck.pptx','preview.json','slide-01.png','slide-02.png','slide-03.png','slide-04.png']);
+  assert.deepEqual((await readdir(join(dir,'preview'))).sort(),['contact-sheet.png','critic.json','deck.pdf','deck.pptx','preview.json','slide-01.png','slide-02.png','slide-03.png','slide-04.png']);
+  // The whole-deck render carries one sheet of every slide and the packet a reviewer answers from.
+  const sheet=decodePng(await readFile(result.contactSheet)),packet=JSON.parse(await readFile(result.critic,'utf8'));
+  assert.deepEqual([sheet.width,sheet.height],[2*16+3*12,2*(9+36)+3*12]);
+  assert.equal(packet.deckSha256,result.deckSha256);assert.equal(packet.questions.length,8);assert.deepEqual(packet.slides.map(s=>[s.number,s.id]),[[1,'flow_slide'],[2,'prose_slide'],[3,'cards_one'],[4,'cards_two']]);assert.deepEqual(Object.keys(packet.grades),['critical','major','minor']);
   assert.ok(result.slides[0].findings.some(f=>f.code==='unattached-connector'));assert.ok(result.slides[1].findings.some(f=>f.code==='relational-text-only'));
   assert.deepEqual(JSON.parse(await readFile(join(dir,'preview','preview.json'),'utf8')).slides.map(s=>s.id),['flow_slide','prose_slide','cards_one','cards_two']);
 });
@@ -112,4 +118,48 @@ test('screens ask for a direction and briefs, and notice dense runs and label ti
   const found=await screenComposition(await compileComposition(run,c));
   assert.ok(!found.some(f=>['no-direction','no-brief','label-title'].includes(f.code)));
   assert.deepEqual(found.filter(f=>f.code==='dense-run').map(f=>f.slide),['slide_dd','slide_ee']);
+});
+
+test('a critique is recorded against the render it judged, and a critical finding blocks delivery',async t=>{
+  const {dir,output}=await compiled(t),preview=join(dir,'preview'),result=await previewComposition({file:output,output:preview},fakes().deps);
+  const save=async(name,value)=>{const file=join(dir,name);await writeFile(file,JSON.stringify(value));return file;};
+  const finding=(extra={})=>({slide:'prose_slide',question:2,severity:'major',note:'The eye lands on the grey panel, not the claim.',...extra});
+  // Every problem with a critique is reported together.
+  const message=await recordCritique({file:preview,assessment:await save('bad.json',{deckSha256:'0'.repeat(64),reviewer:'someone',findings:[finding({slide:'missing_slide'}),finding({question:9}),finding({severity:'awful'}),finding({note:'Bad.'})],weakest:['a','b','c','d']})}).then(()=>'',e=>e.message);
+  for(const part of [/7 problems to fix/,/deckSha256 is not the deck this packet describes/,/reviewer is independent/,/no slide missing_slide/,/question is 1 to 8/,/severity is critical, major or minor/,/note says what is wrong/,/weakest names up to three slides/])assert.match(message,part);
+  const blocked=await recordCritique({file:preview,assessment:await save('one.json',{deckSha256:result.deckSha256,reviewer:'independent',findings:[finding({severity:'critical',fix:'Make the claim the largest element.'}),finding({slide:'cards_one',question:6,severity:'minor'})],weakest:['prose_slide']})});
+  assert.deepEqual([blocked.status,blocked.critical,blocked.major,blocked.minor,blocked.reviewer],['blocked',1,0,1,'independent']);assert.match(blocked.next,/Do not deliver/);
+  const record=JSON.parse(await readFile(blocked.critique,'utf8'));assert.equal(record.deckSha256,result.deckSha256);assert.equal(record.findings.length,2);
+  // One critique per render: the next one needs a new render.
+  await assert.rejects(()=>recordCritique({file:preview,assessment:join(dir,'one.json')}),/already has a critique; fix the slides, preview again/);
+  const again=join(dir,'preview-2'),second=await previewComposition({file:output,output:again,'file-id':'drive_file_1'},fakes().deps);
+  const clear=await recordCritique({file:again,assessment:await save('two.json',{deckSha256:second.deckSha256,reviewer:'author',findings:[]})});
+  assert.deepEqual([clear.status,clear.reviewer],['clear','author']);assert.match(clear.next,/Clear to show the user/);
+  // A single-slide preview has no packet to critique.
+  const single=join(dir,'single');await previewComposition({file:output,output:single,slide:'cards_one','file-id':'drive_file_1'},fakes().deps);
+  await assert.rejects(()=>recordCritique({file:single,assessment:join(dir,'two.json')}),/No critic packet here; run compose preview on the whole deck/);
+  assert.equal(criticQuestions.length,8);
+});
+
+test('icon screens flag an icon repeated, an icon with no words, and one icon given two meanings',async t=>{
+  const dir=await temporary(t),c=await brand(dir);c.design.slides.icon={size:54,library:{path:'/x/icons.pptx',index:'/x/index.json'}};
+  const {contractRevision}=await import('../scripts/lib/brand-contract.mjs');c.revision=contractRevision(c);
+  const card=(n,icon,label)=>({type:'box',id:`card_${n}`,children:[{type:'icon',id:`icon_${n}`,icon},...(label?[{type:'text',id:`text_${n}`,text:label}]:[])]});
+  const comp={version:1,title:'Icons',slides:[
+    slide('same_slide','Three things',{type:'grid',columns:3,children:[card('a1','fi-disk','Fast'),card('a2','fi-disk','Safe'),card('a3','fi-disk','Open')]}),
+    slide('lone_slide','A thing',{type:'stack',direction:'row',children:[{type:'icon',id:'icon_b1',icon:'fi-lock'},{type:'spacer',weight:4},{type:'box',id:'far_box',text:'Far away'}]}),
+    slide('mean_slide','Another thing',{type:'stack',direction:'row',children:[card('c1','fi-lock','Compliance')]}),
+    slide('again_slide','Yet another',{type:'stack',direction:'row',children:[card('d1','fi-lock','Storage')]})]};
+  const {scene,structure}=await compileComposition(comp,c),findings=await screenComposition({scene,structure}),codes=id=>findings.filter(f=>f.slide===id).map(f=>f.code);
+  assert.ok(codes('same_slide').includes('icon-repeated'));assert.match(findings.find(f=>f.code==='icon-repeated').detail,/appears 3 times/);
+  assert.ok(codes('lone_slide').includes('icon-alone'));assert.ok(!codes('mean_slide').includes('icon-alone'));
+  assert.ok(codes('again_slide').includes('icon-two-meanings'));assert.match(findings.find(f=>f.code==='icon-two-meanings').detail,/"storage" here and "compliance" on mean_slide/);
+  assert.ok(!codes('mean_slide').includes('icon-two-meanings'));
+});
+
+test('a panel of words over a picture is not reported as a collision',async t=>{
+  const dir=await temporary(t),c=await brand(dir);
+  const comp={version:1,title:'Photo',slides:[slide('photo_slide','Words on a picture',{type:'free',children:[{type:'image',id:'back_photo',src:'photo.png',alt:'A ridge',fit:'cover',at:{x:0,y:0,width:1,height:1}},{type:'box',id:'panel_card',at:{x:.05,y:.5,width:.5,height:.45},children:[{type:'text',id:'panel_text',text:'Readable on the panel'}]}]})]};
+  const {scene,structure}=await compileComposition(comp,c),findings=await screenComposition({scene,structure});
+  assert.ok(!findings.some(f=>f.code==='content-collision'),JSON.stringify(findings.filter(f=>f.code==='content-collision')));
 });

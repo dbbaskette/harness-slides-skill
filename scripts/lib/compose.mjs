@@ -9,17 +9,42 @@ const fields={
   stack:['direction','gap','align','children','group'],
   grid:['columns','gap','children','group'],
   free:['children','group'],
-  box:['text','shape','fill','color','textRole','align','children','gap'],
+  ring:['children','hub','group'],
+  box:['text','shape','fill','color','textRole','align','children','gap','style'],
   text:['text','textRole','color','align'],
   image:['src','alt','fit'],
   icon:['icon','color','style'],
+  badge:['text','fill'],
+  table:['rows','widths'],
+  rule:[],
+  metric:['value','label'],
   spacer:[],
 };
 const common=['id','type','weight','at'],gapNames=['none','tight','normal','wide'],aligns=['start','center','end','stretch'];
 const round=n=>Math.round(n*100)/100;
 const fail=(where,message)=>{throw new Error(`${where}: ${message}`);};
 const str=v=>typeof v==='string'&&v.trim()&&v.length<=20000;
-const iconStyles=['solid','outline','plain'];
+// Whether two nodes are set side by side (true) or one above the other (false) by the container that holds them both;
+// undefined where that container places its children freely.
+function axisBetween(canvas,from,to) {
+  const trail=id=>{const walk=(n,path)=>{if(!n||typeof n!=='object')return null;if(n.id===id)return path;for(const [i,k] of [...(n.children??[]),...(n.hub?[n.hub]:[])].entries()){const found=walk(k,[...path,{n,i}]);if(found)return found;}return null;};return walk(canvas,[]);};
+  const a=trail(from),b=trail(to);if(!a||!b)return undefined;
+  let depth=0;while(depth<a.length&&depth<b.length&&a[depth].n===b[depth].n&&a[depth].i===b[depth].i)depth++;
+  const x=a[depth],y=b[depth];if(!x||!y||x.n!==y.n)return undefined;
+  if(x.n.type==='stack')return x.n.direction==='row';
+  if(x.n.type==='box')return false;
+  if(x.n.type==='grid'){const row=i=>Math.floor(i/x.n.columns),column=i=>i%x.n.columns;return row(x.i)===row(y.i)?true:column(x.i)===column(y.i)?false:undefined;}
+  return undefined;
+}
+const iconStyles=['solid','outline','plain'],boxStyles=['solid','outline','bar'];
+// A metric is shorthand for a number in the metric role over its label, so the number is never left without its context.
+const expand=n=>{
+  if(!n||typeof n!=='object'||Array.isArray(n))return n;
+  if(n.type==='metric'&&typeof n.value==='string'&&n.value.trim()&&typeof n.label==='string'&&n.label.trim()&&typeof n.id==='string'&&Object.keys(n).every(k=>['id','type','weight','at','value','label'].includes(k)))
+    return {type:'stack',direction:'column',gap:'tight',...(n.weight!==undefined?{weight:n.weight}:{}),...(n.at!==undefined?{at:n.at}:{}),children:[{type:'text',id:n.id,text:n.value,textRole:'metric'},{type:'text',id:`${n.id}_label`,text:n.label}]};
+  return Array.isArray(n.children)?{...n,children:n.children.map(expand)}:n;
+};
+const expanded=comp=>comp&&Array.isArray(comp.slides)?{...comp,slides:comp.slides.map(s=>s&&typeof s==='object'&&!Array.isArray(s)&&s.canvas?{...s,canvas:expand(s.canvas)}:s)}:comp;
 const relations=['order','dependency','hierarchy','membership','contrast','parallel','overlap','quantity','none'],rhythms=['anchor','dense','breathing'];
 // How each relation must show up in the structure, and what to tell the author when it does not.
 const drawn={
@@ -35,31 +60,36 @@ const luminance=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255).map(v=>v<
 export const contrastRatio=(a,b)=>{const [hi,lo]=[luminance(a),luminance(b)].sort((x,y)=>y-x);return (hi+.05)/(lo+.05);};
 
 export const composeContract=`Composition v1 (AI-owned; describe structure, never coordinates).
-{version:1,title,direction?:DIRECTION,slides:[{id,title,sources:[one or more IDs],canvas:NODE,connect?:[EDGE],brief?:BRIEF,subtitle?,caveat?:text|{label,text},source?,notes?:speaker notes,intent?,layoutId?} | {id,title,sources,layout:TEMPLATE LAYOUT NAME,subtitle?,detail?,notes?}]}
+{version:1,title,direction?:DIRECTION,slides:[{id,title,sources:[one or more IDs],canvas:NODE,connect?:[EDGE],brief?:BRIEF,subtitle?,caveat?:text|{label,text},source?,notes?:speaker notes,intent?,layoutId?} | {id,title,sources,layout:TEMPLATE LAYOUT NAME,subtitle?,detail?,picture?:{src,alt},notes?}]}
 A slide with layout uses that template layout's own placeholders (cover, section break, closing) and has no canvas; run compose layouts for the names.
 A content slide's furniture is set on the slide, not drawn in the canvas: subtitle is one line under the title, in the template's own subtitle line; caveat is a ruled strip at the foot, with an optional one-word label such as Limit or Verify; source is a line beneath it. The canvas gets the room that is left.
-NODE containers: {type:stack,direction:row|column,gap?,align?,children:[NODE]} | {type:grid,columns:1-6,gap?,children:[NODE]} | {type:free,children:[NODE with at:{x,y,width,height} as 0-1 fractions]}.
-NODE leaves: {type:icon,id,icon:STABLE ICON ID from the brand's icon search,color?,style?:solid|outline|plain} | {type:box,id,text?|children?,shape?:rect|ellipse|roundRect|diamond|hexagon|chevron|can,fill?,color?,textRole?,align?,gap?} | {type:text,id,text,textRole?,color?,align?} | {type:image,id,src,alt,fit?} | {type:spacer}.
+NODE containers: {type:stack,direction:row|column,gap?,align?,children:[NODE]} | {type:grid,columns:1-6,gap?,children:[NODE]} | {type:free,children:[NODE with at:{x,y,width,height} as 0-1 fractions]} | {type:ring,children:[3-8 NODE],hub?:NODE}.
+NODE leaves: {type:icon,id,icon:STABLE ICON ID from the brand's icon search,color?,style?:solid|outline|plain} | {type:box,id,text?|children?,shape?:rect|ellipse|roundRect|diamond|hexagon|chevron|can,style?:solid|outline|bar,fill?,color?,textRole?,align?,gap?} | {type:metric,id,value,label} | {type:badge,id,text,fill?} | {type:rule} | {type:table,id,rows:[[header cells],[cells]...],widths?:[relative]} | {type:text,id,text,textRole?,color?,align?} | {type:image,id,src,alt,fit?} | {type:spacer}.
 sources name what a slide rests on: a document section, a finding, or one ID such as request or author_knowledge when it comes from the brief or general knowledge.
 Any node may set weight (relative share, above 0 up to 10, default 1). A node never goes below the size its content needs; when that overrides a weight you set, compile and preview report it as weight-overridden. An empty box has no minimum, so use empty boxes for bars drawn to scale.
 An icon keeps the library's own colors unless you set color (a brand color role) or style: solid is a light icon on a colored disc, outline a colored icon in a ring, plain a colored icon with no container, drawn a little larger. On a filled card use plain or outline with a color that reads on the fill.
+A box is solid by default. style outline draws it as a line on whatever is behind it; style bar draws a neutral card with a strip of color down the left edge. The line or strip is the focal color on the slide's focal node, the box's fill where it sets one, and secondary ink otherwise. Both keep color to a small area, so use them for cards that are not the point.
+metric is a number with its label beneath, in the brand's metric size: {type:metric,id,value:"42%",label:"of teams"}. badge is a small numbered or lettered disc for steps and references. rule is a thin line between the parts of a column or a row.
 A card's content sits inside its shape's text area, so a diamond, ellipse or hexagon holds much less than a rectangle of the same size. Containers may set group:true and an id.
 gap: none|tight|normal|wide. align: start|center|end|stretch. In a row, stretch (the default) makes every child fill the row's height; start, center or end gives each child the height its content needs. On a text, or a box with text, align sets the text left, centered or right. In a row an icon takes its own width unless you give it a weight. On a box with children, align (start|center|end) places its content vertically. fill/color: a brand color role name. textRole: a brand typography role name.
-EDGE: {id,from:NODE id,to:NODE id,label?,arrow?:boolean,color?}. Join boxes: an edge to a text or an icon is drawn but cannot stay attached when a node moves.
+EDGE: {id,from:NODE id,to:NODE id,label?,arrow?:boolean,color?,route?:straight|elbow|curve}. An edge attaches to a box of any shape and to an icon with a disc or a ring; an edge to a text or a plain icon is drawn but cannot stay attached when a node moves.
+A straight edge between nodes that are not level runs at a slant. route elbow turns it into right angles, which reads better for a fan-out or a tree; route curve bends it. ring places its children around a circle in order, the first at the top, going clockwise; an elbow or curve edge between two of them turns once around the outside, which draws a cycle. Use hub for what sits at the center.
+Text may sit over an image only inside a filled box, which keeps it readable whatever the picture shows; place the image and the box in a free container. A template layout with a picture slot takes picture:{src,alt}, cropped to fill the slot.
+table is a native, editable table in the brand's table style: the first row is the header, and each row is as tall as its tallest cell. Keep cells short; a table is for comparing values, not for holding sentences.
 DIRECTION, decided once for the deck: {focal:color role that means "look here",neutral:panel color role,meanings?:{color role:what it stands for in this deck},motif?:text}.
 With a direction, fills come only from the neutral, the meanings and white; boxes default to the neutral. Text, icon and edge colors may be any role except the focal.
 BRIEF, per content slide: {relation:order|dependency|hierarchy|membership|contrast|parallel|overlap|quantity|none,focal?:NODE id,rhythm?:anchor|dense|breathing}.
 The title is the claim. The relation must be drawn: edges, chevrons or a column of steps for order, edges for dependency, edges, nesting or layers for hierarchy, a box holding two or more members for membership, side by side for contrast, a grid, row or column of like nodes for parallel, intersecting shapes for overlap, the metric text role for quantity.
 The focal node is a box or text; the compiler gives it the focal color and no other node, text or edge may use it. Text inside a filled box is given a readable color unless you set one.
 A labelled edge needs room: its label must fit the gap between the two nodes, so put a spacer between them.
-Generated IDs are reserved: <slide>_title, <slide>_subtitle, <slide>_detail, <slide>_caveat, <slide>_caveat_label, <slide>_caveat_rule, <slide>_source, <box with children>_group, <labelled edge>_label.
+Generated IDs are reserved: <box with style bar>_bar and _text, <metric>_label, <slide>_rule1 and up, <slide>_title, <slide>_subtitle, <slide>_detail, <slide>_caveat, <slide>_caveat_label, <slide>_caveat_rule, <slide>_source, <box with children>_group, <labelled edge>_label.
 A card's align has no effect when it holds a box, grid or image, because those fill the spare space.
 IDs match [a-zA-Z_][a-zA-Z0-9_-]{4,40} and are unique across the deck.
 Nest at most 8 levels. Run compose contract --brand brand-contract.json for the brand's content area, gap, padding and line sizes.
 Text is measured with the brand font. Content that cannot fit at its role's size fails with the shortfall; rewrite, split or restructure.`;
 
 export function validateComposition(comp,contract,{collect}={}) {
-  validateBrandContract(contract,{medium:'slides'});
+  validateBrandContract(contract,{medium:'slides'});comp=expanded(comp);
   const d=contract.design,roles=d.slides.typography,colors=d.colors;
   if(comp?.version!==1)throw new Error('Use composition version 1 (run compose contract)');
   if(Object.keys(comp).some(k=>!['version','title','slides','direction'].includes(k)))throw new Error('Unsupported composition field');
@@ -83,24 +113,40 @@ export function validateComposition(comp,contract,{collect}={}) {
   const allowedFills=dir?[...new Set([dir.neutral,...Object.keys(dir.meanings??{}),...(Object.hasOwn(colors,'canvasPrimary')?['canvasPrimary']:[])])]:null;
   if(!str(comp.title))throw new Error('Provide a deck title');
   if(!Array.isArray(comp.slides)||!comp.slides.length||comp.slides.length>100)throw new Error('Provide 1–100 slides');
-  const ids=new Set(),claim=(id,where)=>{if(!idPattern.test(id??'')||ids.has(id))fail(where,`invalid or repeated ID: ${id}`);ids.add(id);};
+  const ids=new Set(),claim=(id,where)=>{if(ids.has(id))fail(where,`invalid or repeated ID: ${id} is already used in this deck`);if(!idPattern.test(id??''))fail(where,`invalid or repeated ID: ${id} must be 5 to 41 letters, digits, _ or -, starting with a letter or _`);ids.add(id);};
   const summary=[],invalid=[],bad=new Set();
   for(const s of comp.slides) try {
     // Every problem on a slide is gathered, so one compile shows all of them.
     const found=[],attempt=check=>{try{check();}catch(error){found.push(error.message);}};
     if(!s||typeof s!=='object'||Array.isArray(s))throw new Error('each slide must be an object');
-    if(Object.keys(s).some(k=>!['id','title','sources','canvas','connect','notes','intent','layoutId','layout','subtitle','detail','brief','caveat','source'].includes(k)))fail(s.id,'unsupported slide field');
+    if(Object.keys(s).some(k=>!['id','title','sources','canvas','connect','notes','intent','layoutId','layout','subtitle','detail','picture','brief','caveat','source'].includes(k)))fail(s.id,'unsupported slide field');
+    if(s.picture!==undefined&&s.layout===undefined)fail(s.id,'picture fills a template layout\'s picture slot; on a content slide use an image node in the canvas');
     claim(s.id,'slide');claim(`${s.id}_title`,s.id);
     attempt(()=>{if(!str(s.title))fail(s.id,'provide a slide title');});
     attempt(()=>{if(!Array.isArray(s.sources)||!s.sources.length||s.sources.some(x=>!str(x)))fail(s.id,'provide source references: one or more IDs naming what the slide rests on, such as request or author_knowledge');});
-    const local=new Set(),fills=new Set(),leaves=new Set(),facts={edges:0,chevrons:0,members:false,pair:false,peers:false,nested:false,layers:false,metric:false},brief=s.brief,focalId=brief?.focal;let nodes=0;
+    const local=new Set(),fills=new Set(),leaves=new Set(),facts={edges:0,chevrons:0,members:false,pair:false,peers:false,nested:false,layers:false,metric:false},brief=s.brief,focalId=brief?.focal;let nodes=0,rules=0;
     const inspect=(n,depth,inFree)=>{
       const where=`${s.id}/${n?.id??n?.type}`;
       if(!n||typeof n!=='object'||!fields[n.type])fail(where,'unknown node type');
       if(depth>8)fail(where,'nest at most 8 levels');
       if(Object.keys(n).some(k=>!common.includes(k)&&!fields[n.type].includes(k)))fail(where,'unsupported node field; never silently drop content');
       if(++nodes>80)fail(s.id,'use at most 80 nodes per slide');
-      const needsId=['box','text','image','icon'].includes(n.type)||n.group;
+      const needsId=['box','text','image','icon','badge','table'].includes(n.type)||n.group;
+      if(n.type==='metric')fail(where,'a metric needs an id, a value and a label, and nothing else');
+      if(n.type==='rule'&&n.id===undefined)claim(`${s.id}_rule${++rules}`,where);
+      if(n.type==='table') {
+        const r=n.rows;
+        if(!Array.isArray(r)||r.length<2||r.length>12||!Array.isArray(r[0])||r[0].length<2||r[0].length>6||r.some(row=>!Array.isArray(row)||row.length!==r[0].length||row.some(c=>typeof c!=='string')))fail(where,'a table has 2–12 rows of 2–6 text cells each, the first row being the header');
+        if(n.widths!==undefined&&(!Array.isArray(n.widths)||n.widths.length!==r[0].length||n.widths.some(w=>!Number.isFinite(w)||w<=0||w>10)))fail(where,'widths gives one relative width per column');
+      }
+      if(n.type==='ring') {
+        if(!Array.isArray(n.children)||n.children.length<3||n.children.length>8)fail(where,'a ring places 3–8 children around a circle');
+        if(n.hub!==undefined&&(!n.hub||typeof n.hub!=='object'||Array.isArray(n.hub)))fail(where,'hub is the one node at the center of the ring');
+      }
+      if(n.type==='badge') {
+        if(!str(n.text)||n.text.trim().length>3)fail(where,'a badge holds one to three characters');
+        if(dir&&n.fill!==undefined&&(n.fill===dir.focal||!allowedFills.includes(n.fill)))fail(where,`fill ${n.fill} is not in the deck direction (${allowedFills.join(', ')})`);
+      }
       if(needsId||n.id!==undefined){claim(n.id,where);local.add(n.id);}
       if(n.group!==undefined&&typeof n.group!=='boolean')fail(where,'group must be boolean');
       if(n.weight!==undefined&&(!Number.isFinite(n.weight)||n.weight<=0||n.weight>10))fail(where,'weight must be above 0 and at most 10; weights are relative shares, so 9.5 and 0.5 give 95% and 5%');
@@ -118,6 +164,8 @@ export function validateComposition(comp,contract,{collect}={}) {
         if(n.text!==undefined&&n.children!==undefined)fail(where,'a box holds text or children, not both');
         if(n.text!==undefined&&!str(n.text))fail(where,'provide box text');
         if(!Object.hasOwn(shapeKinds,n.shape??'rect'))fail(where,`shape must be one of ${Object.keys(shapeKinds).join('|')}`);
+        if(n.style!==undefined&&!boxStyles.includes(n.style))fail(where,`style must be one of ${boxStyles.join('|')}`);
+        if(n.style==='bar'){if((n.shape??'rect')!=='rect')fail(where,'a bar card is a rectangle; remove its shape');claim(`${n.id}_bar`,where);if(n.children===undefined){claim(`${n.id}_group`,where);claim(`${n.id}_text`,where);}}
         if(n.children!==undefined){if(n.align==='stretch')fail(where,'a box with children aligns its content start|center|end');claim(`${n.id}_group`,where);}
         if(n.shape==='chevron')facts.chevrons++;
         // A heading and a body are a card, not a group: membership needs two drawn members, or three or more parts.
@@ -134,12 +182,12 @@ export function validateComposition(comp,contract,{collect}={}) {
       if(['box','text'].includes(n.type))leaves.add(n.id);
       if(n.type==='text'&&n.textRole==='metric')facts.metric=true;
       // Two or more comparable siblings: side by side they are a pair, in a single column they are layers.
-      if(['stack','grid','free'].includes(n.type)&&Array.isArray(n.children)&&n.children.filter(k=>['box','text','stack','grid'].includes(k?.type)).length>1){const column=n.type==='stack'&&n.direction==='column'||n.type==='grid'&&n.columns===1;if(n.children.filter(k=>['box','stack','grid'].includes(k?.type)).length>1)facts.peers=true;if(column){if(n.children.filter(k=>k?.type==='box').length>1)facts.layers=true;}else facts.pair=true;}
+      if(['stack','grid','free','ring'].includes(n.type)&&Array.isArray(n.children)&&n.children.filter(k=>['box','text','stack','grid'].includes(k?.type)).length>1){const column=n.type==='stack'&&n.direction==='column'||n.type==='grid'&&n.columns===1;if(n.children.filter(k=>['box','stack','grid'].includes(k?.type)).length>1)facts.peers=true;if(column){if(n.children.filter(k=>k?.type==='box').length>1)facts.layers=true;}else facts.pair=true;}
       if(n.type==='icon'&&(!str(n.icon)||n.icon.length>80||!/^[\w.-]+$/.test(n.icon)))fail(where,'icon needs a stable icon ID from the brand icon search');
       if(n.type==='icon'&&n.style!==undefined&&!iconStyles.includes(n.style))fail(where,`style must be one of ${iconStyles.join('|')}`);
       if(n.type==='image'){if(!str(n.src)||!str(n.alt))fail(where,'image needs src and alt');if(!['contain','cover'].includes(n.fit??'contain'))fail(where,'fit must be contain|cover');}
       const kids=n.children;
-      if(['stack','grid','free'].includes(n.type)||kids!==undefined) {
+      if(['stack','grid','free','ring'].includes(n.type)||kids!==undefined) {
         if(!Array.isArray(kids)||!kids.length||kids.length>12)fail(where,'provide 1–12 children');
       }
     };
@@ -147,6 +195,7 @@ export function validateComposition(comp,contract,{collect}={}) {
     const walk=(n,depth,inFree)=>{
       attempt(()=>inspect(n,depth,inFree));
       if(n&&typeof n==='object'&&Array.isArray(n.children)&&depth<=8)for(const k of n.children.slice(0,12))walk(k,depth+1,n.type==='free');
+      if(n&&typeof n==='object'&&n.type==='ring'&&n.hub&&typeof n.hub==='object'&&depth<=8)walk(n.hub,depth+1,false);
     };
     if(s.layout!==undefined) {
       // A template layout slide (cover, section break, closing) fills that layout's placeholders and draws nothing else.
@@ -154,6 +203,7 @@ export function validateComposition(comp,contract,{collect}={}) {
       if(s.canvas!==undefined||s.connect!==undefined||s.caveat!==undefined||s.source!==undefined)fail(s.id,'a slide with a template layout has no canvas, edges, caveat or source; put content on a standard slide');
       for(const key of ['subtitle','detail'])if(s[key]!==undefined){if(!str(s[key]))fail(s.id,`provide ${key} text or omit it`);claim(`${s.id}_${key}`,s.id);}
       if(s.detail!==undefined&&s.subtitle===undefined)fail(s.id,'detail needs a subtitle before it');
+      if(s.picture!==undefined){if(!s.picture||typeof s.picture!=='object'||Array.isArray(s.picture)||!str(s.picture.src)||!str(s.picture.alt)||Object.keys(s.picture).some(k=>!['src','alt'].includes(k)))fail(s.id,'picture is {src,alt}: the image for the layout\'s picture slot and what it shows');claim(`${s.id}_picture`,s.id);}
       if(brief!==undefined&&(!brief||typeof brief!=='object'||Object.keys(brief).some(k=>k!=='rhythm')||!rhythms.includes(brief.rhythm)))fail(s.id,'a template layout slide takes only brief.rhythm (anchor|dense|breathing)');
       summary.push({id:s.id,nodes:0,fills:[],edges:0,layout:s.layout});continue;
     }
@@ -182,7 +232,8 @@ export function validateComposition(comp,contract,{collect}={}) {
     if(s.connect!==undefined&&(!Array.isArray(s.connect)||s.connect.length>40))fail(s.id,'connect must be a list of at most 40 edges');
     for(const c of s.connect??[])attempt(()=>{
       if(!c||typeof c!=='object')fail(s.id,'each edge must be an object');
-      if(Object.keys(c).some(k=>!['id','from','to','label','arrow','color'].includes(k)))fail(s.id,'unsupported edge field');
+      if(Object.keys(c).some(k=>!['id','from','to','label','arrow','color','route'].includes(k)))fail(s.id,'unsupported edge field');
+      if(c.route!==undefined&&!['straight','elbow','curve'].includes(c.route))fail(`${s.id}/${c.id}`,'route is straight, elbow or curve');
       claim(c.id,`${s.id}/edge`);
       if(!local.has(c.from)||!local.has(c.to)||c.from===c.to)fail(`${s.id}/${c.id}`,'edges connect two distinct nodes on this slide');
       if(c.label!==undefined){if(!str(c.label))fail(`${s.id}/${c.id}`,'provide an edge label or omit it');claim(`${c.id}_label`,`${s.id}/${c.id}`);}
@@ -234,11 +285,12 @@ export async function composeSizes(contract,{fonts}={}) {
   const body=contract.medium.delivery==='live'?'body':'bodyReference';
   return `Sizes for ${contract.identity.id}, in points.
 Content area ${round(sl.contentBox.width)} wide by ${round(sl.contentBox.height)} high. The title holds ${lines} line${lines>1?'s':''} at ${t.title.size}pt across ${round(sl.titleBox.width)}.
-Gaps: tight ${inset/2}, normal ${inset}, wide ${sp.column??28}. A box pads its content by ${inset} on each side. An icon is ${sl.icon?.size??48} square.
+Gaps: tight ${inset/2}, normal ${inset}, wide ${sp.column??28}. A box pads its content by ${inset} on each side. An icon is ${sl.icon?.size??48} square, a badge ${Math.round((sl.icon?.size??48)*.6)}, and a rule takes ${inset/2}.
 One line of text needs: ${Object.keys(t).filter(k=>k!=='title').map(k=>`${k} ${line(k)}`).join(', ')}. Text with no textRole uses ${body}, the size for a deck delivered ${contract.medium.delivery==='live'?'live':'for reading'}. Do not step below it to make content fit.`;
 }
 export async function compileComposition(comp,contract,{fonts}={}) {
   // Structure and fit are reported together: slides that break a rule are skipped, the rest are still laid out.
+  comp=expanded(comp);
   const problems=[],summary=validateComposition(comp,contract,{collect:problems});
   const d=contract.design,sl=d.slides,roles=sl.typography,colors=d.colors,sp=sl.spacing??{},inset=sp.inset??16;
   const gapSize={none:0,tight:inset/2,normal:inset,wide:sp.column??28};
@@ -248,23 +300,31 @@ export async function compileComposition(comp,contract,{fonts}={}) {
 
   const style=n=>roles[n.textRole??bodyRole];
   // Text and icons keep their own size; everything else shares the space that is left.
-  const flexible=n=>n.type!=='text'&&n.type!=='icon';
+  const badgeSize=Math.round(iconSize*.6),ruleSpace=inset/2,barWidth=6;
+  const flexible=n=>!['text','icon','badge','rule','table'].includes(n.type);
+  // A table is set in the brand's table style; each row is as tall as its tallest cell.
+  const tableStyle={size:sl.table?.fontPt??roles.bodyReference?.size??18,pad:sl.table?.paddingPt??8};
+  const tableWidths=(n,width)=>{const w=n.widths??n.rows[0].map(()=>1),total=w.reduce((a,v)=>a+v,0);return w.map(v=>width*v/total);};
+  const tableRows=(n,width)=>{const widths=tableWidths(n,width);return n.rows.map((row,r)=>Math.max(...row.map((cell,c)=>measure.height(cell||' ',{size:tableStyle.size,bold:r===0},Math.max(8,widths[c]-tableStyle.pad*2+7.2))-7.2+tableStyle.pad*2)));};
   const gapOf=n=>gapSize[n.gap??'normal'];
   // In a row an icon takes its own width, as text takes its own height in a column; a weight on it opts back into sharing.
   const rowWidths=(n,width)=>{
-    const kids=n.children,own=k=>k.type==='icon'&&k.weight===undefined,total=kids.reduce((a,k)=>a+(own(k)?0:k.weight??1),0);
+    const kids=n.children,fixed=k=>k.weight!==undefined?0:k.type==='icon'?iconSize:k.type==='badge'?badgeSize:k.type==='rule'?ruleSpace:0,own=k=>fixed(k)>0,total=kids.reduce((a,k)=>a+(own(k)?0:k.weight??1),0);
     if(!total){const each=(width-gapOf(n)*(kids.length-1))/kids.length;return kids.map(()=>each);}
-    const usable=width-gapOf(n)*(kids.length-1)-kids.filter(own).length*iconSize;
+    const usable=width-gapOf(n)*(kids.length-1)-kids.reduce((a,k)=>a+fixed(k),0);
     // Too narrow for the icons themselves: share as before, so the icon's own check reports the width it lacks.
     if(!(usable>0)){const all=kids.reduce((a,k)=>a+(k.weight??1),0),span=width-gapOf(n)*(kids.length-1);return kids.map(k=>span*(k.weight??1)/all);}
-    return kids.map(k=>own(k)?iconSize:usable*(k.weight??1)/total);
+    return kids.map(k=>own(k)?fixed(k):usable*(k.weight??1)/total);
   };
   const need=(n,width)=>{
     if(!(width>7.2))return Infinity; // narrower than the text insets: nothing can be laid out
     if(n.type==='text')return measure.height(n.text,style(n),width);
-    if(n.type==='spacer'||n.type==='free')return 0;
+    if(n.type==='spacer'||n.type==='free'||n.type==='ring')return 0;
     if(n.type==='image')return inset*4;
+    if(n.type==='table')return tableRows(n,width).reduce((a,h)=>a+h,0);
     if(n.type==='icon')return iconSize;
+    if(n.type==='badge')return badgeSize;
+    if(n.type==='rule')return ruleSpace;
     if(n.type==='box') {
       if(n.text!==undefined) {
         // Rectangles pad their text by the brand inset; other presets already confine text to an inner area.
@@ -295,7 +355,7 @@ export async function compileComposition(comp,contract,{fonts}={}) {
     // A slide that breaks a rule is not laid out, but its title can still be measured.
     if(summary.bad.has(s?.id)){if(s&&!s.layout&&str(s.title)&&str(s.id))titleFit(s,problems);continue;}
     // Every part of a slide that cannot fit is reported, not only the first.
-    const elements=[],rects=new Map(),labels=[],focalId=s.brief?.focal,tight=[],sizes={body:0,reading:[]};
+    const elements=[],rects=new Map(),rings=new Map(),labels=[],focalId=s.brief?.focal,tight=[],sizes={body:0,reading:[]};let ruled=0;
     // In a live deck, text set in the reading size has been shrunk to fit. Count it against text left at the live size.
     const sized=n=>{if(bodyRole!=='body'||!roles.bodyReference||!(roles.bodyReference.size<roles.body.size))return;const role=n.textRole??bodyRole;if(role==='body')sizes.body++;else if(role==='bodyReference')sizes.reading.push(n.id);};
     // Text keeps its role color where that is readable on the surface behind it; otherwise it takes the brand's on-color.
@@ -332,7 +392,7 @@ export async function compileComposition(comp,contract,{fonts}={}) {
       // A spacer may be any size, and an icon reports the width it lacks rather than a general lack of room.
       if(n.type==='spacer')return;
       if(n.type==='icon'&&rect.width<iconSize-.5)fail(`${s.id}/${n.id}`,`needs ${round(iconSize)}pt of width for an icon but has ${round(Math.max(0,rect.width))}pt`);
-      if(!(rect.width>inset)||!(rect.height>0))fail(`${s.id}/${n.id??n.name??n.type}`,'has no usable room; use fewer siblings, less nesting or larger weights');
+      if(n.type!=='rule'&&n.type!=='badge'&&(!(rect.width>inset)||!(rect.height>0)))fail(`${s.id}/${n.id??n.name??n.type}`,'has no usable room; use fewer siblings, less nesting or larger weights');
       // Leaves and column stacks own the fit check, so the error names the node to fix.
       const checks=!n.children||n.type==='stack'&&n.direction==='column';
       if(checks){const required=need(n,rect.width);if(required>rect.height+.5){short(n,rect,required);return;}}
@@ -352,17 +412,53 @@ export async function compileComposition(comp,contract,{fonts}={}) {
         rects.set(n.id,slot);structure.icons.push({slide:s.id,id:n.id,icon:n.icon,order:elements.length,...box(slot),...(iconStyle?{style:iconStyle}:{}),...(tint?{color:tint}:{}),...(glyph?{glyph}:{}),...(iconStyle&&iconStyle!=='solid'?{surface}:{})});own?.push(n.id);return;
       }
       if(n.type==='image'){put({id:n.id,type:'image',...box(rect),src:n.src,alt:n.alt,fit:n.fit??'contain'},own);return;}
+      if(n.type==='table') {
+        // A table stays out of any group: a grouped table does not survive every import.
+        const heights=tableRows(n,rect.width).map(round),widths=tableWidths(n,rect.width).map(round),t=sl.table??{};
+        widths[widths.length-1]=round(rect.width-widths.slice(0,-1).reduce((a,v)=>a+v,0));
+        put({id:n.id,type:'table',x:round(rect.x),y:round(rect.y),width:round(rect.width),height:round(heights.reduce((a,v)=>a+v,0)),rows:n.rows,fontSize:tableStyle.size,padding:tableStyle.pad,columnWidths:widths,rowHeights:heights,
+          color:colors.inkDeep,headerFill:colors[t.headerFillRole]??colors.canvasSecondary,headerColor:colors[t.headerTextRole]??colors.inkDeep,bodyFill:colors.canvasPrimary??'#FFFFFF'});return;
+      }
+      if(n.type==='rule') {
+        // A thin line across a column, or down a row, centred in the little room it takes.
+        const across=rect.width>=rect.height,id=n.id??`${s.id}_rule${++ruled}`;
+        put({id,type:'line',x:round(across?rect.x:rect.x+rect.width/2),y:round(across?rect.y+rect.height/2:rect.y),width:round(across?rect.width:1),height:round(across?1:rect.height),color:colors.inkSecondary??colors.inkDeep,weight:1,arrow:false,flipH:false,flipV:false},own);return;
+      }
+      if(n.type==='badge') {
+        if(rect.width<badgeSize-.5)fail(`${s.id}/${n.id}`,`needs ${badgeSize}pt of width for a badge but has ${round(Math.max(0,rect.width))}pt`);
+        const side=Math.min(rect.width,rect.height,badgeSize),fillColor=colors[n.fill??'inkDeep'],st={...roles.caption,bold:true};
+        put({id:n.id,type:'shape',shape:'ellipse',x:round(rect.x+(rect.width-side)/2),y:round(rect.y+(rect.height-side)/2),width:round(side),height:round(side),fill:fillColor,text:n.text.trim(),fontSize:st.size,bold:true,color:ink(colors.inkDeep,fillColor,st),align:'center'},own);return;
+      }
       if(n.type==='box') {
-        const base={id:n.id,type:'shape',...box(rect),shape:n.shape??'rect',fill:colors[fillRole(n)]};
-        if(n.text!==undefined){sized(n);put({...base,text:n.text,...textProps(n,base.fill)},own);return;}
-        const inner=[];put(base,inner);
+        // Solid is a filled shape. Outline is a line in the box's color on whatever is behind it. Bar is a neutral card with a strip of the color down its left edge.
+        const look=n.style??'solid',point=dir&&n.id===focalId,accent=point?dir.focal:n.fill??(colors.inkSecondary?'inkSecondary':'inkDeep');
+        const base=look==='outline'?{id:n.id,type:'shape',...box(rect),shape:n.shape??'rect',stroke:colors[accent],strokeWeight:point?3:1.5}
+          :{id:n.id,type:'shape',...box(rect),shape:n.shape??'rect',fill:colors[look==='bar'?dir?.neutral??'canvasSecondary':fillRole(n)]};
+        const behind=base.fill??surface,strip=look==='bar'?{id:`${n.id}_bar`,type:'shape',shape:'rect',x:round(rect.x),y:round(rect.y),width:barWidth,height:round(rect.height),fill:colors[accent]}:null;
+        if(n.text!==undefined) {
+          sized(n);
+          if(!strip){put({...base,text:n.text,...textProps(n,behind)},own);return;}
+          // The words sit in their own box, clear of the strip, so every emitter insets them the same way.
+          const members=[];put(base,members);put(strip,members);
+          put({id:`${n.id}_text`,type:'text',x:round(rect.x+inset),y:round(rect.y),width:round(rect.width-inset*2),height:round(rect.height),text:n.text,...textProps(n,behind)},members);
+          structure.groups.push({slide:s.id,id:`${n.id}_group`,members});own?.push(...members);return;
+        }
+        const inner=[];put(base,inner);if(strip)put(strip,inner);
         const [,,,fx,fy]=shapeKinds[base.shape],area=fx===1&&fy===1?{x:rect.x+inset,y:rect.y+inset,width:rect.width-inset*2,height:rect.height-inset*2}:{x:rect.x+rect.width*(1-fx)/2,y:rect.y+rect.height*(1-fy)/2,width:rect.width*fx,height:rect.height*fy};
-        if(n.children)place({type:'stack',direction:'column',gap:n.gap,align:n.align,children:n.children,name:n.id},area,inner,base.fill);
+        if(n.children)place({type:'stack',direction:'column',gap:n.gap,align:n.align,children:n.children,name:n.id},area,inner,behind);
         if(inner.length>1)structure.groups.push({slide:s.id,id:`${n.id}_group`,members:inner});
         own?.push(...inner);return;
       }
       const g=gapOf(n);
       if(n.type==='free'){for(const k of n.children)place(k,{x:rect.x+k.at.x*rect.width,y:rect.y+k.at.y*rect.height,width:k.at.width*rect.width,height:k.at.height*rect.height},own,surface);}
+      else if(n.type==='ring') {
+        // Children sit at equal steps around an ellipse, the first at the top, going clockwise; a hub sits in the middle.
+        const count=n.children.length,share=count<=4?.3:count<=6?.25:.21,w=rect.width*share,h=rect.height*(count<=4?.3:.26),rx=(rect.width-w)/2,ry=(rect.height-h)/2,cx=rect.x+rect.width/2,cy=rect.y+rect.height/2;
+        n.children.forEach((k,i)=>{const angle=-Math.PI/2+i*2*Math.PI/count;place(k,{x:cx+rx*Math.cos(angle)-w/2,y:cy+ry*Math.sin(angle)-h/2,width:w,height:h},own,surface);});
+        // An edge between two children bends around the outside of the ring, so each child remembers the center.
+        const center={x:cx,y:cy},remember=k=>{if(k.id)rings.set(k.id,center);for(const c of k.children??[])remember(c);};n.children.forEach(remember);
+        if(n.hub)place(n.hub,{x:cx-rect.width*.16,y:cy-rect.height*.17,width:rect.width*.32,height:rect.height*.34},own,surface);
+      }
       else if(n.type==='grid') {
         const rows=Math.ceil(n.children.length/n.columns),w=(rect.width-g*(n.columns-1))/n.columns,h=(rect.height-g*(rows-1))/rows;
         n.children.forEach((k,i)=>place(k,{x:rect.x+(i%n.columns)*(w+g),y:rect.y+Math.floor(i/n.columns)*(h+g),width:w,height:h},own,surface));
@@ -370,7 +466,7 @@ export async function compileComposition(comp,contract,{fonts}={}) {
       else if(n.direction==='row') {
         const widths=rowWidths(n,rect.width);let x=rect.x;
         n.children.forEach((k,i)=>{
-          if(!(widths[i]>inset)&&k.type!=='spacer'&&k.type!=='icon')fail(`${s.id}/${k.id??k.type}`,'has no usable room; use fewer siblings, less nesting or larger weights');
+          if(!(widths[i]>inset)&&!['spacer','icon','badge','rule'].includes(k.type))fail(`${s.id}/${k.id??k.type}`,'has no usable room; use fewer siblings, less nesting or larger weights');
           const min=need(k,widths[i]);
           if(min>rect.height+.5){short(k,{width:widths[i],height:rect.height},min);x+=widths[i]+g;return;}
           // Stretch fills the row. Any other alignment gives a child the height its content needs; a child with nothing to measure still fills.
@@ -427,8 +523,20 @@ export async function compileComposition(comp,contract,{fonts}={}) {
       // The native emitter writes these into the layout's subtitle placeholders; the geometry here serves other emitters.
       const placeholders=[],body=roles[bodyRole];let y=sl.contentBox.y;
       for(const key of ['subtitle','detail'])if(s[key]!==undefined){const height=measure.height(s[key],body,sl.contentBox.width);put({id:`${s.id}_${key}`,type:'text',x:sl.contentBox.x,y:round(y),width:sl.contentBox.width,height:round(height),text:s[key],fontSize:body.size,bold:body.bold,color:colors[body.colorRole]});placeholders.push(`${s.id}_${key}`);y+=height+inset;}
-      structure.layouts.push({slide:s.id,layout:s.layout,placeholders});
+      // A picture goes into the layout's own picture slot, which gives it its place, shape and crop.
+      const pictures=[];if(s.picture){put({id:`${s.id}_picture`,type:'image',x:0,y:0,width:sl.canvas.width,height:sl.canvas.height,src:s.picture.src,alt:s.picture.alt,fit:'cover'});pictures.push(`${s.id}_picture`);}
+      structure.layouts.push({slide:s.id,layout:s.layout,placeholders,...(pictures.length?{pictures}:{})});
     } else if(area.height>inset*2)place(s.canvas,area,null);
+    if(!s.layout) {
+      // Words over a picture need something solid behind them: contrast against a photograph cannot be checked, and
+      // a see-through scrim changes a brand color. A filled box painted between the picture and the words does it.
+      const hits=(a,b)=>a.x<b.x+b.width-.5&&b.x<a.x+a.width-.5&&a.y<b.y+b.height-.5&&b.y<a.y+a.height-.5,inside=(a,b)=>a.x>=b.x-.5&&a.y>=b.y-.5&&a.x+a.width<=b.x+b.width+.5&&a.y+a.height<=b.y+b.height+.5;
+      elements.forEach((e,i)=>{
+        if(!(e.type==='text'&&e.role!=='title'||e.type==='shape'&&e.text&&!e.fill))return;
+        const bare=elements.slice(0,i).some((p,at)=>p.type==='image'&&hits(e,p)&&!elements.slice(at+1,i).some(b=>b.type==='shape'&&b.fill&&inside(e,b)));
+        if(bare)tight.push(`${s.id}/${e.id}: sits over an image with nothing solid behind it. Put the words in a filled box, so they stay readable whatever the picture shows`);
+      });
+    }
     if(tight.length){problems.push(...tight);continue;}
     // A slide presented live needs something for the presenter to say.
     if(bodyRole==='body'&&!s.layout&&!(typeof s.notes==='string'&&s.notes.trim()))structure.unspoken.push(s.id);
@@ -444,10 +552,24 @@ export async function compileComposition(comp,contract,{fonts}={}) {
 
     for(const c of s.connect??[]) {
       const a=rects.get(c.from),b=rects.get(c.to),ac={x:a.x+a.width/2,y:a.y+a.height/2},bc={x:b.x+b.width/2,y:b.y+b.height/2};
-      const horizontal=Math.abs(bc.x-ac.x)>=Math.abs(bc.y-ac.y);
-      const p1=horizontal?{x:bc.x>ac.x?a.x+a.width:a.x,y:ac.y}:{x:ac.x,y:bc.y>ac.y?a.y+a.height:a.y};
-      const p2=horizontal?{x:bc.x>ac.x?b.x:b.x+b.width,y:bc.y}:{x:bc.x,y:bc.y>ac.y?b.y:b.y+b.height};
-      put({id:c.id,type:'line',x:round(Math.min(p1.x,p2.x)),y:round(Math.min(p1.y,p2.y)),width:round(Math.max(1,Math.abs(p2.x-p1.x))),height:round(Math.max(1,Math.abs(p2.y-p1.y))),color:colors[c.color??(dir?(Object.hasOwn(colors,'inkSecondary')?'inkSecondary':'inkDeep'):'headingPrimary')],weight:2,arrow:c.arrow??true,flipH:p2.x<p1.x,flipV:p2.y<p1.y});
+      // An edge runs the way the layout does: across between parts of a row, down between parts of a column. A parent
+      // above its children therefore leads off downward even to the child far to one side. Where the layout does not
+      // say, it runs along the longer distance.
+      let horizontal=axisBetween(s.canvas,c.from,c.to)??Math.abs(bc.x-ac.x)>=Math.abs(bc.y-ac.y),turns;
+      const bent=c.route&&c.route!=='straight',center=rings.get(c.from);
+      let p1=horizontal?{x:bc.x>ac.x?a.x+a.width:a.x,y:ac.y}:{x:ac.x,y:bc.y>ac.y?a.y+a.height:a.y};
+      let p2=horizontal?{x:bc.x>ac.x?b.x:b.x+b.width,y:bc.y}:{x:bc.x,y:bc.y>ac.y?b.y:b.y+b.height};
+      if(bent&&center&&center===rings.get(c.to)) {
+        // Around a ring a bent edge turns once: it leaves one node sideways and meets the next end-on, or the reverse,
+        // whichever puts the corner further from the center. Nodes too nearly level for a corner keep the usual route.
+        const dx=Math.abs(bc.x-ac.x),dy=Math.abs(bc.y-ac.y),far=p=>Math.hypot(p.x-center.x,p.y-center.y);
+        const across=dx>a.width/2&&dy>b.height/2?{x:bc.x,y:ac.y}:null,down=dy>a.height/2&&dx>b.width/2?{x:ac.x,y:bc.y}:null;
+        const corner=across&&down?(far(across)>=far(down)?across:down):across??down;
+        if(corner){turns=1;horizontal=corner===across;
+          p1=horizontal?{x:bc.x>ac.x?a.x+a.width:a.x,y:ac.y}:{x:ac.x,y:bc.y>ac.y?a.y+a.height:a.y};
+          p2=horizontal?{x:bc.x,y:bc.y>ac.y?b.y:b.y+b.height}:{x:bc.x>ac.x?b.x:b.x+b.width,y:bc.y};}
+      }
+      put({id:c.id,type:'line',x:round(Math.min(p1.x,p2.x)),y:round(Math.min(p1.y,p2.y)),width:round(Math.max(1,Math.abs(p2.x-p1.x))),height:round(Math.max(1,Math.abs(p2.y-p1.y))),color:colors[c.color??(dir?(Object.hasOwn(colors,'inkSecondary')?'inkSecondary':'inkDeep'):'headingPrimary')],weight:2,arrow:c.arrow??true,flipH:p2.x<p1.x,flipV:p2.y<p1.y,...(bent&&Math.abs(p2.x-p1.x)>1&&Math.abs(p2.y-p1.y)>1?{route:c.route,lead:horizontal?'horizontal':'vertical',...(turns?{turns}:{})}:{})});
       const record={slide:s.id,id:c.id,from:c.from,to:c.to};
       if(c.label) {
         const st=roles.caption,width=measure.width(c.label,st)+1,height=measure.height(c.label,st,width),mid={x:(p1.x+p2.x)/2,y:(p1.y+p2.y)/2},cb=sl.contentBox;

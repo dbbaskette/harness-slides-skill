@@ -22,6 +22,8 @@ export async function checkIcons(structure,brand) {
     const entry=index.entries.find(e=>e.id===i.icon);
     if(!entry)wrong.push(`${i.id}: unknown icon ${i.icon}; search the brand icon library for a current ID`);
     else if(!entry.native||!(entry.bounds?.[2]>0)||!(entry.bounds?.[3]>0))wrong.push(`${i.id}: icon ${i.icon} is a picture, not native geometry; choose another`);
+    // Every library icon is a disc and a drawing; an entry that lists one shape would be copied as an empty disc.
+    else if(Array.isArray(entry.shapeIds)&&entry.shapeIds.length<2)wrong.push(`${i.id}: icon ${i.icon} has no drawing in the library index, only its disc; choose another`);
   }
   if(wrong.length)throw new Error(wrong.join('\n'));
   return library;
@@ -36,12 +38,14 @@ export async function emitNativePptx({scene,structure={groups:[],connectors:[]},
   for(const s of scene.slides) {
     const elements=[];
     for(const e of s.elements) {
-      if(e.type==='table'||e.type==='chart')throw new Error(`${e.id}: the native emitter does not write ${e.type} objects yet; use pptx render`);
+      if(e.type==='chart')throw new Error(`${e.id}: the native emitter does not write chart objects yet; use pptx render`);
       if(e.href)throw new Error(`${e.id}: the native emitter does not write hyperlinks yet; use pptx render`);
       const out={...e};
       if(e.type==='text'||e.type==='shape'&&e.text!==undefined){out.fontSize=e.fontSize??(e.role==='title'?theme.titleSize:theme.bodySize);out.color=hex(e.color??'text');}
       if(e.fill)out.fill=hex(e.fill);
+      if(e.stroke)out.stroke=hex(e.stroke);
       if(e.type==='line')out.color=hex(e.color??'accent');
+      if(e.type==='table'){out.color=hex(e.color??'text');out.headerColor=hex(e.headerColor??e.color??'text');out.headerFill=hex(e.headerFill??'muted');out.bodyFill=hex(e.bodyFill??'background');out.fontSize=e.fontSize??theme.bodySize;out.ruleColor=hex('muted');}
       if(e.type==='image') {
         if(/^https?:/.test(e.src))throw new Error('Download authorized images to the workspace before PPTX rendering; no remote fetch during build');
         const path=resolve(base,e.src),bytes=await readFile(path);
@@ -56,7 +60,7 @@ export async function emitNativePptx({scene,structure={groups:[],connectors:[]},
     // Each order was recorded against the scene's own elements, so earlier insertions shift later ones by one.
     for(const [n,icon] of (structure.icons??[]).filter(i=>i.slide===s.id).sort((a,b)=>a.order-b.order).entries()){const {slide:_,order,...rest}=icon;elements.splice(Math.min(order+n,elements.length),0,{type:'icon',...rest});}
     const chosen=(structure.layouts??[]).find(l=>l.slide===s.id);
-    slides.push({id:s.id,...(chosen?{layout:chosen.layout,placeholders:chosen.placeholders}:{}),elements,...(s.notes?{notes:s.notes}:{}),groups:structure.groups.filter(g=>g.slide===s.id).map(({id,members})=>({id,members})),connectors:structure.connectors.filter(c=>c.slide===s.id).map(({id,from,to})=>({id,from,to}))});
+    slides.push({id:s.id,...(chosen?{layout:chosen.layout,placeholders:chosen.placeholders,...(chosen.pictures?{pictures:chosen.pictures}:{})}:{}),elements,...(s.notes?{notes:s.notes}:{}),groups:structure.groups.filter(g=>g.slide===s.id).map(({id,members})=>({id,members})),connectors:structure.connectors.filter(c=>c.slide===s.id).map(({id,from,to})=>({id,from,to}))});
   }
   const iconLibrary=await checkIcons(structure,brand);
   const plan={layoutPart:native.layoutPart,...(iconLibrary?{iconLibrary}:{}),font:brand.design.fontFamily,shapeInset:sl.spacing?.inset??16,slides};
@@ -81,7 +85,7 @@ export async function templateLayouts(brand) {
   try{({stdout}=await exec('python3',['-B',fileURLToPath(new URL('./pptx-native.py',import.meta.url)),'layouts',resolve(native.path),native.layoutPart],{timeout:60000,maxBuffer:4*1024*1024}));}
   catch(error){throw new Error(error.code==='ENOENT'?'Python 3.9+ is required. Run harness-slides doctor.':error.stderr?.trim()||error.message);}
   const found=JSON.parse(stdout);
-  return {default:found.default,layouts:found.layouts.map(l=>({name:l.name,title:Boolean(l.title),subtitles:l.subtitles.length,pictures:l.pictures,canvas:l.default,...(l.subtitled?{subtitled:true}:{})})),use:'A content slide that sets a subtitle moves to the layout marked subtitled, and keeps its canvas. A slide on the default layout has a canvas. A slide that names another layout fills its title and up to that many subtitle lines, and has no canvas. A layout with pictures reserves an area for a photo that compositions cannot fill yet, so it renders as an empty panel; prefer layouts with pictures: 0. A layout with title: false shows no title.'};
+  return {default:found.default,layouts:found.layouts.map(l=>({name:l.name,title:Boolean(l.title),subtitles:l.subtitles.length,pictures:l.pictures,canvas:l.default,...(l.subtitled?{subtitled:true}:{})})),use:'A content slide that sets a subtitle moves to the layout marked subtitled, and keeps its canvas. A slide on the default layout has a canvas. A slide that names another layout fills its title and up to that many subtitle lines, and has no canvas. A layout with pictures has a slot for a photo: give the slide picture:{src,alt} and it is cropped to fill the slot. Left unfilled the slot renders as an empty panel, so without a picture prefer layouts with pictures: 0. A layout with title: false shows no title.'};
 }
 
 // Catch a misspelled or overfilled template layout at compile, not at render.
@@ -95,6 +99,7 @@ export async function checkLayouts(structure,brand) {
     const match=layouts.find(l=>tidy(l.name)===tidy(w.layout));
     if(!match)wrong.push(`${w.slide}: the template has no layout named ${w.layout}. Available: ${layouts.map(l=>l.name).join(', ')}`);
     else if(w.placeholders.length>match.subtitles)wrong.push(`${w.slide}: layout ${match.name} has ${match.subtitles} subtitle placeholders; remove the extra text`);
+    else if((w.pictures?.length??0)>match.pictures)wrong.push(`${w.slide}: layout ${match.name} has no picture slot; remove the picture or choose a layout listed with pictures: 1`);
   }
   if(wrong.length)throw new Error(wrong.join('\n'));
 }

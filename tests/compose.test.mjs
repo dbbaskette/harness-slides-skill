@@ -455,3 +455,85 @@ test('a role color the direction has given a job does not leak onto ordinary tex
   const free={version:1,title:'D',slides:[{id:'slide_one',title:'T',sources:['s1'],canvas:{type:'text',id:'big_number',text:'42%',textRole:'metric'}}]};
   assert.equal(byId((await compileComposition(free,c)).scene,'big_number').color,'#0091DA');
 });
+
+test('a box can be drawn as an outline or as a card with a bar of its color',async()=>{
+  const c=brand(),dir={focal:'headingPrimary',neutral:'canvasSecondary',meanings:{accentAqua:'the product'}};
+  const slide=(children,brief)=>({version:1,title:'D',direction:dir,slides:[{id:'slide_one',title:'T',sources:['s1'],...(brief?{brief}:{}),canvas:{type:'stack',direction:'row',children}}]});
+  const {scene,structure}=await compileComposition(slide([{type:'box',id:'line_box',text:'Outlined',style:'outline'},{type:'box',id:'meaning_box',text:'Product',style:'outline',fill:'accentAqua'},{type:'box',id:'point_box',text:'The point',style:'outline'},{type:'box',id:'bar_box',text:'Barred',style:'bar',fill:'accentAqua'},{type:'box',id:'bar_card',style:'bar',children:[{type:'text',id:'bar_text',text:'Inside'}]}],{relation:'parallel',focal:'point_box'}),c),e=id=>byId(scene,id);
+  // An outline has a line and no fill; its text is read against what is behind it.
+  assert.deepEqual([e('line_box').fill,e('line_box').stroke,e('line_box').strokeWeight,e('line_box').color],[undefined,'#555555',1.5,'#202124']);
+  assert.equal(e('meaning_box').stroke,'#0091DA');assert.deepEqual([e('point_box').stroke,e('point_box').strokeWeight],['#2867B2',3]);
+  // A bar card stays neutral and carries its color in a strip, grouped with it.
+  assert.equal(e('bar_box').fill,'#F0F2F5');assert.deepEqual([e('bar_box_bar').fill,e('bar_box_bar').width,e('bar_box_bar').x,e('bar_box_bar').height],['#0091DA',6,e('bar_box').x,e('bar_box').height]);
+  assert.ok(structure.groups.some(g=>g.id==='bar_box_group'&&g.members.join()==='bar_box,bar_box_bar,bar_box_text'));assert.equal(e('bar_box').text,undefined);assert.deepEqual([e('bar_box_text').text,e('bar_box_text').x],['Barred',e('bar_box').x+18]);assert.ok(structure.groups.some(g=>g.id==='bar_card_group'&&g.members.join()==='bar_card,bar_card_bar,bar_text'));
+  const bad=node=>()=>validateComposition(slide([node,{type:'box',id:'other_box',text:'x'}]),c);
+  assert.throws(bad({type:'box',id:'odd_box',text:'x',style:'dotted'}),/style must be one of solid\|outline\|bar/);assert.throws(bad({type:'box',id:'round_bar',text:'x',style:'bar',shape:'ellipse'}),/a bar card is a rectangle/);
+  assert.throws(()=>validateComposition(slide([{type:'box',id:'bar_box',text:'x',style:'bar'},{type:'box',id:'bar_box_bar',text:'y'}]),c),/invalid or repeated ID: bar_box_bar/);
+});
+
+test('badges, rules and metrics are small fixed parts with their own size',async()=>{
+  const c=brand({icon:{size:50}}),col=children=>deck({type:'stack',direction:'column',children});
+  const {scene}=await compileComposition(deck({type:'stack',direction:'row',children:[{type:'badge',id:'step_one',text:'1'},{type:'box',id:'step_text',text:'First'},{type:'rule'},{type:'box',id:'more_text',text:'Second'}]}),c),e=id=>byId(scene,id);
+  // A badge is a disc 0.6 of the icon size; a rule is a hairline taking half an inset; the boxes share the rest.
+  assert.deepEqual([e('step_one').shape,e('step_one').width,e('step_one').height,e('step_one').text,e('step_one').bold,e('step_one').color],['ellipse',30,30,'1',true,'#FFFFFF']);
+  const rule=e('slide_one_rule1');assert.deepEqual([rule.type,rule.width,rule.arrow],['line',1,false]);assert.equal(rule.height,360);
+  assert.equal(e('step_text').width,e('more_text').width);assert.equal(round(e('step_text').width*2+30+9+18*3),864);
+  const stacked=(await compileComposition(col([{type:'text',id:'top_text',text:'Above'},{type:'rule',id:'named_rule'},{type:'text',id:'low_text',text:'Below'}]),c)).scene,across=byId(stacked,'named_rule');
+  assert.deepEqual([across.width,across.height],[864,1]);
+  // A metric is a number over its label, and can be the point of the slide.
+  const dir={focal:'headingPrimary',neutral:'canvasSecondary'},m={version:1,title:'D',direction:dir,slides:[{id:'slide_one',title:'T',sources:['s1'],brief:{relation:'quantity',focal:'big_share'},canvas:{type:'stack',direction:'row',children:[{type:'metric',id:'big_share',value:'42%',label:'of teams'},{type:'box',id:'side_box',text:'x'}]}}]};
+  const built=(await compileComposition(m,c)).scene;
+  assert.deepEqual([byId(built,'big_share').text,byId(built,'big_share').fontSize,byId(built,'big_share').color,byId(built,'big_share_label').text],['42%',64,'#2867B2','of teams']);
+  assert.ok(byId(built,'big_share_label').y>=byId(built,'big_share').y+byId(built,'big_share').height);
+  const bad=node=>()=>validateComposition(deck({type:'stack',direction:'row',children:[node,{type:'box',id:'other_box',text:'x'}]}),c);
+  assert.throws(bad({type:'badge',id:'long_badge',text:'1234'}),/a badge holds one to three characters/);assert.throws(bad({type:'metric',id:'half_metric',value:'42%'}),/a metric needs an id, a value and a label/);
+  assert.throws(()=>validateComposition({version:1,title:'D',direction:dir,slides:[{id:'slide_one',title:'T',sources:['s1'],canvas:{type:'badge',id:'loud_badge',text:'1',fill:'accentAqua'}}]},c),/fill accentAqua is not in the deck direction/);
+});
+
+test('edges can bend, a ring places its children around a circle, and a table is measured row by row',async()=>{
+  const c=brand({table:{headerFillRole:'headingPrimary',headerTextRole:'canvasPrimary',fontPt:18,paddingPt:10}});
+  // An edge between nodes that are not level keeps its ends on the facing sides and records how it turns.
+  const fan=deck({type:'stack',direction:'row',gap:'wide',children:[{type:'box',id:'hub_node',text:'Hub'},{type:'stack',direction:'column',children:[{type:'box',id:'top_node',text:'Top'},{type:'box',id:'low_node',text:'Low'}]}]});
+  fan.slides[0].connect=[{id:'edge_up',from:'hub_node',to:'top_node',route:'elbow'},{id:'edge_down',from:'hub_node',to:'low_node',route:'curve'},{id:'edge_flat',from:'top_node',to:'low_node',route:'elbow'}];
+  const {scene}=await compileComposition(fan,c),e=id=>byId(scene,id);
+  assert.deepEqual([e('edge_up').route,e('edge_up').lead,e('edge_down').route],['elbow','horizontal','curve']);assert.equal(e('edge_flat').route,undefined,'a level edge stays straight');
+  // A parent above a row of children leads off downward, even to the child far to one side.
+  const tree=deck({type:'stack',direction:'column',gap:'wide',children:[{type:'stack',direction:'row',children:[{type:'spacer'},{type:'box',id:'tree_root',text:'Root'},{type:'spacer'}]},{type:'stack',direction:'row',gap:'wide',children:[{type:'box',id:'tree_left',text:'Left'},{type:'box',id:'tree_mid',text:'Middle'},{type:'box',id:'tree_right',text:'Right'}]}]});
+  tree.slides[0].connect=[{id:'tree_e1',from:'tree_root',to:'tree_left',route:'elbow'},{id:'tree_e2',from:'tree_root',to:'tree_left'}];
+  const grown=(await compileComposition(tree,c)).scene,root=byId(grown,'tree_root'),left=byId(grown,'tree_left'),bentEdge=byId(grown,'tree_e1');
+  assert.equal(bentEdge.lead,'vertical');assert.equal(bentEdge.y,round(root.y+root.height));assert.equal(round(bentEdge.y+bentEdge.height),left.y);
+  assert.equal(byId(grown,'tree_e2').y,bentEdge.y,'a straight edge follows the layout too');assert.equal(byId(grown,'tree_e2').route,undefined);
+  assert.throws(()=>validateComposition((d=>{d.slides[0].connect[0].route='zigzag';return d;})(structuredClone(fan)),c),/route is straight, elbow or curve/);
+  // Four children of a ring sit at top, right, bottom and left, with the hub in the middle.
+  const ring=deck({type:'ring',hub:{type:'box',id:'ring_hub',text:'Core'},children:['north','east','south','west'].map(n=>({type:'box',id:`ring_${n}`,text:n}))});
+  const r=(await compileComposition(ring,c)).scene,mid=id=>({x:byId(r,id).x+byId(r,id).width/2,y:byId(r,id).y+byId(r,id).height/2}),hub=mid('ring_hub');
+  assert.ok(mid('ring_north').y<hub.y&&Math.abs(mid('ring_north').x-hub.x)<1);assert.ok(mid('ring_east').x>hub.x&&Math.abs(mid('ring_east').y-hub.y)<1);
+  assert.ok(mid('ring_south').y>hub.y);assert.ok(mid('ring_west').x<hub.x);
+  // A bent edge between two ring children turns once, with the corner outside the ring.
+  ring.slides[0].connect=[{id:'ring_e1',from:'ring_north',to:'ring_east',route:'curve'},{id:'ring_e2',from:'ring_east',to:'ring_south',route:'curve'},{id:'ring_e3',from:'ring_north',to:'ring_south',route:'curve'},{id:'ring_e4',from:'ring_hub',to:'ring_east',route:'elbow'}];
+  const turned=(await compileComposition(ring,c)).scene,line=id=>byId(turned,id),north=byId(turned,'ring_north'),east=byId(turned,'ring_east');
+  assert.deepEqual([line('ring_e1').turns,line('ring_e1').lead,line('ring_e2').turns,line('ring_e2').lead],[1,'horizontal',1,'vertical']);
+  assert.equal(line('ring_e1').x,round(north.x+north.width));assert.equal(round(line('ring_e1').y+line('ring_e1').height),east.y);
+  assert.equal(line('ring_e3').route,undefined,'nodes in line with each other join straight');assert.equal(line('ring_e4').turns,undefined,'the hub is not on the ring');
+  assert.throws(()=>validateComposition(deck({type:'ring',children:[{type:'box',id:'only_one',text:'x'},{type:'box',id:'only_two',text:'y'}]}),c),/a ring places 3–8 children/);
+  // A table takes the brand's table style; rows are as tall as their tallest cell, and it sits outside any group.
+  const table=deck({type:'box',id:'table_card',children:[{type:'text',id:'table_head',text:'Options'},{type:'table',id:'opt_table',widths:[2,1,1],rows:[['Option','Cost','Time'],['Buy','High','Four weeks'],['Build','Low','Six months, and longer if the team is new to it']]}]});
+  const built=await compileComposition(table,c),tb=byId(built.scene,'opt_table');
+  assert.deepEqual([tb.type,tb.fontSize,tb.padding,tb.headerFill,tb.headerColor],['table',18,10,'#2867B2','#FFFFFF']);
+  assert.equal(tb.columnWidths.length,3);assert.ok(Math.abs(tb.columnWidths.reduce((a,v)=>a+v,0)-tb.width)<.02);assert.equal(tb.columnWidths[0],round(tb.width/2));
+  assert.equal(tb.rowHeights.length,3);assert.ok(tb.rowHeights[2]>tb.rowHeights[1]);assert.ok(Math.abs(tb.rowHeights.reduce((a,v)=>a+v,0)-tb.height)<.02);
+  assert.ok(!built.structure.groups.some(g=>g.members.includes('opt_table')));
+  const bad=rows=>()=>validateComposition(deck({type:'table',id:'bad_table',rows}),c);
+  assert.throws(bad([['a','b']]),/a table has 2–12 rows of 2–6 text cells/);assert.throws(bad([['a','b'],['c']]),/a table has 2–12 rows/);
+});
+
+test('words over an image need a filled box behind them',async()=>{
+  const c=brand(),over=children=>deck({type:'free',children:[{type:'image',id:'back_image',src:'photo.png',alt:'A ridge at dawn',fit:'cover',at:{x:0,y:0,width:1,height:1}},...children]});
+  const at={x:.05,y:.55,width:.5,height:.4};
+  await assert.rejects(()=>compileComposition(over([{type:'text',id:'bare_text',text:'Words on the photo',at}]),c),/bare_text: sits over an image with nothing solid behind it/);
+  await assert.rejects(()=>compileComposition(over([{type:'box',id:'line_box',style:'outline',text:'Words in an outline',at}]),c),/line_box: sits over an image with nothing solid behind it/);
+  // A filled box, or a card holding the text, is enough; so is text beside the image rather than on it.
+  const panel=(await compileComposition(over([{type:'box',id:'panel_box',text:'Words on a panel',at}]),c)).scene;assert.ok(byId(panel,'panel_box').fill);
+  await compileComposition(over([{type:'box',id:'card_box',children:[{type:'text',id:'card_text',text:'Words in a card'}],at}]),c);
+  await compileComposition(deck({type:'stack',direction:'row',children:[{type:'image',id:'side_image',src:'photo.png',alt:'A ridge'},{type:'text',id:'side_text',text:'Words beside it'}]}),c);
+});

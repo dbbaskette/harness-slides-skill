@@ -1,108 +1,70 @@
 # Design that carries meaning
 
-Use [the design walkthrough](design-walkthrough.md) before new creative construction.
-Use a clear takeaway per slide and make the hierarchy visible. Prefer a short
-claim title and evidence, relationship or example that supports it. A briefing
-deck can be denser than a live talk. Preserve required content and qualifications.
+A slide is designed when its form follows from what it says. Work through each
+slide in this order; the [gallery](gallery.md) shows one finished example for
+each relation.
 
-## Choose each slide from its content
+## For each slide
 
-Make a fresh composition decision for every slide. Identify its takeaway, the
-relationship the audience needs to understand, and the evidence that supports
-it; then choose the visual treatment. Do not inherit a numbered list, card grid,
-or other format because an earlier slide used it. Numbering should communicate
-order, priority or a useful reference, not turn unrelated ideas into steps.
+1. **Claim.** One takeaway, written as the title. Read down the titles alone:
+   they should give the deck's argument.
+2. **Units.** Count the real things on the slide from the content, never from a
+   layout.
+3. **Relation.** How the units relate: an order, a dependency, a hierarchy, a
+   group and its members, a contrast, peers, an overlap, one number, or words
+   best read directly.
+4. **Form.** Draw that relation. Steps are joined by arrows; a dependency is an
+   arrow to what is depended on; members sit inside their group; things
+   compared sit side by side; a number is large with its context beside it.
+   Headings and prose inside boxes are not a diagram.
+5. **Focal.** The one thing the eye should land on first. A slide that compares
+   equals may have none.
 
-Consider the alternatives that serve this slide:
+Similar content may share a form. Different content gets its own decision;
+never carry a format over because the last slide used it, and never change one
+only for variety. This list is for deciding, not for filing: write down only
+what the chosen method asks for.
 
-| Content to communicate | Possible treatment |
-| --- | --- |
-| Steps, dependencies or milestones | Editable flow, timeline or branching diagram |
-| Components, layers or spatial relationships | Architecture, ecosystem or labeled diagram |
-| Alternatives or tradeoffs | Comparison, matrix or aligned evidence |
-| Parallel themes or categories | Distinct regions, meaningful icons, or a color per category that recurs |
-| Measured change or a finding | Evidence chart or a prominent metric with context |
-| Product behavior or a concrete example | Screenshot/image with editable annotations |
-| An experience, setting or conceptual idea | Relevant supplied, sourced or generated illustration/image |
-| A statement or a few items best read directly | Attributed quote or concise text/list |
+## Defaults
 
-These are options, not a rotation schedule or a fixed menu. Identify a specific asset concept/construction and route before choosing no asset.
-A deck-level dismissal of icons or imagery does not decide subsequent slides.
-Decide whether icons,
-imagery, a diagram, colored grouping, or plain text improves comprehension on
-this slide. Use available authorized asset/generation tools when imagery serves
-the message; keep explanatory diagrams and labels editable. Generated imagery
-can illustrate an idea, but must not masquerade as measured evidence or an actual
-product screenshot. Follow the selected brand's asset policy.
+- Everything is neutral until it is colored for a reason. One focal color marks
+  the point; any other color stands for one thing and keeps that meaning on
+  every slide, with a label or other cue besides color.
+- One emphasis per slide, and one large element: a slide in one size has
+  nothing to look at first.
+- A label sits inside what it names or right beside it, never in leftover
+  space between two things.
+- White space frames the main element. A small diagram stranded in a corner
+  is unfinished.
+- Text is never shrunk to fit. Cut words, split the slide or restructure.
+- Diagrams and labels are native, editable objects. Chart data stays editable;
+  label units, periods and sources, and start bars at zero.
 
-Before choosing a structure, settle these for each slide (a decision, not a
-reasoning transcript):
+Decide the deck's look once, before the first slide: the focal color, the
+neutral, what each other color means, and which furniture every slide carries.
 
-- Takeaway and audience question.
-- Source evidence, actors and the actual relationship.
-- Selected treatment and what it makes easier to understand.
-- Visual family and communicative purpose: text/no asset, icon, native diagram,
-  regions, table/chart, supplied/sourced image or generated art.
-- The strongest feasible alternative for this content and a specific reason for
-  rejecting it. Rejecting invented metrics or unrelated decoration is not a comparison
-  with a useful diagram, image or approved functional icon.
+## Do not
 
-Topology, flow, ownership, containment and decision content needs visible supported
-objects and relationships. Headings and prose inside boxes are not automatically
-a diagram. Missing evidence calls for explicit limits, not invented connections.
+- Reach for a row of equal cards as the answer to every slide.
+- Build a grid of icons with a blurb under each.
+- Center body text, or write a title that is a label instead of a claim.
+- Add an icon or image that explains nothing.
+- End on a closing slide with no takeaway.
 
-This list is for deciding, not for filing. Write down only what the chosen
-method asks for. Similar content may justify similar layouts; different content needs
-its own decision. Do not force variety, insert decorative assets, or remove
-evidence to meet a layout quota. In preservation work, honor the agreed scope:
-brand-only and polish do not authorize redesigning the composition.
+## Evidence and assets
 
-## Carry the theme across compositions
+Preserve required content and qualifications, and keep a caveat next to the
+claim it limits. Where evidence is missing, say so; do not invent a connection,
+a number or a quote. Sample data is never a claim.
 
-Keep palette, typography, hierarchy, recurring anchors and asset treatment
-coherent. The narrative thread comes from the takeaways and their progression;
-it does not require every slide to share the same body layout.
+Use an approved icon where a concept is recognisable, the same icon for the
+same concept throughout. Use an image when it shows something the slide is
+about; generated art may illustrate an idea but must not pass as measured
+evidence or a real product screenshot. Follow the selected brand's asset
+policy and the user's chosen and excluded colors.
 
-For new work/redesigns, establish an art direction as well as an information
-structure: the focal scale, contrast between dominant and supporting elements,
-color roles and label treatment. Decide it once for the deck, before the first
-slide. A technically correct diagram can still look
-like an unfinished wireframe. Make its mechanism visually prominent, with
-deliberate proportions and a clear silhouette at thumbnail size; then judge the
-actual full-size pixels. White space should frame a focal element rather than
-leave a small diagram stranded.
+Check contrast, reading order and alt text, keep image proportions, and judge
+the slide at delivery size.
 
-Give color a job. One focal color marks the point of a slide. Panels start in a
-neutral. Any further color stands for one thing, such as a product or a state,
-and keeps that meaning on every slide, with a label or other cue besides color.
-Use as many as the content has things to tell apart, and none because the
-brand palette offers it. Use the selected brand palette and its rules.
-Honor the user's selected subset and excluded colors in text, shapes,
-connectors, charts and image briefs.
-
-Align repeated components to common anchors; group related objects, preserve
-whitespace and keep enough room for native text wrapping.
-
-Place node labels inside their object or consistently beside it; put captions
-next to their visual and path labels beside the specific connector segment they
-describe. Leave clearance around arrowheads and route connectors around text.
-Use consistent insets within comparable regions. A label centered in leftover
-space, or halfway between two unrelated objects, has an ambiguous owner even
-when it does not overlap. Repair ownership and reading order before shrinking it.
-
-Use native objects for diagrams and editable labels. Prefer an available approved
-functional icon library when a recognizable concept benefits from an icon;
-skip icons that add decoration or crowding. Keep the same treatment for the same
-concept, even when the surrounding slide composition differs.
-
-Keep chart data editable. Label units, periods, series and sources; use zero
-baselines for bars and consistent scales for comparisons. Avoid 3D decoration.
-Retain qualifications next to the finding. Never turn sample data into a claim.
-
-Check contrast, meaningful reading order, alt text, chart labels and information
-conveyed through more than color. Maintain image aspect ratio and deliberate
-crops. Inspect at delivery size. Small labels, clipped text, inconsistent gaps,
-overlaps, empty placeholders and distorted images need correction.
-
-Use a coherent direction across the deck, and imitate supplied good examples
-through their geometry, hierarchy and rhythm rather than copying their content.
+In preservation work, honor the agreed scope: brand-only and polish do not
+authorize redesigning a composition.

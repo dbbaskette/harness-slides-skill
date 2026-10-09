@@ -6,7 +6,7 @@ it in [checkpoint records](design-records.md).
 
 | Need | Method |
 | --- | --- |
-| A table or a chart | [Typed components](content-components.md) |
+| A chart | [Typed components](content-components.md) |
 | A template's own rich slide, reused or adapted | [Template reuse](templates.md); no contract needed |
 | Anything else, or an unbranded deck | An AI-owned scene, below |
 

@@ -1,7 +1,7 @@
 # Typed components
 
 Prefer [compositions](compositions.md) for new slides. Use these typed components
-for tables and charts, which compositions do not yet express.
+for charts, which compositions do not yet express.
 
 Approve [the per-slide proposal](design-walkthrough.md) first and keep it in
 [checkpoint records](design-records.md).

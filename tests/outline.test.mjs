@@ -68,7 +68,7 @@ test('outline check, draft and start work from the command line and feed the bui
   await writeFile(brandFile,JSON.stringify(c));
   const direction={focal:'headingPrimary',neutral:'canvasSecondary',meanings:{accentAqua:'the product'}};
   const deck=outline([{id:'cover_slide',kind:'cover',title:'Open',subtitle:'Sub'},...['a','b','c','d','e'].map(n=>content(`slide_${n}x`,{title:`Claim ${n}`,focal:'One'})),{id:'part_two',kind:'section',title:'Part two'},content('slide_last',{title:'Last claim'}),{id:'close_slide',kind:'closing',title:'End'}],
-    {direction,layouts:{cover:'Cover',section:'Section',closing:'Closing'},house:['Blue marks the product.'],material:['notes.md'],audience:'architects'});
+    {direction,layouts:{cover:'Cover',section:'Section',closing:'Closing'},house:['Blue marks the product.'],material:['notes.md'],audience:'architects',approval:['The story is right. Go with look B.']});
   await writeFile(file,JSON.stringify(deck));
   const run=async(...args)=>JSON.parse((await exec('node',[cli,'outline',...args])).stdout);
   const checked=await run('check','--file',file,'--brand',brandFile);
@@ -88,6 +88,8 @@ test('outline check, draft and start work from the command line and feed the bui
   for(const part of [/# Section 2 of Deck/,/`slide_dx`: "Claim d"/,/`slide_ex`: "Claim e"/,/The audience must understand: What to take away\./,/Prefix every node and edge ID you create with `s2_`/,/Blue marks the product\./,/Source material: notes\.md/,/"focal":"headingPrimary"/,/Before your section comes the slide "Claim c", built by another worker; after it comes a section slide/,/- One: First thing/,/Speaker notes, to go in the slide's `notes`: Say this\. Source: the report\./])assert.match(brief,part);
   assert.doesNotMatch(brief,/slide_ax/);
   assert.match(await readFile(join(out,'presentation-brief.md'),'utf8'),new RegExp(`SHA-256 \`${started.outlineSha256}\``));
+  // What the user said is carried from the outline into the build's brief.
+  assert.match(await readFile(join(out,'presentation-brief.md'),'utf8'),/## Approval\n\n> The story is right\. Go with look B\./);
   // Sections written by builders merge with the lead's files in the order start laid down.
   for(const [n,ids] of [[1,['slide_ax','slide_bx','slide_cx']],[2,['slide_dx','slide_ex']],[3,['slide_last']]])await writeFile(join(out,`section-${n}.json`),JSON.stringify({version:1,title:'Deck',direction,slides:ids.map(id=>({id,title:'T',sources:['s1'],canvas:{type:'box',id:`s${n}_${id}`,text:'x'}}))}));
   const merged=JSON.parse((await exec('node',[cli,'compose','merge','--file',join(out,'parts.json'),'--output',join(out,'composition.json')])).stdout);

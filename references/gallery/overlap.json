@@ -1,0 +1,90 @@
+{
+ "version": 1,
+ "title": "Gallery: overlap",
+ "direction": {
+  "focal": "headingPrimary",
+  "neutral": "canvasSecondary"
+ },
+ "slides": [
+  {
+   "id": "shared_slide",
+   "title": "Security and delivery meet in the release pipeline",
+   "sources": [
+    "example"
+   ],
+   "notes": "Each team has its own work. The pipeline is the one place both must agree.",
+   "brief": {
+    "relation": "overlap",
+    "focal": "shared_text"
+   },
+   "canvas": {
+    "type": "free",
+    "children": [
+     {
+      "type": "box",
+      "id": "shared_left",
+      "shape": "ellipse",
+      "style": "outline",
+      "at": {
+       "x": 0.1,
+       "y": 0.02,
+       "width": 0.5,
+       "height": 0.96
+      }
+     },
+     {
+      "type": "box",
+      "id": "shared_right",
+      "shape": "ellipse",
+      "style": "outline",
+      "at": {
+       "x": 0.4,
+       "y": 0.02,
+       "width": 0.5,
+       "height": 0.96
+      }
+     },
+     {
+      "type": "text",
+      "id": "shared_one",
+      "text": "Security",
+      "textRole": "label",
+      "align": "center",
+      "at": {
+       "x": 0.14,
+       "y": 0.4,
+       "width": 0.22,
+       "height": 0.2
+      }
+     },
+     {
+      "type": "text",
+      "id": "shared_two",
+      "text": "Delivery",
+      "textRole": "label",
+      "align": "center",
+      "at": {
+       "x": 0.64,
+       "y": 0.4,
+       "width": 0.22,
+       "height": 0.2
+      }
+     },
+     {
+      "type": "text",
+      "id": "shared_text",
+      "text": "Release pipeline",
+      "textRole": "label",
+      "align": "center",
+      "at": {
+       "x": 0.41,
+       "y": 0.4,
+       "width": 0.18,
+       "height": 0.2
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

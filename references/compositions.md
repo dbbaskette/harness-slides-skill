@@ -78,16 +78,35 @@ the words really are enough; do not draw a diagram to satisfy the rule.
 ## Design each slide from its content
 
 There are no slide types to pick from. Build the structure the content needs
-from three containers and five leaves:
+from four containers and a handful of leaves:
 
 | Use | For |
 | --- | --- |
 | `stack` (row or column) | Things read in order, or side by side |
 | `grid` | Peers of equal weight |
-| `free` | A hub, a map, anything placed by position (fractions of the area) |
+| `free` | A map, an overlap, anything placed by position (fractions of the area) |
+| `ring` | Three to eight things around a circle, in order, with an optional `hub` at the center |
 | `box` | A shape with text inside, or a card holding other nodes |
 | `text`, `icon`, `image` | Words, an approved icon by ID, supplied or generated artwork |
+| `metric` | The one number a slide is about, with its label beneath |
+| `badge` | A small numbered or lettered disc, for steps and references |
+| `rule` | A thin line between the parts of a column or a row |
+| `table` | A native table in the brand's table style, for comparing values across rows |
 | `spacer` | Deliberate empty space, and room for an arrow label |
+
+A box has three looks, set with `style`:
+
+- `solid` fills it. Keep that for the point of the slide and for a color that
+  carries a meaning.
+- `outline` draws it as a line and leaves the inside open.
+- `bar` is a neutral card with a strip of color down the left edge.
+
+The line or strip is the focal color on the slide's point, the box's `fill`
+where it has one, and a quiet ink otherwise. Under a direction a `fill` is still
+one of its meanings, so a plain supporting card sets none.
+
+A slide of nothing but solid boxes is heavy and flat. Give the supporting cards
+`outline` or `bar`, and let the one solid shape be the thing to look at.
 
 A box that holds other nodes is a card. Its content starts at the top; set
 `align` to `center` or `end` to place it lower. Centre only when every card in a
@@ -136,15 +155,31 @@ equal weight. A role's own color gives way to plain ink when the deck's
 direction has given that color a job, and takes the focal color when the node
 is the slide's point.
 
-`connect` joins two nodes with an arrow. A label on an arrow needs room: on a
-straight arrow it must fit the gap between the two nodes, so leave a spacer; on a
-slanted arrow it is placed beside the line, clear of every node.
+`connect` joins two nodes with an arrow. It runs the way the layout does:
+across between the parts of a row, down between the parts of a column. Between
+nodes that are not level a straight arrow slants; set `route` to `elbow` for
+right angles, which suits a fan-out or a tree, or to `curve`. Between two
+children of a `ring` an elbow or a curve turns once around the outside, which
+draws a cycle. A label on an arrow needs room: on a straight arrow it must fit
+the gap between the two nodes, so leave a spacer; on a slanted arrow it is
+placed beside the line, clear of every node.
+
+Words may sit over an `image` only inside a filled box: put the image and
+the box in a `free` container, the image first. `compile` refuses bare text
+and outlined boxes over a picture, because no check can promise they stay
+readable. There is no see-through scrim; a brand may forbid changing a color's
+opacity.
+
+A `table` takes `rows`, the first being the header, and optional `widths` that
+share the width between columns. Each row is as tall as its tallest cell. Keep
+cells to a few words; a table compares values and is not a place for sentences.
 
 Show a sequence, a dependency or a
 hand-off with nodes and edges, not with a sentence that describes it. Show
 ownership with regions. Use plain text when reading the wording is the point.
 
-Let the content choose the structure. Repeat a layout when two slides hold the
+The [gallery](gallery.md) has one finished example for each relation. Let the
+content choose the structure. Repeat a layout when two slides hold the
 same kind of content or are meant to be compared, not because the last slide
 used it.
 
@@ -160,8 +195,11 @@ node scripts/harness-slides.mjs compose layouts --brand brand-contract.json
 A slide that names a `layout` from that list fills the layout's own title and up
 to its number of subtitle lines (`subtitle`, then `detail`) and has no canvas:
 `{"id":"cover_slide","title":"…","layout":"Title 1 - dark","subtitle":"…","sources":[…]}`.
-Prefer layouts listed with `pictures: 0`; a picture slot cannot be filled yet and
-renders as an empty panel. Content slides stay on the default layout.
+A layout listed with `pictures: 1` has a slot for a photo: add
+`"picture":{"src":"assets/cover.png","alt":"…"}` and the image is cropped to
+fill it. Left unfilled the slot renders as an empty panel, so without a
+picture choose a layout with `pictures: 0`. Content slides stay on the default
+layout.
 
 ## Brand roles, not values
 
@@ -178,8 +216,12 @@ library for icon IDs. An icon keeps the library's colors unless you set its
 `color` and `style`: `solid` is a light icon on a colored disc, `outline` a
 colored icon in a ring, `plain` a colored icon with no container. On a filled
 card use `plain` or `outline` in a color that reads on the fill. Follow the
-brand's own icon rules where it has them. Shapes: `rect`, `roundRect`, `ellipse`, `diamond`,
-`hexagon`, `chevron`, `can`. Arrows attach to the first four.
+brand's own icon rules where it has them. An icon needs its label beside it,
+stands for one thing throughout the deck, and is not repeated across the cards
+of one slide; `preview` reports each of these. Shapes: `rect`, `roundRect`,
+`ellipse`, `diamond`, `hexagon`, `chevron`, `can`. An arrow stays attached to
+any of them and to an icon with a disc or a ring, so it follows when someone
+moves the node.
 
 ## Build, look, fix
 
@@ -232,13 +274,32 @@ node scripts/harness-slides.mjs compose render --file NEW_DIR --output deck.pptx
 node scripts/harness-slides.mjs drive import --file deck.pptx --name TITLE
 ```
 
-Before delivering, run `compose preview` on the finished build without `--slide`
-and open every image, in order: each slide, then the run of slides as a deck.
-Name the three weakest slides and what is wrong with each, fix them, and
-preview again. That is the final review for a composed deck. Note what you
-found and fixed in `presentation-brief.md`, with the deck hash the preview
-returns. Show the user those images and
-wait, as [the walkthrough](design-walkthrough.md#show-rendered-output-and-pause-again)
+Before delivering, run `compose preview` on the finished build without
+`--slide`. Beside the slide images it writes `contact-sheet.png`, every slide
+numbered on one sheet, and `critic.json`, eight yes-or-no questions to answer
+for each slide.
+
+**Have it reviewed by someone who did not draw it.** Where the harness runs
+subagents, hand one the preview directory and nothing else. It reads
+`critic.json`, looks at the contact sheet and then each image, and answers the
+questions; it sees what is on the slide, not what was meant. Where there is no
+subagent, answer them yourself and record the reviewer as `author`.
+
+```sh
+node scripts/harness-slides.mjs compose critique --file PREVIEW_DIR --assessment critique.json
+```
+
+Each no is a finding: `critical` when the slide misleads or its point cannot be
+found, `major` when it is clearly weaker than it should be, `minor` otherwise.
+The critique also names the three weakest slides. A critical finding blocks
+delivery. Fix the critical and major findings in one pass, preview again and
+have the new render critiqued; undo a fix that causes a new finding. A reviewer
+does not change brand colors or what a slide says.
+
+That is the final review for a composed deck. Note what was found and fixed in
+`presentation-brief.md`, with the deck hash the preview returns. Then show the
+user the contact sheet and the images and wait, as
+[the walkthrough](design-walkthrough.md#show-rendered-output-and-pause-again)
 describes. The preview file and the delivered file are imports of the same
 build.
 
@@ -247,7 +308,7 @@ placeholder, labels sit inside their shapes, arrows are attached, and each card
 is one group. All of that survives the import into Google Slides. Read
 [review](review.md) only for a requested PDF export or an editability check.
 
-Native tables, charts and hyperlinks are not available in compositions yet. A
-small comparison table can be built as a grid of boxes and text. A deck that
-needs a real table or chart is built with [another method](authoring.md); the
-methods cannot yet be mixed in one build.
+Native charts and hyperlinks are not available in compositions yet. Show a
+few numbers as bars drawn to scale or as a table. A deck that needs a real
+chart is built with [another method](authoring.md); the methods cannot yet be
+mixed in one build.

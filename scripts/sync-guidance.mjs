@@ -57,10 +57,11 @@ function version(value) {
   if (!/^\d+\.\d+\.\d+$/.test(value)) throw new Error('Invalid guidance/runtime version.');
   return value.split('.').map(Number);
 }
-function compatible(required, actual) {
+function newer(required, actual) {
   const a = version(required), b = version(actual);
-  if (a.some((n, i) => n > b[i] && a.slice(0, i).every((v, j) => v === b[j]))) throw new Error(`Current guidance needs a newer installed runtime: requires ${required} or newer; installed ${actual}. Update with this skill’s trusted installer.`);
+  return a.some((n, i) => n > b[i] && a.slice(0, i).every((v, j) => v === b[j]));
 }
+const refusal = (required, actual, detail = '') => new Error(`Current guidance needs a newer installed runtime: requires ${required} or newer; installed ${actual}. Update with this skill’s trusted installer.${detail}`);
 async function runtimeHashes(runtime) {
   const hashes = {};
   async function walk(name) {
@@ -80,6 +81,48 @@ async function blob(repository, id, size) {
   new TextDecoder('utf-8', { fatal: true }).decode(bytes);
   return bytes;
 }
+async function tree(repository, commit) {
+  return (await git(repository, 'ls-tree', '-r', '-l', '-z', commit)).toString('utf8').split('\0').filter(Boolean).map(line => {
+    const [meta, name] = line.split('\t'), [mode, type, id, size] = meta.trim().split(/\s+/);
+    return { mode, type, id, size: Number(size), name };
+  });
+}
+async function required(repository, listing, config) {
+  const metadata = listing.find(item => item.name === 'guidance/manifest.json') ?? listing.find(item => item.name === 'package.json');
+  if (!metadata || metadata.mode !== '100644' || metadata.type !== 'blob') throw new Error('Guidance compatibility metadata is missing.');
+  const manifest = JSON.parse(await blob(repository, metadata.id, metadata.size));
+  if (metadata.name === 'guidance/manifest.json') {
+    if (manifest.schema !== 1 || manifest.skill !== config.skill || manifest.entry !== 'SKILL.md') throw new Error('Unsupported guidance contract.');
+    return manifest.minimumRuntime;
+  }
+  if (manifest.name !== config.packageName) throw new Error('Unrecognized guidance package.');
+  return manifest.version;
+}
+// The index is data from the fetched commit, trusted for nothing but naming a commit. That commit is used only once
+// it is shown to be an ancestor of the fetched one, so on the trusted main, and to suit this runtime. Otherwise refuse.
+async function lastCompatible(repository, source, commit, listing, config, needs) {
+  const item = listing.find(item => item.name === 'guidance/compatibility.json');
+  if (!item) throw refusal(needs, config.version);
+  const invalid = refusal(needs, config.version, ' Older guidance was not used: the compatibility index is invalid.');
+  let entries, best;
+  try {
+    if (item.mode !== '100644' || item.type !== 'blob') throw invalid;
+    const index = JSON.parse(await blob(repository, item.id, item.size)), map = index?.lastCompatible;
+    if (index?.schema !== 1 || index.skill !== config.skill || !map || typeof map !== 'object' || Array.isArray(map)) throw invalid;
+    entries = Object.entries(map);
+    if (entries.length > 500 || entries.some(([minimum, revision]) => version(minimum).join('.') !== minimum || typeof revision !== 'string' || !revisionPattern.test(revision))) throw invalid;
+  } catch { throw invalid; }
+  for (const entry of entries) if (!newer(entry[0], config.version) && (!best || newer(entry[0], best[0]))) best = entry;
+  if (!best) throw refusal(needs, config.version);
+  // Ancestry needs main's history, which the first fetch left out. Never fetch the named commit by ID: a host may serve commits that were never on main.
+  if ((await git(repository, 'rev-parse', '--is-shallow-repository')).toString().trim() === 'true') await git(repository, 'fetch', '--quiet', '--no-tags', '--unshallow', source, 'refs/heads/main');
+  try {
+    await git(repository, 'merge-base', '--is-ancestor', best[1], commit);
+    const older = await tree(repository, best[1]);
+    if (newer(await required(repository, older, config), config.version)) throw invalid;
+    return { commit: best[1], listing: older };
+  } catch { throw invalid; }
+}
 export async function start({ project, runtime = root, source, revision } = {}) {
   const config = await settings(runtime), cache = await cacheFor(project, config, true);
   const lock = await open(join(cache, '.sync-lock'), 'wx', 0o600).catch(error => { if (error.code === 'EEXIST') throw new Error('Another guidance refresh is running; retry after it finishes.'); throw error; });
@@ -96,17 +139,10 @@ export async function start({ project, runtime = root, source, revision } = {}) 
     let commit = (await git(repository, 'rev-parse', '--verify', 'FETCH_HEAD^{commit}')).toString().trim();
     if (revision) { await git(repository, 'merge-base', '--is-ancestor', revision, commit); commit = revision; }
     if (!revisionPattern.test(commit)) throw new Error('Invalid guidance revision.');
-    const listing = (await git(repository, 'ls-tree', '-r', '-l', '-z', commit)).toString('utf8').split('\0').filter(Boolean).map(line => {
-      const [meta, name] = line.split('\t'), [mode, type, id, size] = meta.trim().split(/\s+/);
-      return { mode, type, id, size: Number(size), name };
-    });
-    const metadata = listing.find(item => item.name === 'guidance/manifest.json') ?? listing.find(item => item.name === 'package.json');
-    if (!metadata || metadata.mode !== '100644' || metadata.type !== 'blob') throw new Error('Guidance compatibility metadata is missing.');
-    const manifest = JSON.parse(await blob(repository, metadata.id, metadata.size));
-    if (metadata.name === 'guidance/manifest.json') {
-      if (manifest.schema !== 1 || manifest.skill !== config.skill || manifest.entry !== 'SKILL.md') throw new Error('Unsupported guidance contract.');
-      compatible(manifest.minimumRuntime, config.version);
-    } else { if (manifest.name !== config.packageName) throw new Error('Unrecognized guidance package.'); compatible(manifest.version, config.version); }
+    let listing = await tree(repository, commit);
+    const needs = await required(repository, listing, config), behind = newer(needs, config.version);
+    if (behind && revision) throw refusal(needs, config.version);
+    if (behind) ({ commit, listing } = await lastCompatible(repository, trustedSource, commit, listing, config, needs));
     const selected = listing.filter(item => allowed(item.name));
     if (!selected.some(item => item.name === 'SKILL.md') || selected.length > 500 || selected.reduce((n, item) => n + item.size, 0) > 8 * 1024 * 1024) throw new Error('Guidance inventory is missing or too large.');
     const task = randomUUID().replaceAll('-', '');
@@ -122,7 +158,8 @@ export async function start({ project, runtime = root, source, revision } = {}) 
     const pin = { schema: 1, skill: config.skill, repository: config.repository, revision: commit, task, createdAt: new Date().toISOString(), runtime: config.runtime, runtimeVersion: config.version, runtimeFiles: await runtimeHashes(config.runtime), files: hashes };
     await writeFile(join(stage, 'pin.json'), JSON.stringify(pin, null, 2) + '\n', { flag: 'wx', mode: 0o400 });
     const snapshot = join(cache, 'tasks', task); await rename(stage, snapshot); stage = null;
-    return { freshness: 'current-at-start', revision: commit, task, guidance: join(snapshot, 'SKILL.md'), runtime: config.runtime, runtimeVersion: config.version, runtimeDigest: sha(JSON.stringify(pin.runtimeFiles)) };
+    const result = { freshness: behind ? 'last-compatible' : 'current-at-start', revision: commit, task, guidance: join(snapshot, 'SKILL.md'), runtime: config.runtime, runtimeVersion: config.version, runtimeDigest: sha(JSON.stringify(pin.runtimeFiles)) };
+    return behind ? { ...result, currentMinimumRuntime: needs, notice: `Using older guidance: the installed runtime is ${config.version} and current guidance needs ${needs} or newer. Update with this skill’s trusted installer to use current guidance.` } : result;
   } finally { if (stage) await rm(stage, { recursive: true, force: true }); await lock.close(); await rm(join(cache, '.sync-lock')); }
 }
 export async function resume({ project, task, runtime = root, cached = false } = {}) {

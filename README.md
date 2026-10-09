@@ -35,7 +35,7 @@ PowerPoint inspection also needs **Python 3.9 or newer**.
 Run these commands in your terminal:
 
 ```sh
-git clone --branch v0.12.0 --depth 1 https://github.com/dbbaskette/harness-slides-skill.git
+git clone --branch v0.13.0 --depth 1 https://github.com/dbbaskette/harness-slides-skill.git
 cd harness-slides-skill
 bash scripts/Install-Harness-Slides.sh
 ```
@@ -48,8 +48,8 @@ skills. To preview the changes first, add `--dry-run` to the installer command.
 
 ## Know which version you are using
 
-The current published release is [v0.12.0](https://github.com/dbbaskette/harness-slides-skill/releases/tag/v0.12.0).
-The skill reports “Using Harness Slides v0.12.0” when starting or resuming work.
+The current published release is [v0.13.0](https://github.com/dbbaskette/harness-slides-skill/releases/tag/v0.13.0).
+The skill reports “Using Harness Slides v0.13.0” when starting or resuming work.
 A resumed deck may use its older saved runtime and will report that version.
 Guidance can refresh independently; its revision does not replace the runtime version.
 
@@ -140,18 +140,24 @@ Ask for the visual as part of your deck request:
 Leave room for the headline and use our brand colors.
 ```
 
-The first time, the agent prepares the optional image helper and opens a
-separate Chrome window. Sign in to Google, then close that window. You can also
-ask `/harness-slides setup images` in advance (use `$harness-slides` in Codex).
-Later image requests run once and exit. There is no service to start or manage.
-Downloaded images and metadata are saved with your deck; sign-in stays private.
+Images are generated through the Gemini API with your own key, and they cost
+money: about five cents for each image at the default size, with no free tier.
+Create a key at <https://aistudio.google.com/apikey> and put it in your
+environment as `GEMINI_API_KEY` before you start the agent. Never paste the key
+into the chat; the agent will not ask for it. The agent tells you how many
+images a deck needs and what they will cost before it generates any, and each
+image is generated only after you approve it.
 
-This optional Gemini Web path needs Chrome and Python 3.11 or newer on macOS or
-Linux. It uses your Gemini web account and its limits, through an unofficial
-transport. A Google Cloud CLI login does not configure this session. The agent
-checks access and reports failures; it can retry a saved image download without
-asking Gemini to generate another image. See [image guidance](references/images.md)
-for helper details and [dependency notices](NOTICE.md) for licensing.
+Every image in a deck shares one art style, kept as a short `art-style.txt` in
+the deck's working folder. Images and their metadata are saved with your deck.
+A repeated request returns the saved image instead of paying for another one.
+
+This route was built from Google's documentation and has not yet been verified
+against the live API. The earlier route through a signed-in Gemini web session
+is still available when you ask for it by name; it needs Chrome and Python 3.11
+or newer and uses an unofficial transport. See
+[image guidance](references/images.md) for details and
+[dependency notices](NOTICE.md) for licensing.
 
 ## Improve an existing deck
 
@@ -209,8 +215,12 @@ no GitHub account is required.
 
 Existing decks or research reports keep their saved task and runtime. Resuming
 uses that pin without fetching. Explicitly adopting newer guidance starts a new
-task and requires rechecking affected reviews. A failed fetch or incompatible
-runtime is reported; it is never described as current.
+task and requires rechecking affected reviews. A failed fetch is reported; it is
+never described as current.
+
+If the installed helpers are older than current guidance needs, new work uses the
+last guidance they support and the agent tells you an update is available. If no
+earlier guidance fits, the task is refused until you update.
 
 **Instructions update automatically; executable helpers do not.** Rerun the trusted
 shell installer from a current repository copy to update helpers or the entrypoint.
@@ -254,20 +264,20 @@ representative guidance-start response. Bootstrap activation is shown separately
 | --- | ---: |
 | Discovery metadata | 39 |
 | Installed bootstrap | 412 |
-| Bootstrap + current guidance entry | 1,482 |
-| Scoped PPTX edit + final review | 3,240 |
-| Scoped Google edit + final review | 3,827 |
-| New PPTX deck from native template + review | 7,241 |
-| New Google deck from native template + review | 8,268 |
-| Draft stage only: outline + contract | 4,066 |
-| New composed deck: draft, then build | 9,635 |
-| Parallel build, lead | 9,188 |
-| Parallel build, each worker | 7,253 |
-| New PPTX scene + contract + review | 6,500 |
-| New Google scene + contract + review | 7,639 |
-| Content-led PPTX + selected component + review | 8,524 |
-| Font screening + structured critique + review | 3,672 |
-| Optional image guidance + download result | 2,624 |
+| Bootstrap + current guidance entry | 1,490 |
+| Scoped PPTX edit + final review | 3,248 |
+| Scoped Google edit + final review | 3,835 |
+| New PPTX deck from native template + review | 6,750 |
+| New Google deck from native template + review | 7,777 |
+| Draft stage only: outline + contract | 4,490 |
+| New composed deck: draft, then build | 11,286 |
+| Parallel build, lead | 10,000 |
+| Parallel build, each worker | 8,498 |
+| New PPTX scene + contract + review | 6,040 |
+| New Google scene + contract + review | 7,179 |
+| Content-led PPTX + selected component + review | 8,031 |
+| Font screening + structured critique + review | 3,680 |
+| Optional image guidance + download result | 2,800 |
 
 Intake, workspace, brand integration and image guidance load only when needed. Native-template
 authoring skips the scene contract; scene routes include its actual helper output.

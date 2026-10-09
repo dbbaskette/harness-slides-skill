@@ -1,0 +1,154 @@
+{
+ "version": 1,
+ "title": "Gallery: order",
+ "direction": {
+  "focal": "headingPrimary",
+  "neutral": "canvasSecondary"
+ },
+ "slides": [
+  {
+   "id": "order_slide",
+   "title": "A change reaches production in four checked steps",
+   "sources": [
+    "example"
+   ],
+   "notes": "Walk the four steps left to right. The point is the last one: nothing ships without a recorded approval.",
+   "brief": {
+    "relation": "order",
+    "focal": "order_ship"
+   },
+   "caveat": {
+    "label": "Limit",
+    "text": "Emergency fixes skip step two and are reviewed afterwards."
+   },
+   "canvas": {
+    "type": "stack",
+    "direction": "row",
+    "align": "center",
+    "children": [
+     {
+      "type": "box",
+      "id": "order_build",
+      "style": "outline",
+      "children": [
+       {
+        "type": "badge",
+        "id": "order_b1",
+        "text": "1"
+       },
+       {
+        "type": "text",
+        "id": "order_h1",
+        "text": "Build",
+        "textRole": "label"
+       },
+       {
+        "type": "text",
+        "id": "order_t1",
+        "text": "Compile and unit test"
+       }
+      ]
+     },
+     {
+      "type": "spacer",
+      "weight": 0.2
+     },
+     {
+      "type": "box",
+      "id": "order_review",
+      "style": "outline",
+      "children": [
+       {
+        "type": "badge",
+        "id": "order_b2",
+        "text": "2"
+       },
+       {
+        "type": "text",
+        "id": "order_h2",
+        "text": "Review",
+        "textRole": "label"
+       },
+       {
+        "type": "text",
+        "id": "order_t2",
+        "text": "A peer reads the change"
+       }
+      ]
+     },
+     {
+      "type": "spacer",
+      "weight": 0.2
+     },
+     {
+      "type": "box",
+      "id": "order_stage",
+      "style": "outline",
+      "children": [
+       {
+        "type": "badge",
+        "id": "order_b3",
+        "text": "3"
+       },
+       {
+        "type": "text",
+        "id": "order_h3",
+        "text": "Stage",
+        "textRole": "label"
+       },
+       {
+        "type": "text",
+        "id": "order_t3",
+        "text": "Run against real data"
+       }
+      ]
+     },
+     {
+      "type": "spacer",
+      "weight": 0.2
+     },
+     {
+      "type": "box",
+      "id": "order_ship",
+      "children": [
+       {
+        "type": "badge",
+        "id": "order_b4",
+        "text": "4",
+        "fill": "canvasPrimary"
+       },
+       {
+        "type": "text",
+        "id": "order_h4",
+        "text": "Ship",
+        "textRole": "label"
+       },
+       {
+        "type": "text",
+        "id": "order_t4",
+        "text": "Approval is recorded"
+       }
+      ]
+     }
+    ]
+   },
+   "connect": [
+    {
+     "id": "order_e1",
+     "from": "order_build",
+     "to": "order_review"
+    },
+    {
+     "id": "order_e2",
+     "from": "order_review",
+     "to": "order_stage"
+    },
+    {
+     "id": "order_e3",
+     "from": "order_stage",
+     "to": "order_ship"
+    }
+   ]
+  }
+ ]
+}

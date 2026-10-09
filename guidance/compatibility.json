@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "skill": "harness-slides",
+  "lastCompatible": {
+    "0.10.2": "9ccc243874eab2d927446f0bdc98389c30344f98",
+    "0.11.0": "63b855d2f73ca8c9481b42edc89016955d7c6f95",
+    "0.12.0": "a1bb16ef6da422176f3715e8363223064df0b584"
+  }
+}

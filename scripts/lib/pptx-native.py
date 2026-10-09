@@ -35,7 +35,12 @@ SITES = {
     'roundRect': {'top': 0, 'left': 1, 'bottom': 2, 'right': 3},
     'diamond': {'top': 0, 'left': 1, 'bottom': 2, 'right': 3},
     'ellipse': {'top': 0, 'left': 2, 'bottom': 4, 'right': 6},
+    # A hexagon has no site at the middle of its top or bottom edge, so only its sides attach.
+    'hexagon': {'right': 0, 'left': 3},
+    'chevron': {'top': 0, 'left': 1, 'bottom': 2, 'right': 3},
+    'can': {'top': 1, 'left': 2, 'bottom': 3, 'right': 4},
 }
+ROUTES = {'elbow': 'bentConnector', 'curve': 'curvedConnector'}
 IMAGE_TYPES = {'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'gif': 'image/gif'}
 
 
@@ -85,6 +90,13 @@ def fill(value):
     return f'<a:solidFill><a:srgbClr val="{value.lstrip("#").upper()}"/></a:solidFill>' if value else '<a:noFill/>'
 
 
+def outline(e):
+    """A shape's own line: none unless the scene gives it a stroke."""
+    if not e.get('stroke'):
+        return '<a:ln><a:noFill/></a:ln>'
+    return f'<a:ln w="{emu(e.get("strokeWeight", 1.5))}">{fill(e["stroke"])}</a:ln>'
+
+
 def paragraphs(e, font):
     align = {'left': 'l', 'center': 'ctr', 'right': 'r'}[e.get('align', 'left')]
     run = (f'<a:rPr lang="en-US" sz="{int(round(e["fontSize"] * 100))}" b="{1 if e.get("bold") else 0}" dirty="0">'
@@ -129,10 +141,12 @@ class IconLibrary:
 
 
 class Slide:
-    def __init__(self, spec, plan, title_type, library=None, subtitles=()):
+    def __init__(self, spec, plan, title_type, library=None, subtitles=(), slots=()):
         self.spec, self.plan, self.title_type, self.library = spec, plan, title_type, library
         # Element IDs that fill the layout's subtitle placeholders, paired with each placeholder's idx.
         self.placeholders = dict(zip(spec.get('placeholders', []), subtitles))
+        # Image IDs that fill the layout's picture placeholders, paired with each slot's idx and size.
+        self.slots = dict(zip(spec.get('pictures', []), slots))
         self.numbers, self.next = {}, 2
         self.rels, self.media = [], {}
         self.report = {'id': spec['id'], 'titlePlaceholder': False, 'attached': [], 'unattached': [], 'groups': [], 'icons': []}
@@ -183,7 +197,7 @@ class Slide:
             depth = int(round(20000 * e['width'] / min(e['width'], e['height'])))
             guides = f'<a:gd name="adj" fmla="val {depth}"/>'
         return (f'<p:sp>{non_visual("Sp", self.numbers[e["id"]], e["id"])}<p:spPr>{xfrm(e)}<a:prstGeom prst="{preset}"><a:avLst>{guides}</a:avLst></a:prstGeom>'
-                f'{fill(e.get("fill"))}<a:ln><a:noFill/></a:ln></p:spPr>{inner}</p:sp>')
+                f'{fill(e.get("fill"))}{outline(e)}</p:spPr>{inner}</p:sp>')
 
     def side(self, target, point):
         """Which side of the target shape a line end touches, if any."""
@@ -207,21 +221,62 @@ class Slide:
         if link:
             for tag, node, point in (('stCxn', link['from'], start), ('endCxn', link['to'], end)):
                 target = self.elements.get(node)
-                site = None
+                site, number = None, self.numbers.get(node)
                 if target and target['type'] == 'shape':
                     site = SITES.get(target.get('shape', 'rect'), {}).get(self.side(target, point))
+                elif target and target['type'] == 'icon' and target.get('style') != 'plain':
+                    # A group has no connection sites, but the disc or ring inside an icon does.
+                    site, number = SITES['ellipse'].get(self.side(target, point)), self.number(f'{node}#1')
                 if site is None:
                     joined = ''
                     break
-                joined += f'<a:{tag} id="{self.numbers[node]}" idx="{site}"/>'
+                joined += f'<a:{tag} id="{number}" idx="{site}"/>'
             self.report['attached' if joined else 'unattached'].append(e['id'])
-        flip = (' flipH="1"' if e.get('flipH') else '') + (' flipV="1"' if e.get('flipV') else '')
         arrow = '<a:tailEnd type="triangle"/>' if e.get('arrow') else ''
-        return (f'<p:cxnSp>{non_visual("CxnSp", self.numbers[e["id"]], e["id"], inner=joined)}<p:spPr>{xfrm(flat, flip)}'
-                f'<a:prstGeom prst="straightConnector1"><a:avLst/></a:prstGeom><a:ln w="{emu(e.get("weight", 2))}">'
+        preset = ROUTES.get(e.get('route')) if width and height else None
+        if preset:
+            # Connector 3 runs across, down, across; connector 2 turns once, across then down.
+            preset += '2' if e.get('turns') == 1 else '3'
+        if preset and e.get('lead') == 'vertical':
+            # Both presets lead off across. To lead off down, the connector is turned a quarter turn about its
+            # middle: the frame is written unturned, with its width and height swapped.
+            dx, dy = end[0] - start[0], end[1] - start[1]
+            box = {'x': e['x'] + (width - height) / 2, 'y': e['y'] + (height - width) / 2, 'width': height, 'height': width}
+            frame = xfrm(box, ' rot="5400000"' + (' flipH="1"' if dy < 0 else '') + (' flipV="1"' if dx > 0 else ''))
+        else:
+            frame = xfrm(flat, (' flipH="1"' if e.get('flipH') else '') + (' flipV="1"' if e.get('flipV') else ''))
+        return (f'<p:cxnSp>{non_visual("CxnSp", self.numbers[e["id"]], e["id"], inner=joined)}<p:spPr>{frame}'
+                f'<a:prstGeom prst="{preset or "straightConnector1"}"><a:avLst/></a:prstGeom><a:ln w="{emu(e.get("weight", 2))}">'
                 f'{fill(e.get("color", "#000000"))}{arrow}</a:ln></p:spPr></p:cxnSp>')
 
-    def picture(self, e):
+    def table(self, e):
+        """A native table: one graphic frame, a grid of editable cells, a filled header row and hairlines between rows."""
+        rows, font = e['rows'], self.plan['font']
+        widths = e.get('columnWidths') or [e['width'] / len(rows[0])] * len(rows[0])
+        heights = e.get('rowHeights') or [e['height'] / len(rows)] * len(rows)
+        pad, size, rule = emu(e.get('padding', 3.6)), int(round(e.get('fontSize', 18) * 100)), fill(e.get('ruleColor', '#BBBBBB'))
+
+        def cell(value, row):
+            head = row == 0
+            ink = e.get('headerColor' if head else 'color', '#000000')
+            back = e.get('headerFill') if head else e.get('bodyFill')
+            lines = ''.join(f'<a:p><a:r><a:rPr lang="en-US" sz="{size}" b="{1 if head else 0}" dirty="0">{fill(ink)}<a:latin typeface={quoteattr(font)}/>'
+                            f'<a:cs typeface={quoteattr(font)}/></a:rPr><a:t>{text(line)}</a:t></a:r></a:p>' for line in value.split('\n'))
+            # A border between two rows belongs to both cells, so the line under a row is also written as the top of the next.
+            none, hair = '<a:{0} w="0"><a:noFill/></a:{0}>', '<a:{0} w="9525">' + rule + '</a:{0}>'
+            edge = ''.join((hair if side == 'lnB' and not head or side == 'lnT' and row > 1 else none).format(side) for side in ('lnL', 'lnR', 'lnT', 'lnB'))
+            return (f'<a:tc><a:txBody><a:bodyPr/><a:lstStyle/>{lines}</a:txBody><a:tcPr marL="{pad}" marR="{pad}" marT="{pad}" marB="{pad}" anchor="ctr">'
+                    f'{edge}{fill(back)}</a:tcPr></a:tc>')
+
+        grid = ''.join(f'<a:gridCol w="{emu(w)}"/>' for w in widths)
+        body = ''.join(f'<a:tr h="{emu(heights[r])}">{"".join(cell(value, r) for value in row)}</a:tr>' for r, row in enumerate(rows))
+        return (f'<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="{self.numbers[e["id"]]}" name={quoteattr(e["id"])}/>'
+                '<p:cNvGraphicFramePr><a:graphicFrameLocks noGrp="1"/></p:cNvGraphicFramePr><p:nvPr/></p:nvGraphicFramePr>'
+                f'<p:xfrm><a:off x="{emu(e["x"])}" y="{emu(e["y"])}"/><a:ext cx="{emu(e["width"])}" cy="{emu(e["height"])}"/></p:xfrm>'
+                '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table">'
+                f'<a:tbl><a:tblPr firstRow="1"/><a:tblGrid>{grid}</a:tblGrid>{body}</a:tbl></a:graphicData></a:graphic></p:graphicFrame>')
+
+    def embed(self, e):
         with open(e['path'], 'rb') as stream:
             data = stream.read()
         extension = image_type(data)
@@ -229,7 +284,22 @@ class Slide:
             raise ValueError(f'{e["id"]}: use a PNG, JPEG or GIF image')
         name = f'harness-{hashlib.sha256(data).hexdigest()[:16]}.{extension}'
         self.media[name] = data
-        rel = self.relate(f'{REL}/image', f'../media/{name}')
+        return self.relate(f'{REL}/image', f'../media/{name}')
+
+    def slot_picture(self, e):
+        """A picture in the layout's own picture placeholder: it takes the slot's place and shape, cropped to fill it."""
+        idx, width, height = self.slots[e['id']]
+        rel, crop = self.embed(e), ''
+        if width and height:
+            ratio, slot = e['pixelWidth'] / e['pixelHeight'], width / height
+            trim = int(round((1 - (slot / ratio if ratio > slot else ratio / slot)) / 2 * 100000))
+            crop = f'<a:srcRect l="{trim}" r="{trim}"/>' if ratio > slot else f'<a:srcRect t="{trim}" b="{trim}"/>'
+        return (f'<p:pic><p:nvPicPr><p:cNvPr id="{self.numbers[e["id"]]}" name={quoteattr(e["id"])} descr={quoteattr(e["alt"])}/>'
+                f'<p:cNvPicPr><a:picLocks noGrp="1" noChangeAspect="1"/></p:cNvPicPr><p:nvPr><p:ph type="pic" idx="{idx}"/></p:nvPr></p:nvPicPr>'
+                f'<p:blipFill><a:blip r:embed="{rel}"/>{crop}<a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr/></p:pic>')
+
+    def picture(self, e):
+        rel = self.embed(e)
         box, crop = dict(e), ''
         ratio, slot = e['pixelWidth'] / e['pixelHeight'], e['width'] / e['height']
         if e.get('fit', 'contain') == 'contain':
@@ -347,9 +417,11 @@ class Slide:
         if e['type'] == 'line':
             return self.line(e)
         if e['type'] == 'image':
-            return self.picture(e)
+            return self.slot_picture(e) if e['id'] in self.slots else self.picture(e)
         if e['type'] == 'icon':
             return self.icon(e)
+        if e['type'] == 'table':
+            return self.table(e)
         raise ValueError(f'{e["id"]}: the native emitter does not write {e["type"]} objects yet; use pptx render')
 
     def grouped(self):
@@ -480,6 +552,13 @@ def emit(template, plan_path, output, layout_part=None):
         name = re.search(r'<p:cSld\b[^>]*name="([^"]*)"', xml)
         title = re.search(r'<p:ph\b[^>]*type="(title|ctrTitle)"', xml)
         subtitles = sorted(int(re.search(r'idx="(\d+)"', tag).group(1)) for tag in re.findall(r'<p:ph\b[^>]*>', xml) if 'type="subTitle"' in tag and 'idx=' in tag)
+        # Each picture placeholder's idx and size, in the order the layout lists them.
+        slots = []
+        for shape in re.findall(r'<p:sp>.*?</p:sp>', xml, flags=re.S):
+            tag = re.search(r'<p:ph\b[^>]*>', shape)
+            if tag and 'type="pic"' in tag.group(0) and 'idx=' in tag.group(0):
+                size = re.search(r'<a:ext cx="(\d+)" cy="(\d+)"', shape)
+                slots.append((int(re.search(r'idx="(\d+)"', tag.group(0)).group(1)), int(size.group(1)) if size else 0, int(size.group(2)) if size else 0))
         pictures = len([tag for tag in re.findall(r'<p:ph\b[^>]*>', xml) if 'type="pic"' in tag])
         # Any other content placeholder (a body, table or chart area) would sit empty under a composed canvas.
         chrome = ('title', 'ctrTitle', 'subTitle', 'pic', 'ftr', 'sldNum', 'dt')
@@ -491,7 +570,7 @@ def emit(template, plan_path, output, layout_part=None):
                 at, size = re.search(r'<a:off x="(-?\d+)" y="(-?\d+)"', shape), re.search(r'<a:ext cx="(\d+)" cy="(\d+)"', shape)
                 frame = (at.groups() + size.groups()) if at and size else None
                 break
-        return {'part': part, 'name': tidy(html.unescape(name.group(1))) if name else part, 'title': title.group(1) if title else None, 'subtitles': subtitles, 'pictures': pictures, 'bodies': bodies, 'frame': frame}
+        return {'part': part, 'name': tidy(html.unescape(name.group(1))) if name else part, 'title': title.group(1) if title else None, 'subtitles': subtitles, 'pictures': pictures, 'slots': slots, 'bodies': bodies, 'frame': frame}
 
     # A template can carry several masters that reuse layout names. Only the default layout's master is offered,
     # so a cover cannot land on a different master's artwork.
@@ -521,7 +600,7 @@ def emit(template, plan_path, output, layout_part=None):
         item['subtitled'] = item is subtitled
     if plan_path is None:
         unique = [items[0] for items in by_name.values() if len(items) == 1 or any(i['default'] for i in items)]
-        return {'layouts': [{k: v for k, v in item.items() if k not in ('part', 'frame', 'bodies')} for item in unique], 'default': next(i['name'] for i in layouts if i['default'])}
+        return {'layouts': [{k: v for k, v in item.items() if k not in ('part', 'frame', 'bodies', 'slots')} for item in unique], 'default': next(i['name'] for i in layouts if i['default'])}
     notes_master = next((n for n in sorted(parts) if re.fullmatch(r'ppt/notesMasters/notesMaster\d+\.xml', n)), None)
     ids, new_rels, overrides, report = [], [], [], []
     library = IconLibrary(plan['iconLibrary']['path'], plan['iconLibrary']['index']) if plan.get('iconLibrary') else None
@@ -541,7 +620,9 @@ def emit(template, plan_path, output, layout_part=None):
             chosen = next(i for i in layouts if i['default'])
         if len(spec.get('placeholders', [])) > len(chosen['subtitles']):
             raise ValueError(f'{spec["id"]}: layout {chosen["name"]} has {len(chosen["subtitles"])} subtitle placeholders; remove the extra text')
-        slide = Slide(spec, plan, chosen['title'], library, chosen['subtitles'])
+        if len(spec.get('pictures', [])) > len(chosen['slots']):
+            raise ValueError(f'{spec["id"]}: layout {chosen["name"]} has no picture slot; remove the picture')
+        slide = Slide(spec, plan, chosen['title'], library, chosen['subtitles'], chosen['slots'])
         slide.relate(f'{REL}/slideLayout', posixpath.relpath(chosen['part'], 'ppt/slides'))
         slide.report['layout'] = chosen['name']
         xml = slide.xml()
