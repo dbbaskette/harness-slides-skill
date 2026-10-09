@@ -77,7 +77,7 @@ brand's body size for this deck's delivery; a section that shrinks its text to
 fit more in will not match the others. Write
 only your section file, with the deck's `direction` copied unchanged and your ID
 prefix on every node. Check with `compose compile` and no `--output` until it
-fits, then preview each slide, and revise and look again where it needs it,
-twice at most. Before returning, name your weakest slide, fix it and preview
+fits, then preview your slides together, and revise and look again where one
+needs it, twice at most. Give each slide speaker `notes`. Before returning, name your weakest slide, fix it and preview
 once more. Report what still bothers you instead of polishing further: the
 lead reviews the deck as a whole.

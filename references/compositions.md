@@ -103,6 +103,9 @@ content needs; when that overrides a weight you set, `compile` and `preview`
 report `weight-overridden`. For bars drawn to scale use empty boxes, which have
 no minimum, and put the labels beside them.
 
+Give every content slide `notes`: what the presenter says, and the source
+behind the claim. A deck presented live without them gets a `no-notes` finding.
+
 `connect` joins two nodes with an arrow. A label on an arrow needs room: on a
 straight arrow it must fit the gap between the two nodes, so leave a spacer; on a
 slanted arrow it is placed beside the line, clear of every node.
@@ -178,10 +181,11 @@ proposal file. Add `--design-project CONTENT` to `compile` only when slides carr
 A deck of more than about ten content slides can be
 [built in parallel](parallel-build.md) where the harness runs subagents.
 
-Open every image. Because `compile` checks every slide in the file, either add
-slides one at a time or draft them all and then take them in turn with
-`--slide`. Either way, look at each slide; if it needs revising, revise it and
-look at the revision before the next. Two revisions is the limit for a slide:
+Work three slides at a time: write three, check them with one `compile`,
+render them with one `preview`, open the three images, revise, and move on.
+A batch costs one round trip where three single slides cost three, and the
+whole build renders in a few seconds either way. Look at each slide; if it
+needs revising, revise it and look at the revision before the next batch. Two revisions is the limit for a slide:
 after that, write down what still bothers you and move on. The final review
 picks up the worst of them. Findings point at things to look at: wording that describes a relationship
 with nothing drawn, a layout repeated from the previous slide, an arrow that

@@ -35,7 +35,7 @@ const luminance=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255).map(v=>v<
 export const contrastRatio=(a,b)=>{const [hi,lo]=[luminance(a),luminance(b)].sort((x,y)=>y-x);return (hi+.05)/(lo+.05);};
 
 export const composeContract=`Composition v1 (AI-owned; describe structure, never coordinates).
-{version:1,title,direction?:DIRECTION,slides:[{id,title,sources:[one or more IDs],canvas:NODE,connect?:[EDGE],brief?:BRIEF,notes?,intent?,layoutId?} | {id,title,sources,layout:TEMPLATE LAYOUT NAME,subtitle?,detail?,notes?}]}
+{version:1,title,direction?:DIRECTION,slides:[{id,title,sources:[one or more IDs],canvas:NODE,connect?:[EDGE],brief?:BRIEF,notes?:speaker notes,intent?,layoutId?} | {id,title,sources,layout:TEMPLATE LAYOUT NAME,subtitle?,detail?,notes?}]}
 A slide with layout uses that template layout's own placeholders (cover, section break, closing) and has no canvas; run compose layouts for the names.
 NODE containers: {type:stack,direction:row|column,gap?,align?,children:[NODE]} | {type:grid,columns:1-6,gap?,children:[NODE]} | {type:free,children:[NODE with at:{x,y,width,height} as 0-1 fractions]}.
 NODE leaves: {type:icon,id,icon:STABLE ICON ID from the brand's icon search,color?,style?:solid|outline|plain} | {type:box,id,text?|children?,shape?:rect|ellipse|roundRect|diamond|hexagon|chevron|can,fill?,color?,textRole?,align?,gap?} | {type:text,id,text,textRole?,color?,align?} | {type:image,id,src,alt,fit?} | {type:spacer}.
@@ -235,7 +235,7 @@ export async function compileComposition(comp,contract,{fonts}={}) {
   const gapSize={none:0,tight:inset/2,normal:inset,wide:sp.column??28};
   const bodyRole=contract.medium.delivery==='live'?'body':'bodyReference',measure=await measurer(contract,fonts);
   const iconSize=sl.icon?.size??48;
-  const scene={version:2,title:comp.title,mode:'new',canvas:sl.canvas,theme:brandTheme(contract),slides:[]},structure={groups:[],connectors:[],icons:[],layouts:[],adjusted:[],reading:[],direction:comp.direction??null,briefs:[]},room=[],dir=comp.direction;
+  const scene={version:2,title:comp.title,mode:'new',canvas:sl.canvas,theme:brandTheme(contract),slides:[]},structure={groups:[],connectors:[],icons:[],layouts:[],adjusted:[],reading:[],unspoken:[],direction:comp.direction??null,briefs:[]},room=[],dir=comp.direction;
 
   const style=n=>roles[n.textRole??bodyRole];
   // Text and icons keep their own size; everything else shares the space that is left.
@@ -393,6 +393,8 @@ export async function compileComposition(comp,contract,{fonts}={}) {
       structure.layouts.push({slide:s.id,layout:s.layout,placeholders});
     } else place(s.canvas,sl.contentBox,null);
     if(tight.length){problems.push(...tight);continue;}
+    // A slide presented live needs something for the presenter to say.
+    if(bodyRole==='body'&&!s.layout&&!(typeof s.notes==='string'&&s.notes.trim()))structure.unspoken.push(s.id);
     if(sizes.reading.length>1&&sizes.reading.length>sizes.body)structure.reading.push({slide:s.id,nodes:sizes.reading,size:roles.bodyReference.size,live:roles.body.size});
     if(!s.layout){const used=need(s.canvas,sl.contentBox.width);if(Number.isFinite(used))room.push({slide:s.id,needs:round(used),has:round(sl.contentBox.height)});}
     if(s.brief?.relation==='overlap') {

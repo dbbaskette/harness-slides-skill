@@ -26,7 +26,8 @@ minutes a content slide. Then for each content slide:
   of text or both. The title, the points, a focal statement of its own and the
   caveat are all the wording the slide will show; the build draws them and
   adds no claims.
-- **`caveat`**, if the claim needs one, and **`notes`** for the speaker.
+- **`caveat`**, if the claim needs one, and **`notes`**: what the presenter
+  says, and the source behind the claim. They go into the built slide's notes.
 - **`sources`:** what the slide rests on, as IDs: a section of the source
   material, or `request` when it comes from the brief.
 

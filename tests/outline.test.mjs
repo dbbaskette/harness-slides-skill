@@ -13,7 +13,7 @@ import {checkOutline,draftOutline,outlineContract} from '../scripts/lib/outline.
 
 const exec=promisify(execFile),cli=fileURLToPath(new URL('../scripts/harness-slides.mjs',import.meta.url));
 const live=async dir=>{const c=await brand(dir);c.medium.delivery='live';c.revision=contractRevision(c);return c;};
-const content=(id,extra={})=>({id,kind:'content',title:'A claim',understand:'What to take away.',relation:'parallel',points:[{label:'One',text:'First thing'},{label:'Two',text:'Second thing'}],sources:['s1'],...extra});
+const content=(id,extra={})=>({id,kind:'content',title:'A claim',understand:'What to take away.',relation:'parallel',points:[{label:'One',text:'First thing'},{label:'Two',text:'Second thing'}],notes:'Say this. Source: the report.',sources:['s1'],...extra});
 const outline=(slides,extra={})=>({version:1,title:'Deck',delivery:'live',slides,...extra});
 
 test('the outline contract names its fields and relations',()=>{
@@ -31,13 +31,13 @@ test('an outline reports every structure problem together',async t=>{
 
 test('an outline that is sound returns findings about the words',async t=>{
   const c=await live(await temporary(t)),long='word '.repeat(70).trim();
-  const deck=outline([{id:'cover_slide',kind:'cover',title:'Open'},content('slide_one',{title:'A very long claim that keeps going well past what one title line can hold. '.repeat(3)}),content('slide_two',{title:'Claim two',points:[{label:'One',text:long},{label:'Two'}]}),content('slide_three',{title:'Claim three'}),content('slide_four',{title:'Claim four',relation:'order'}),content('slide_five',{title:'claim TWO',rhythm:'breathing'})]);
+  const deck=outline([{id:'cover_slide',kind:'cover',title:'Open'},content('slide_one',{title:'A very long claim that keeps going well past what one title line can hold. '.repeat(3)}),content('slide_two',{title:'Claim two',points:[{label:'One',text:long},{label:'Two'}]}),content('slide_three',{title:'Claim three',notes:undefined}),content('slide_four',{title:'Claim four',relation:'order'}),content('slide_five',{title:'claim TWO',rhythm:'breathing'})]);
   const {findings,counts,budget,delivery}=await checkOutline(deck,c),codes=id=>findings.filter(f=>f.slide===id).map(f=>f.code);
   assert.equal(delivery,'live');assert.equal(budget,60);assert.equal(counts.slide_two,72);
   assert.deepEqual(codes('slide_one'),['title-too-long']);assert.deepEqual(codes('slide_two'),['over-budget']);
   assert.deepEqual(codes('slide_four'),['dense-run','no-focal']);assert.ok(codes('slide_five').includes('repeated-title'));
   // Layouts are a build matter, so a draft does not report them.
-  assert.deepEqual(codes('cover_slide'),[]);assert.deepEqual(codes('slide_three'),[]);
+  assert.deepEqual(codes('cover_slide'),[]);assert.deepEqual(codes('slide_three'),['no-notes']);
 });
 
 test('a draft is one self-contained wireframe page that never fails on length',async t=>{
@@ -85,7 +85,7 @@ test('outline check, draft and start work from the command line and feed the bui
   const lead=JSON.parse(await readFile(join(out,'lead-1.json')));
   assert.deepEqual(lead.direction,direction);assert.deepEqual(lead.slides.map(s=>[s.id,s.layout,s.subtitle]),[['cover_slide','Cover','Sub']]);validateComposition(lead,c);
   const brief=await readFile(join(out,'briefs','section-2.md'),'utf8');
-  for(const part of [/# Section 2 of Deck/,/`slide_dx`: "Claim d"/,/`slide_ex`: "Claim e"/,/The audience must understand: What to take away\./,/Prefix every node and edge ID you create with `s2_`/,/Blue marks the product\./,/Source material: notes\.md/,/"focal":"headingPrimary"/,/Before your section comes the slide "Claim c", built by another worker; after it comes a section slide/,/- One: First thing/])assert.match(brief,part);
+  for(const part of [/# Section 2 of Deck/,/`slide_dx`: "Claim d"/,/`slide_ex`: "Claim e"/,/The audience must understand: What to take away\./,/Prefix every node and edge ID you create with `s2_`/,/Blue marks the product\./,/Source material: notes\.md/,/"focal":"headingPrimary"/,/Before your section comes the slide "Claim c", built by another worker; after it comes a section slide/,/- One: First thing/,/Speaker notes, to go in the slide's `notes`: Say this\. Source: the report\./])assert.match(brief,part);
   assert.doesNotMatch(brief,/slide_ax/);
   assert.match(await readFile(join(out,'presentation-brief.md'),'utf8'),new RegExp(`SHA-256 \`${started.outlineSha256}\``));
   // Sections written by builders merge with the lead's files in the order start laid down.

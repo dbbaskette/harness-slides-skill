@@ -94,6 +94,7 @@ export async function checkOutline(outline,contract,{fonts}={}) {
     else{if(run.length>=4)findings.push({slide:run[3],code:'dense-run',detail:`${run.length} dense slides in a row from ${run[0]}. Lighten one and mark it breathing, or put a section slide between.`});run=[];}
   }
   if(run.length>=4)findings.push({slide:run[3],code:'dense-run',detail:`${run.length} dense slides in a row from ${run[0]}. Lighten one and mark it breathing, or put a section slide between.`});
+  if(delivery==='live')for(const s of content)if(!s.notes)findings.push({slide:s.id,code:'no-notes',detail:'A slide presented live needs speaker notes: what the presenter says, and the source behind the claim.'});
   for(const s of content)if(s.focal===undefined&&!['contrast','parallel','none'].includes(s.relation))findings.push({slide:s.id,code:'no-focal',detail:'Nothing is named as the point of this slide. Name it, unless the slide compares equals.'});
   return {delivery,budget,counts,findings};
 }
@@ -245,7 +246,7 @@ ${group.map((s,k)=>`
 ${k+1}. **\`${s.id}\`: "${s.title}"**
    - The audience must understand: ${s.understand}
    - Relation \`${s.relation}\`${s.rhythm?`, rhythm \`${s.rhythm}\``:''}. ${s.focal?`The point of the slide: ${s.focal}.`:'No focal point: it compares equals.'}
-${(s.points??[]).map(p=>`   - ${[p.label,p.text].filter(Boolean).join(': ')}`).join('\n')}${s.caveat?`\n   - Caveat line: "${s.caveat}"`:''}
+${(s.points??[]).map(p=>`   - ${[p.label,p.text].filter(Boolean).join(': ')}`).join('\n')}${s.caveat?`\n   - Caveat line: "${s.caveat}"`:''}${s.notes?`\n   - Speaker notes, to go in the slide's \`notes\`: ${s.notes}`:''}
    - Sources: ${JSON.stringify(s.sources)}`).join('\n')}
 
 Before your section comes ${beside(prev)}; after it comes ${beside(next)}. Do not echo a neighbour, and make your own slides differ from each other.

@@ -411,3 +411,10 @@ test('a live deck reports slides whose text was shrunk to the reading size',asyn
   // A reading deck is meant to be set at that size.
   assert.deepEqual((await compileComposition(slide('bodyReference'),brand())).structure.reading,[]);
 });
+
+test('a live deck reports content slides with no speaker notes',async()=>{
+  const live=brand();live.medium.delivery='live';live.revision=contractRevision(live);
+  const comp={version:1,title:'Deck',slides:[{id:'said_slide',title:'T',sources:['s1'],notes:'Say this.',canvas:{type:'box',id:'said_box',text:'x'}},{id:'mute_slide',title:'T',sources:['s1'],canvas:{type:'box',id:'mute_box',text:'x'}}]};
+  assert.deepEqual((await compileComposition(comp,live)).structure.unspoken,['mute_slide']);
+  assert.deepEqual((await compileComposition(comp,brand())).structure.unspoken,[]);
+});
