@@ -81,16 +81,17 @@ export async function templateLayouts(brand) {
   try{({stdout}=await exec('python3',['-B',fileURLToPath(new URL('./pptx-native.py',import.meta.url)),'layouts',resolve(native.path),native.layoutPart],{timeout:60000,maxBuffer:4*1024*1024}));}
   catch(error){throw new Error(error.code==='ENOENT'?'Python 3.9+ is required. Run harness-slides doctor.':error.stderr?.trim()||error.message);}
   const found=JSON.parse(stdout);
-  return {default:found.default,layouts:found.layouts.map(l=>({name:l.name,title:Boolean(l.title),subtitles:l.subtitles.length,pictures:l.pictures,canvas:l.default})),use:'A slide on the default layout has a canvas. A slide that names another layout fills its title and up to that many subtitle lines, and has no canvas. A layout with pictures reserves an area for a photo that compositions cannot fill yet, so it renders as an empty panel; prefer layouts with pictures: 0. A layout with title: false shows no title.'};
+  return {default:found.default,layouts:found.layouts.map(l=>({name:l.name,title:Boolean(l.title),subtitles:l.subtitles.length,pictures:l.pictures,canvas:l.default,...(l.subtitled?{subtitled:true}:{})})),use:'A content slide that sets a subtitle moves to the layout marked subtitled, and keeps its canvas. A slide on the default layout has a canvas. A slide that names another layout fills its title and up to that many subtitle lines, and has no canvas. A layout with pictures reserves an area for a photo that compositions cannot fill yet, so it renders as an empty panel; prefer layouts with pictures: 0. A layout with title: false shows no title.'};
 }
 
 // Catch a misspelled or overfilled template layout at compile, not at render.
 export async function checkLayouts(structure,brand) {
   const wanted=structure.layouts??[];if(!wanted.length)return;
-  if(!brand.design.nativeTemplate)throw new Error('This composition uses template layouts, which need a brand with a native template');
+  if(!brand.design.nativeTemplate){if(wanted.every(w=>w.layout==='@subtitled'))return;throw new Error('This composition uses template layouts, which need a brand with a native template');}
   const {layouts}=await templateLayouts(brand),tidy=name=>String(name).replace(/\s+/g,' ').trim();
   const wrong=[];
   for(const w of wanted) {
+    if(w.layout==='@subtitled'){if(!layouts.some(l=>l.subtitled))wrong.push(`${w.slide}: the template has no layout with a title, a subtitle line and an open canvas; remove the subtitle`);continue;}
     const match=layouts.find(l=>tidy(l.name)===tidy(w.layout));
     if(!match)wrong.push(`${w.slide}: the template has no layout named ${w.layout}. Available: ${layouts.map(l=>l.name).join(', ')}`);
     else if(w.placeholders.length>match.subtitles)wrong.push(`${w.slide}: layout ${match.name} has ${match.subtitles} subtitle placeholders; remove the extra text`);

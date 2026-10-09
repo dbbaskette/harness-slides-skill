@@ -1,9 +1,10 @@
 # Compose slides
 
 For new slides in a brand template. You describe each slide's structure; the
-compiler places it, fits the text and builds editable native objects. Approve
-[the per-slide proposal](design-walkthrough.md) first, and decide what each slide
-must make the audience understand before choosing its structure. The `direction`
+compiler places it, fits the text and builds editable native objects. Get the
+[draft](draft.md) approved first, or [the per-slide proposal](design-walkthrough.md)
+where there is no draft, and decide what each slide must make the audience
+understand before choosing its structure. The `direction`
 and each slide's `brief` are the only record of those [design](design.md)
 decisions that a composition needs.
 
@@ -102,6 +103,39 @@ content needs; when that overrides a weight you set, `compile` and `preview`
 report `weight-overridden`. For bars drawn to scale use empty boxes, which have
 no minimum, and put the labels beside them.
 
+Give every content slide `notes`: what the presenter says, and the source
+behind the claim. A deck presented live without them gets a `no-notes` finding.
+
+## Slide furniture
+
+Three things are set on the slide itself, not drawn in the canvas, so they sit
+in the same place on every slide:
+
+| Field | What it is |
+| --- | --- |
+| `subtitle` | One line under the title, in the template's own subtitle line: the section, or the question the slide answers |
+| `caveat` | A ruled strip at the foot. Text, or `{"label":"Limit","text":"…"}` with a one-word label |
+| `source` | A line under the caveat naming where the claim comes from |
+
+Each takes its height from the canvas, so use the ones a slide needs. Decide
+once which of them every slide in the deck carries, and keep to it.
+
+## Use the type range
+
+A slide set in one size has no first thing to look at. The brand's roles give a
+range; use it:
+
+- `metric` for the one number a slide is about, with its context beside it in
+  the body size.
+- `quote` for a statement that is the point of the slide.
+- `label` for the heading of a card or a group, the body size for what is
+  read, `caption` for a caveat or a source.
+
+One large element and a few supporting ones reads better than six items of
+equal weight. A role's own color gives way to plain ink when the deck's
+direction has given that color a job, and takes the focal color when the node
+is the slide's point.
+
 `connect` joins two nodes with an arrow. A label on an arrow needs room: on a
 straight arrow it must fit the gap between the two nodes, so leave a spacer; on a
 slanted arrow it is placed beside the line, clear of every node.
@@ -177,10 +211,11 @@ proposal file. Add `--design-project CONTENT` to `compile` only when slides carr
 A deck of more than about ten content slides can be
 [built in parallel](parallel-build.md) where the harness runs subagents.
 
-Open every image. Because `compile` checks every slide in the file, either add
-slides one at a time or draft them all and then take them in turn with
-`--slide`. Either way, look at each slide; if it needs revising, revise it and
-look at the revision before the next. Two revisions is the limit for a slide:
+Work three slides at a time: write three, check them with one `compile`,
+render them with one `preview`, open the three images, revise, and move on.
+A batch costs one round trip where three single slides cost three, and the
+whole build renders in a few seconds either way. Look at each slide; if it
+needs revising, revise it and look at the revision before the next batch. Two revisions is the limit for a slide:
 after that, write down what still bothers you and move on. The final review
 picks up the worst of them. Findings point at things to look at: wording that describes a relationship
 with nothing drawn, a layout repeated from the previous slide, an arrow that

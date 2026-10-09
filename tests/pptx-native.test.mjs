@@ -322,19 +322,28 @@ test('a slide can use another template layout, filling its title and subtitle pl
   // Give the fixture a second layout, "Cover", with a centred title and two subtitle placeholders.
   const ph=(type,idx)=>`<p:sp><p:nvSpPr><p:cNvPr id="${90+(idx??0)}" name="${type}"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr><p:ph type="${type}"${idx?` idx="${idx}"`:''}/></p:nvPr></p:nvSpPr><p:spPr><a:xfrm><a:off x="609600" y="${1000000*(1+(idx??0))}"/><a:ext cx="10972800" cy="838200"/></a:xfrm></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr lang="en-US"/></a:p></p:txBody></p:sp>`;
   const cover=layout.replace(/<p:cSld[^>]*>/,'<p:cSld name="Cover &amp; open">').replace(/<p:sp>(?:(?!<\/p:sp>).)*<p:ph type="title"\/>.*?<\/p:sp>/s,'').replace('</p:spTree>',ph('ctrTitle')+ph('subTitle',1)+ph('subTitle',2)+'</p:spTree>');
+  // And a third, the default layout with one subtitle line added: the layout a content slide with a subtitle moves to.
+  const lineLayout=layout.replace(/<p:cSld[^>]*>/,'<p:cSld name="Title and line">').replace('</p:spTree>',ph('subTitle',1)+'</p:spTree>');
   const withCover=join(dir,'two-layouts.pptx');
-  await rewrite(source,withCover,{add:{'ppt/slideLayouts/slideLayout2.xml':cover,'ppt/slideLayouts/_rels/slideLayout2.xml.rels':await part(source,'ppt/slideLayouts/_rels/slideLayout1.xml.rels')},
-    replace:{'ppt/slideMasters/slideMaster1.xml':[['</p:sldLayoutIdLst>','<p:sldLayoutId id="2147483900" r:id="rId77"/></p:sldLayoutIdLst>']],'ppt/slideMasters/_rels/slideMaster1.xml.rels':[['</Relationships>','<Relationship Id="rId77" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout2.xml"/></Relationships>']],
-      '[Content_Types].xml':[['</Types>','<Override PartName="/ppt/slideLayouts/slideLayout2.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/></Types>']]}});
+  await rewrite(source,withCover,{add:{'ppt/slideLayouts/slideLayout2.xml':cover,'ppt/slideLayouts/_rels/slideLayout2.xml.rels':await part(source,'ppt/slideLayouts/_rels/slideLayout1.xml.rels'),'ppt/slideLayouts/slideLayout3.xml':lineLayout,'ppt/slideLayouts/_rels/slideLayout3.xml.rels':await part(source,'ppt/slideLayouts/_rels/slideLayout1.xml.rels')},
+    replace:{'ppt/slideMasters/slideMaster1.xml':[['</p:sldLayoutIdLst>','<p:sldLayoutId id="2147483900" r:id="rId77"/><p:sldLayoutId id="2147483901" r:id="rId78"/></p:sldLayoutIdLst>']],'ppt/slideMasters/_rels/slideMaster1.xml.rels':[['</Relationships>','<Relationship Id="rId77" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout2.xml"/><Relationship Id="rId78" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout3.xml"/></Relationships>']],
+      '[Content_Types].xml':[['</Types>','<Override PartName="/ppt/slideLayouts/slideLayout2.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/><Override PartName="/ppt/slideLayouts/slideLayout3.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/></Types>']]}});
   assert.match(master,/sldLayoutIdLst/);
   const b=await rebrand(c,withCover),{templateLayouts}=await import('../scripts/lib/pptx-native.mjs');
-  assert.deepEqual((await templateLayouts(b)).layouts,[{name:'DEFAULT',title:true,subtitles:0,pictures:0,canvas:true},{name:'Cover & open',title:true,subtitles:2,pictures:0,canvas:false}].map((l,i)=>i?l:{...l,name:(layout.match(/<p:cSld name="([^"]*)"/)?.[1])??'ppt/slideLayouts/slideLayout1.xml'}));
+  assert.deepEqual((await templateLayouts(b)).layouts,[{name:'DEFAULT',title:true,subtitles:0,pictures:0,canvas:true},{name:'Cover & open',title:true,subtitles:2,pictures:0,canvas:false},{name:'Title and line',title:true,subtitles:1,pictures:0,canvas:false,subtitled:true}].map((l,i)=>i?l:{...l,name:(layout.match(/<p:cSld name="([^"]*)"/)?.[1])??'ppt/slideLayouts/slideLayout1.xml'}));
   const comp={version:1,title:'Deck',slides:[{id:'cover_slide',title:'Opening',layout:'Cover & open',subtitle:'For architects',detail:'October 2026',sources:['brief:test']},{id:'body_slide',title:'Body',sources:['brief:test'],canvas:{type:'box',id:'body_box',text:'x'}}]};
   const compiled=await compileComposition(comp,b),output=join(dir,'layouts.pptx'),result=await emitNativePptx({...compiled,brand:b,output,base:dir});
   assert.deepEqual(result.native.map(n=>n.layout).slice(0,1),['Cover & open']);assert.deepEqual(await audit(output),[]);
   const first=await part(output,'ppt/slides/harnessSlide1.xml');
   assert.match(await part(output,'ppt/slides/_rels/harnessSlide1.xml.rels'),/slideLayouts\/slideLayout2\.xml/);assert.match(await part(output,'ppt/slides/_rels/harnessSlide2.xml.rels'),/slideLayouts\/slideLayout1\.xml/);
   assert.match(first,/<p:ph type="ctrTitle"\/>/);assert.match(first,/<p:ph type="subTitle" idx="1"\/>.*For architects.*<p:ph type="subTitle" idx="2"\/>.*October 2026/s);assert.doesNotMatch(first.split('</p:grpSpPr>')[1],/a:xfrm/);
+  // A content slide with a subtitle moves to the template's title-and-subtitle layout and keeps its canvas.
+  const lined=structuredClone(comp);lined.slides[1].subtitle='Part one';
+  const linedOut=join(dir,'lined.pptx');await emitNativePptx({...await compileComposition(lined,b),brand:b,output:linedOut,base:dir});
+  const second=await part(linedOut,'ppt/slides/harnessSlide2.xml');
+  assert.match(await part(linedOut,'ppt/slides/_rels/harnessSlide2.xml.rels'),/slideLayouts\/slideLayout3\.xml/);assert.match(second,/<p:ph type="subTitle" idx="1"\/>.*Part one/s);assert.match(second,/name="body_box"/);assert.deepEqual(await audit(linedOut),[]);
+  const alone={version:1,title:'Deck',slides:[lined.slides[1]]};
+  await assert.rejects(async()=>emitNativePptx({...await compileComposition(alone,c),brand:c,output:join(dir,'nolayout.pptx'),base:dir}),/has no layout with a title, a subtitle line and an open canvas/);
   const unknown=structuredClone(comp);unknown.slides[0].layout='Missing layout';
   await assert.rejects(async()=>emitNativePptx({...await compileComposition(unknown,b),brand:b,output:join(dir,'no.pptx'),base:dir}),/the template has no layout named Missing layout\. Available: /);
   // Names match after tidying whitespace, and a layout without a title placeholder shows no title box.

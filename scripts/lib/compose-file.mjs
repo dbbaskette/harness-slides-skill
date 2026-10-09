@@ -78,7 +78,7 @@ export async function renderCompositionDir({file,output}) {
   const dir=resolve(file),load=async name=>JSON.parse(await readFile(join(dir,name),'utf8'));
   const scene=await load('scene.json'),structure=await load('structure.json'),brand=await load('brand-contract.json');
   if(structure.icons?.length&&!brand.design.nativeTemplate)throw new Error('This composition uses icons, which need a brand with a native template');
-  if(structure.layouts?.length&&!brand.design.nativeTemplate)throw new Error('This composition uses template layouts, which need a brand with a native template');
+  if(structure.layouts?.some(l=>l.layout!=='@subtitled')&&!brand.design.nativeTemplate)throw new Error('This composition uses template layouts, which need a brand with a native template');
   if(brand.design.nativeTemplate)return (await import('./pptx-native.mjs')).emitNativePptx({scene,structure,brand,output,base:dir});
   const {inventory,...result}=await (await import('./pptx-render.mjs')).renderPptxScene(scene,resolve(output),{base:dir});
   return {...result,emitter:'generated deck; the brand contract has no native template'};

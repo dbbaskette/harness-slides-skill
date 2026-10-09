@@ -481,7 +481,17 @@ def emit(template, plan_path, output, layout_part=None):
         title = re.search(r'<p:ph\b[^>]*type="(title|ctrTitle)"', xml)
         subtitles = sorted(int(re.search(r'idx="(\d+)"', tag).group(1)) for tag in re.findall(r'<p:ph\b[^>]*>', xml) if 'type="subTitle"' in tag and 'idx=' in tag)
         pictures = len([tag for tag in re.findall(r'<p:ph\b[^>]*>', xml) if 'type="pic"' in tag])
-        return {'part': part, 'name': tidy(html.unescape(name.group(1))) if name else part, 'title': title.group(1) if title else None, 'subtitles': subtitles, 'pictures': pictures}
+        # Any other content placeholder (a body, table or chart area) would sit empty under a composed canvas.
+        chrome = ('title', 'ctrTitle', 'subTitle', 'pic', 'ftr', 'sldNum', 'dt')
+        bodies = len([tag for tag in re.findall(r'<p:ph\b[^>]*>', xml) if not any(f'type="{kind}"' in tag for kind in chrome)])
+        # Where the title sits, so a layout can be matched to the default one. None means it is inherited from the master.
+        frame = None
+        for shape in re.findall(r'<p:sp>.*?</p:sp>', xml, flags=re.S):
+            if re.search(r'<p:ph\b[^>]*type="(title|ctrTitle)"', shape):
+                at, size = re.search(r'<a:off x="(-?\d+)" y="(-?\d+)"', shape), re.search(r'<a:ext cx="(\d+)" cy="(\d+)"', shape)
+                frame = (at.groups() + size.groups()) if at and size else None
+                break
+        return {'part': part, 'name': tidy(html.unescape(name.group(1))) if name else part, 'title': title.group(1) if title else None, 'subtitles': subtitles, 'pictures': pictures, 'bodies': bodies, 'frame': frame}
 
     # A template can carry several masters that reuse layout names. Only the default layout's master is offered,
     # so a cover cannot land on a different master's artwork.
@@ -502,14 +512,25 @@ def emit(template, plan_path, output, layout_part=None):
     by_name = {}
     for item in layouts:
         by_name.setdefault(item['name'], []).append(item)
+    # The layout a content slide moves to when it carries a subtitle: a title, a subtitle line and otherwise an open canvas.
+    # Its title must sit exactly where the default layout's does, so the slide still looks like a content slide.
+    home = next(i for i in layouts if i['default'])
+    open_with_subtitle = sorted((i for i in layouts if not i['default'] and i['title'] == home['title'] and i['frame'] == home['frame'] and i['subtitles'] and not i['pictures'] and not i['bodies']), key=lambda i: len(i['subtitles']))
+    subtitled = open_with_subtitle[0] if open_with_subtitle else None
+    for item in layouts:
+        item['subtitled'] = item is subtitled
     if plan_path is None:
         unique = [items[0] for items in by_name.values() if len(items) == 1 or any(i['default'] for i in items)]
-        return {'layouts': [{k: v for k, v in item.items() if k != 'part'} for item in unique], 'default': next(i['name'] for i in layouts if i['default'])}
+        return {'layouts': [{k: v for k, v in item.items() if k not in ('part', 'frame', 'bodies')} for item in unique], 'default': next(i['name'] for i in layouts if i['default'])}
     notes_master = next((n for n in sorted(parts) if re.fullmatch(r'ppt/notesMasters/notesMaster\d+\.xml', n)), None)
     ids, new_rels, overrides, report = [], [], [], []
     library = IconLibrary(plan['iconLibrary']['path'], plan['iconLibrary']['index']) if plan.get('iconLibrary') else None
     for index, spec in enumerate(plan['slides'], 1):
-        if spec.get('layout'):
+        if spec.get('layout') == '@subtitled':
+            if subtitled is None:
+                raise ValueError(f'{spec["id"]}: the template has no layout with a title, a subtitle line and an open canvas; remove the subtitle')
+            chosen = subtitled
+        elif spec.get('layout'):
             named = by_name.get(tidy(spec['layout']))
             if not named:
                 raise ValueError(f'{spec["id"]}: the template has no layout named {spec["layout"]}. Available: {", ".join(sorted(by_name))}')

@@ -24,10 +24,13 @@ back, at the quality of a one-line sketch.
    cover, section breaks and closing slide yourself.
 2. **Write the house style once**, in `presentation-brief.md`, and keep it to
    what has to match across sections: what each color stands for, the icon
-   style and color, where a caveat such as "illustrative" goes, and how arrows
-   are labelled. Do not say what a card looks like or cap what a slide may
+   style and color, which furniture every slide carries (a subtitle line, a
+   caveat strip, a source line) and what the subtitle says, and how arrows are
+   labelled. Do not say what a card looks like or cap what a slide may
    hold; that turns every section into the same boxes.
 3. **Brief each worker** with everything below. A worker knows only its brief.
+   `outline start` writes these briefs from an approved [draft](draft.md); add
+   what it cannot know, the guidance entry and each worker's preview file.
 4. **Write your own file** while they work: cover, section breaks, closing.
 5. **Merge, then review as a deck.** List the files in deck order and join them:
 
@@ -75,7 +78,7 @@ brand's body size for this deck's delivery; a section that shrinks its text to
 fit more in will not match the others. Write
 only your section file, with the deck's `direction` copied unchanged and your ID
 prefix on every node. Check with `compose compile` and no `--output` until it
-fits, then preview each slide, and revise and look again where it needs it,
-twice at most. Before returning, name your weakest slide, fix it and preview
+fits, then preview your slides together, and revise and look again where one
+needs it, twice at most. Give each slide speaker `notes`. Before returning, name your weakest slide, fix it and preview
 once more. Report what still bothers you instead of polishing further: the
 lead reviews the deck as a whole.

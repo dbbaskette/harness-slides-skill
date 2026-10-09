@@ -35,8 +35,9 @@ const luminance=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255).map(v=>v<
 export const contrastRatio=(a,b)=>{const [hi,lo]=[luminance(a),luminance(b)].sort((x,y)=>y-x);return (hi+.05)/(lo+.05);};
 
 export const composeContract=`Composition v1 (AI-owned; describe structure, never coordinates).
-{version:1,title,direction?:DIRECTION,slides:[{id,title,sources:[one or more IDs],canvas:NODE,connect?:[EDGE],brief?:BRIEF,notes?,intent?,layoutId?} | {id,title,sources,layout:TEMPLATE LAYOUT NAME,subtitle?,detail?,notes?}]}
+{version:1,title,direction?:DIRECTION,slides:[{id,title,sources:[one or more IDs],canvas:NODE,connect?:[EDGE],brief?:BRIEF,subtitle?,caveat?:text|{label,text},source?,notes?:speaker notes,intent?,layoutId?} | {id,title,sources,layout:TEMPLATE LAYOUT NAME,subtitle?,detail?,notes?}]}
 A slide with layout uses that template layout's own placeholders (cover, section break, closing) and has no canvas; run compose layouts for the names.
+A content slide's furniture is set on the slide, not drawn in the canvas: subtitle is one line under the title, in the template's own subtitle line; caveat is a ruled strip at the foot, with an optional one-word label such as Limit or Verify; source is a line beneath it. The canvas gets the room that is left.
 NODE containers: {type:stack,direction:row|column,gap?,align?,children:[NODE]} | {type:grid,columns:1-6,gap?,children:[NODE]} | {type:free,children:[NODE with at:{x,y,width,height} as 0-1 fractions]}.
 NODE leaves: {type:icon,id,icon:STABLE ICON ID from the brand's icon search,color?,style?:solid|outline|plain} | {type:box,id,text?|children?,shape?:rect|ellipse|roundRect|diamond|hexagon|chevron|can,fill?,color?,textRole?,align?,gap?} | {type:text,id,text,textRole?,color?,align?} | {type:image,id,src,alt,fit?} | {type:spacer}.
 sources name what a slide rests on: a document section, a finding, or one ID such as request or author_knowledge when it comes from the brief or general knowledge.
@@ -51,7 +52,7 @@ BRIEF, per content slide: {relation:order|dependency|hierarchy|membership|contra
 The title is the claim. The relation must be drawn: edges, chevrons or a column of steps for order, edges for dependency, edges, nesting or layers for hierarchy, a box holding two or more members for membership, side by side for contrast, a grid, row or column of like nodes for parallel, intersecting shapes for overlap, the metric text role for quantity.
 The focal node is a box or text; the compiler gives it the focal color and no other node, text or edge may use it. Text inside a filled box is given a readable color unless you set one.
 A labelled edge needs room: its label must fit the gap between the two nodes, so put a spacer between them.
-Generated IDs are reserved: <slide>_title, <slide>_subtitle, <slide>_detail, <box with children>_group, <labelled edge>_label.
+Generated IDs are reserved: <slide>_title, <slide>_subtitle, <slide>_detail, <slide>_caveat, <slide>_caveat_label, <slide>_caveat_rule, <slide>_source, <box with children>_group, <labelled edge>_label.
 A card's align has no effect when it holds a box, grid or image, because those fill the spare space.
 IDs match [a-zA-Z_][a-zA-Z0-9_-]{4,40} and are unique across the deck.
 Nest at most 8 levels. Run compose contract --brand brand-contract.json for the brand's content area, gap, padding and line sizes.
@@ -88,7 +89,7 @@ export function validateComposition(comp,contract,{collect}={}) {
     // Every problem on a slide is gathered, so one compile shows all of them.
     const found=[],attempt=check=>{try{check();}catch(error){found.push(error.message);}};
     if(!s||typeof s!=='object'||Array.isArray(s))throw new Error('each slide must be an object');
-    if(Object.keys(s).some(k=>!['id','title','sources','canvas','connect','notes','intent','layoutId','layout','subtitle','detail','brief'].includes(k)))fail(s.id,'unsupported slide field');
+    if(Object.keys(s).some(k=>!['id','title','sources','canvas','connect','notes','intent','layoutId','layout','subtitle','detail','brief','caveat','source'].includes(k)))fail(s.id,'unsupported slide field');
     claim(s.id,'slide');claim(`${s.id}_title`,s.id);
     attempt(()=>{if(!str(s.title))fail(s.id,'provide a slide title');});
     attempt(()=>{if(!Array.isArray(s.sources)||!s.sources.length||s.sources.some(x=>!str(x)))fail(s.id,'provide source references: one or more IDs naming what the slide rests on, such as request or author_knowledge');});
@@ -150,13 +151,21 @@ export function validateComposition(comp,contract,{collect}={}) {
     if(s.layout!==undefined) {
       // A template layout slide (cover, section break, closing) fills that layout's placeholders and draws nothing else.
       if(!str(s.layout)||s.layout.length>80)fail(s.id,'layout must be a template layout name');
-      if(s.canvas!==undefined||s.connect!==undefined)fail(s.id,'a slide with a template layout has no canvas or edges; put content on a standard slide');
+      if(s.canvas!==undefined||s.connect!==undefined||s.caveat!==undefined||s.source!==undefined)fail(s.id,'a slide with a template layout has no canvas, edges, caveat or source; put content on a standard slide');
       for(const key of ['subtitle','detail'])if(s[key]!==undefined){if(!str(s[key]))fail(s.id,`provide ${key} text or omit it`);claim(`${s.id}_${key}`,s.id);}
       if(s.detail!==undefined&&s.subtitle===undefined)fail(s.id,'detail needs a subtitle before it');
       if(brief!==undefined&&(!brief||typeof brief!=='object'||Object.keys(brief).some(k=>k!=='rhythm')||!rhythms.includes(brief.rhythm)))fail(s.id,'a template layout slide takes only brief.rhythm (anchor|dense|breathing)');
       summary.push({id:s.id,nodes:0,fills:[],edges:0,layout:s.layout});continue;
     }
-    attempt(()=>{if(s.subtitle!==undefined||s.detail!==undefined)fail(s.id,'subtitle and detail belong to a slide with a template layout');});
+    // A content slide's furniture: a subtitle line under the title, a caveat strip and a source line at the foot.
+    attempt(()=>{if(s.detail!==undefined)fail(s.id,'detail belongs to a slide with a template layout');});
+    attempt(()=>{if(s.subtitle!==undefined){if(!str(s.subtitle))fail(s.id,'provide subtitle text or omit it');claim(`${s.id}_subtitle`,s.id);}});
+    attempt(()=>{if(s.source!==undefined){if(!str(s.source))fail(s.id,'provide source text or omit it');claim(`${s.id}_source`,s.id);}});
+    attempt(()=>{if(s.caveat!==undefined){
+      const c=s.caveat,plain=typeof c==='string';
+      if(plain?!str(c):!c||typeof c!=='object'||Array.isArray(c)||Object.keys(c).some(k=>!['label','text'].includes(k))||!str(c.text)||c.label!==undefined&&(!str(c.label)||c.label.length>24))fail(s.id,'caveat is a line of text, or {label,text} with a label of a word or two');
+      claim(`${s.id}_caveat`,s.id);claim(`${s.id}_caveat_rule`,s.id);if(!plain&&c.label!==undefined)claim(`${s.id}_caveat_label`,s.id);
+    }});
     attempt(()=>{if(brief!==undefined) {
       if(!brief||typeof brief!=='object'||Array.isArray(brief)||Object.keys(brief).some(k=>!['relation','focal','rhythm'].includes(k)))fail(s.id,'brief takes relation, focal and rhythm');
       if(!relations.includes(brief.relation))fail(s.id,`brief.relation must be one of ${relations.join('|')}`);
@@ -211,6 +220,13 @@ async function measurer(contract,options) {
 }
 
 // The brand's own numbers, so fit can be planned instead of found by failed compiles.
+export const relationNames=relations,rhythmNames=rhythms;
+// How many lines each title runs to at the brand's title size, and how many the title box holds.
+export async function titleLines(contract,titles,{fonts}={}) {
+  validateBrandContract(contract,{medium:'slides'});
+  const measure=await measurer(contract,fonts),sl=contract.design.slides,t=sl.typography.title,one=measure.height('Ag',t,1e4),line=measure.height('Ag\nAg',t,1e4)-one;
+  return {fit:Math.max(1,Math.floor((sl.titleBox.height-one+.5)/line)+1),lines:titles.map(x=>Math.round((measure.height(x,t,sl.titleBox.width)-one)/line)+1)};
+}
 export async function composeSizes(contract,{fonts}={}) {
   validateBrandContract(contract,{medium:'slides'});
   const sl=contract.design.slides,sp=sl.spacing??{},inset=sp.inset??16,measure=await measurer(contract,fonts),t=sl.typography;
@@ -228,7 +244,7 @@ export async function compileComposition(comp,contract,{fonts}={}) {
   const gapSize={none:0,tight:inset/2,normal:inset,wide:sp.column??28};
   const bodyRole=contract.medium.delivery==='live'?'body':'bodyReference',measure=await measurer(contract,fonts);
   const iconSize=sl.icon?.size??48;
-  const scene={version:2,title:comp.title,mode:'new',canvas:sl.canvas,theme:brandTheme(contract),slides:[]},structure={groups:[],connectors:[],icons:[],layouts:[],adjusted:[],reading:[],direction:comp.direction??null,briefs:[]},room=[],dir=comp.direction;
+  const scene={version:2,title:comp.title,mode:'new',canvas:sl.canvas,theme:brandTheme(contract),slides:[]},structure={groups:[],connectors:[],icons:[],layouts:[],adjusted:[],reading:[],unspoken:[],direction:comp.direction??null,briefs:[]},room=[],dir=comp.direction;
 
   const style=n=>roles[n.textRole??bodyRole];
   // Text and icons keep their own size; everything else shares the space that is left.
@@ -306,7 +322,10 @@ export async function compileComposition(comp,contract,{fonts}={}) {
       if(!Number.isFinite(required))fail(`${s.id}/${n.id??n.name??n.type}`,'has no usable room; use fewer siblings, less nesting or larger weights');
       tight.push(`${s.id}/${n.id??n.name??n.type}: needs ${round(required)}pt of height but has ${round(rect.height)}pt at ${round(rect.width)}pt wide${parts(n,rect.width)}${inLines(n,rect,required)}; shorten the text, split the slide or restructure`);
     };
-    const textProps=(n,surface)=>{const st=style(n);return {fontSize:st.size,bold:st.bold,color:n.color?colors[n.color]:dir&&n.id===focalId&&n.type==='text'?colors[dir.focal]:ink(colors[st.colorRole],surface,st),...(n.align&&n.align!=='stretch'?{align:{start:'left',center:'center',end:'right'}[n.align]}:{})};};
+    // A role's own color may be one the direction has given a job (the focal, or a meaning). Ordinary text does not borrow it.
+    const taken=dir?new Set([dir.focal,...Object.keys(dir.meanings??{})].map(role=>colors[role].toUpperCase())):new Set();
+    const roleColor=st=>taken.has(colors[st.colorRole].toUpperCase())?colors.inkDeep:colors[st.colorRole];
+    const textProps=(n,surface)=>{const st=style(n);return {fontSize:st.size,bold:st.bold,color:n.color?colors[n.color]:dir&&n.id===focalId&&n.type==='text'?colors[dir.focal]:ink(roleColor(st),surface,st),...(n.align&&n.align!=='stretch'?{align:{start:'left',center:'center',end:'right'}[n.align]}:{})};};
     const box=r=>({x:round(r.x),y:round(r.y),width:round(r.width),height:round(r.height)});
 
     const place=(n,rect,members,surface=colors.canvasPrimary??'#FFFFFF')=>{
@@ -377,17 +396,44 @@ export async function compileComposition(comp,contract,{fonts}={}) {
       if(n.group){if(own.length>1)structure.groups.push({slide:s.id,id:n.id,members:own});members?.push(...own);}
     };
 
-    const title=roles.title;if(!s.layout)titleFit(s,tight);
-    put({id:`${s.id}_title`,type:'text',...sl.titleBox,text:s.title,role:'title',fontSize:title.size,bold:title.bold,color:colors[title.colorRole]});
+    const title=roles.title,furniture=[];if(!s.layout)titleFit(s,tight);
+    let area={...sl.contentBox},titleBox=sl.titleBox;
+    if(!s.layout) {
+      const cap=roles.caption,capColor=colors[cap.colorRole],muted=colors.inkSecondary??colors.inkDeep,gap=inset/2;
+      if(s.subtitle!==undefined) {
+        // The native deck writes this into the template's own subtitle line. Here it sits under a one-line title, and the content starts below it.
+        const sub=roles.bodyReference??roles[bodyRole],one=measure.height('Ag',sub,1e4),needs=measure.height(s.subtitle,sub,titleBox.width),top=measure.height(s.title,title,titleBox.width);
+        if(needs>one+.5)tight.push(`${s.id}/subtitle: runs past one line at ${sub.size}pt; shorten it`);
+        titleBox={...titleBox,height:round(Math.min(titleBox.height,top))};
+        const y=titleBox.y+titleBox.height;
+        furniture.push({id:`${s.id}_subtitle`,type:'text',x:titleBox.x,y:round(y),width:titleBox.width,height:round(one),text:s.subtitle,fontSize:sub.size,bold:false,color:muted});
+        structure.layouts.push({slide:s.id,layout:'@subtitled',placeholders:[`${s.id}_subtitle`]});
+        const start=Math.max(area.y,y+one+gap);area.height-=start-area.y;area.y=start;
+      }
+      if(s.source!==undefined){const h=measure.height(s.source,cap,area.width);area.height-=h;furniture.push({id:`${s.id}_source`,type:'text',x:area.x,y:round(area.y+area.height),width:area.width,height:round(h),text:s.source,fontSize:cap.size,bold:false,color:capColor});}
+      if(s.caveat!==undefined) {
+        const c=typeof s.caveat==='string'?{text:s.caveat}:s.caveat,strong={...cap,bold:true},lw=c.label?Math.min(area.width/3,measure.width(c.label,strong)+gap):0,h=measure.height(c.text,cap,area.width-lw);
+        area.height-=h;const y=round(area.y+area.height);
+        if(c.label)furniture.push({id:`${s.id}_caveat_label`,type:'text',x:area.x,y,width:round(lw),height:round(h),text:c.label,fontSize:cap.size,bold:true,color:colors.inkDeep});
+        furniture.push({id:`${s.id}_caveat`,type:'text',x:round(area.x+lw),y,width:round(area.width-lw),height:round(h),text:c.text,fontSize:cap.size,bold:false,color:capColor});
+        area.height-=4;furniture.push({id:`${s.id}_caveat_rule`,type:'line',x:area.x,y:round(area.y+area.height+1),width:area.width,height:1,color:muted,weight:1,arrow:false,flipH:false,flipV:false});
+      }
+      if(s.source!==undefined||s.caveat!==undefined)area.height-=gap;
+      if(!(area.height>inset*2))tight.push(`${s.id}: the subtitle, caveat and source leave no room for content; shorten or drop one`);
+    }
+    put({id:`${s.id}_title`,type:'text',...titleBox,text:s.title,role:'title',fontSize:title.size,bold:title.bold,color:colors[title.colorRole]});
+    for(const item of furniture)put(item);
     if(s.layout) {
       // The native emitter writes these into the layout's subtitle placeholders; the geometry here serves other emitters.
       const placeholders=[],body=roles[bodyRole];let y=sl.contentBox.y;
       for(const key of ['subtitle','detail'])if(s[key]!==undefined){const height=measure.height(s[key],body,sl.contentBox.width);put({id:`${s.id}_${key}`,type:'text',x:sl.contentBox.x,y:round(y),width:sl.contentBox.width,height:round(height),text:s[key],fontSize:body.size,bold:body.bold,color:colors[body.colorRole]});placeholders.push(`${s.id}_${key}`);y+=height+inset;}
       structure.layouts.push({slide:s.id,layout:s.layout,placeholders});
-    } else place(s.canvas,sl.contentBox,null);
+    } else if(area.height>inset*2)place(s.canvas,area,null);
     if(tight.length){problems.push(...tight);continue;}
+    // A slide presented live needs something for the presenter to say.
+    if(bodyRole==='body'&&!s.layout&&!(typeof s.notes==='string'&&s.notes.trim()))structure.unspoken.push(s.id);
     if(sizes.reading.length>1&&sizes.reading.length>sizes.body)structure.reading.push({slide:s.id,nodes:sizes.reading,size:roles.bodyReference.size,live:roles.body.size});
-    if(!s.layout){const used=need(s.canvas,sl.contentBox.width);if(Number.isFinite(used))room.push({slide:s.id,needs:round(used),has:round(sl.contentBox.height)});}
+    if(!s.layout){const used=need(s.canvas,area.width);if(Number.isFinite(used))room.push({slide:s.id,needs:round(used),has:round(area.height)});}
     if(s.brief?.relation==='overlap') {
       // Overlap is geometric: two shapes must intersect without one simply sitting inside the other.
       const shapes=elements.filter(e=>e.type==='shape'),inside=(a,b)=>a.x>=b.x&&a.y>=b.y&&a.x+a.width<=b.x+b.width&&a.y+a.height<=b.y+b.height;
