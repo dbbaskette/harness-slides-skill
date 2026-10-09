@@ -209,8 +209,12 @@ no GitHub account is required.
 
 Existing decks or research reports keep their saved task and runtime. Resuming
 uses that pin without fetching. Explicitly adopting newer guidance starts a new
-task and requires rechecking affected reviews. A failed fetch or incompatible
-runtime is reported; it is never described as current.
+task and requires rechecking affected reviews. A failed fetch is reported; it is
+never described as current.
+
+If the installed helpers are older than current guidance needs, new work uses the
+last guidance they support and the agent tells you an update is available. If no
+earlier guidance fits, the task is refused until you update.
 
 **Instructions update automatically; executable helpers do not.** Rerun the trusted
 shell installer from a current repository copy to update helpers or the entrypoint.
