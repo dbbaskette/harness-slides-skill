@@ -140,18 +140,24 @@ Ask for the visual as part of your deck request:
 Leave room for the headline and use our brand colors.
 ```
 
-The first time, the agent prepares the optional image helper and opens a
-separate Chrome window. Sign in to Google, then close that window. You can also
-ask `/harness-slides setup images` in advance (use `$harness-slides` in Codex).
-Later image requests run once and exit. There is no service to start or manage.
-Downloaded images and metadata are saved with your deck; sign-in stays private.
+Images are generated through the Gemini API with your own key, and they cost
+money: about five cents for each image at the default size, with no free tier.
+Create a key at <https://aistudio.google.com/apikey> and put it in your
+environment as `GEMINI_API_KEY` before you start the agent. Never paste the key
+into the chat; the agent will not ask for it. The agent tells you how many
+images a deck needs and what they will cost before it generates any, and each
+image is generated only after you approve it.
 
-This optional Gemini Web path needs Chrome and Python 3.11 or newer on macOS or
-Linux. It uses your Gemini web account and its limits, through an unofficial
-transport. A Google Cloud CLI login does not configure this session. The agent
-checks access and reports failures; it can retry a saved image download without
-asking Gemini to generate another image. See [image guidance](references/images.md)
-for helper details and [dependency notices](NOTICE.md) for licensing.
+Every image in a deck shares one art style, kept as a short `art-style.txt` in
+the deck's working folder. Images and their metadata are saved with your deck.
+A repeated request returns the saved image instead of paying for another one.
+
+This route was built from Google's documentation and has not yet been verified
+against the live API. The earlier route through a signed-in Gemini web session
+is still available when you ask for it by name; it needs Chrome and Python 3.11
+or newer and uses an unofficial transport. See
+[image guidance](references/images.md) for details and
+[dependency notices](NOTICE.md) for licensing.
 
 ## Improve an existing deck
 
