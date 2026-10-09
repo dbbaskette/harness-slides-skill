@@ -22,7 +22,7 @@ export async function auditSceneQuality(scene,{designReport,fonts,artifactDigest
   const geometry=new Map();for(const slide of scene.slides){const key=compositionGeometry(slide,scene.canvas);if(!geometry.has(key))geometry.set(key,[]);geometry.get(key).push(slide.id);}
   const deckReview={groups:[...geometry.values()].filter(ids=>ids.length>=3),questions:['What does each visual make easier to understand than the same wording in a list?','Which shared geometry supports comparison, and which changing relationship needs recomposition?']};
   for(const slide of scene.slides) {
-    const choice=designReport?.choices.find(c=>c.id===slide.id)??(slide.intent?{component:'custom-scene',intent:slide.intent}:null),textObjects=slide.elements.filter(e=>e.text||e.type==='table');
+    const initialChoice=designReport?.choices.find(c=>c.id===slide.id),choice=initialChoice?{...initialChoice,intent:slide.intent??initialChoice.intent}:slide.intent?{component:'custom-scene',intent:slide.intent}:null,textObjects=slide.elements.filter(e=>e.text||e.type==='table');
     for(const e of textObjects) {
       const cells=e.type==='table'?e.rows.flatMap((row,ri)=>row.map((text,ci)=>({text,bold:ri===0,cell:{row:ri,column:ci},width:(e.columnWidths??row.map(()=>e.width/row.length))[ci],height:e.height/e.rows.length,padding:e.padding??3.6}))):[{text:e.text,bold:e.bold??false,width:e.width,height:e.height,padding:3.6}];
       for(const cell of cells){const {font}=await fontFor(cell.bold);if(!font){findings.push({slide:slide.id,object:e.id,...(cell.cell?{cell:cell.cell}:{}),severity:'warn',code:'font-unavailable',detail:`Exact ${theme.font} ${cell.bold?'bold':'regular'} unavailable; supply the font or verify in the target editor`});continue;}
@@ -33,6 +33,7 @@ export async function auditSceneQuality(scene,{designReport,fonts,artifactDigest
         if(metrics.tabStopsEstimated)findings.push({slide:slide.id,object:e.id,severity:'warn',code:'tab-stop-review',detail:'Tab stops require native review; measurements use four spaces'});
       }
     }
+    if(['generated-art','sourced-image'].includes(slide.intent?.visual?.family)&&!slide.elements.some(e=>e.type==='image'))findings.push({slide:slide.id,code:'approved-asset-missing',severity:'error',detail:'The selected image/art family is absent from the built scene. Insert the asset or revise the proposal with user approval.'});
     const content=slide.elements.filter(e=>e.text||['table','chart','image'].includes(e.type));
     for(let i=0;i<content.length;i++)for(let j=i+1;j<content.length;j++){const a=content[i],b=content[j];if(!overlap(a,b))continue;const allowed=(designReport?.intentionalOverlaps??[]).some(x=>x.slide===slide.id&&((x.front===a.id&&x.back===b.id)||(x.front===b.id&&x.back===a.id)));if(!allowed)findings.push({slide:slide.id,object:a.id,relatedObjects:[b.id],severity:'warn',code:'content-collision',detail:'Content boxes overlap; repair or explicitly justify the intended annotation'});}
     const title=slide.elements.filter(e=>e.role==='title'||e.text===slide.title),body=slide.elements.filter(e=>!title.includes(e)).map(visible).join(' '),bodyNumbers=numbers(body);

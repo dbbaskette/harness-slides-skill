@@ -1,5 +1,6 @@
 # Content-led compositions
 
+Approve [the per-slide proposal](design-walkthrough.md) first.
 For a new deck, the agent can prepare a typed deck
 plan instead of hand-placing every object. Unbranded decks use neutral defaults;
 pass a resolved brand contract when identity is selected. Decide each slide's takeaway,
@@ -13,7 +14,7 @@ Query only the needed component:
 ```sh
 node scripts/harness-slides.mjs deck contract --id comparison
 node scripts/harness-slides.mjs deck inspect --file plan.json
-node scripts/harness-slides.mjs deck compile --file plan.json --brand brand-contract.json --output NEW_DIR
+node scripts/harness-slides.mjs deck compile --file plan.json --brand brand-contract.json --design-project CONTENT --output NEW_DIR
 ```
 
 The compiler supports statement, comparison, categories, process, timeline,
@@ -40,7 +41,7 @@ or initialize a workspace with both. Native master artwork comes from the actual
 brand template, not a re-created logo or theme approximation:
 
 ```sh
-node scripts/harness-slides.mjs workspace init --project WORKSPACE --file NEW_DIR/scene.json --brand NEW_DIR/brand-contract.json --design-report NEW_DIR/design-report.json --format pptx
+node scripts/harness-slides.mjs workspace init --project WORKSPACE --file NEW_DIR/scene.json --brand NEW_DIR/brand-contract.json --design-report NEW_DIR/design-report.json --design-project CONTENT --format pptx
 node scripts/harness-slides.mjs workspace build --project WORKSPACE
 ```
 

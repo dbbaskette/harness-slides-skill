@@ -34,13 +34,13 @@ export async function measureContext() {
   const samples = Object.fromEntries(Object.entries(outputs).map(([name, value]) => [name, count(value)]));
   const path = (paths, helpers = []) => readingPath(paths, files, samples, helpers);
   const entry = ['SKILL.md'];
-  const design = [...entry, 'references/design.md', 'references/authoring.md'];
+  const design = [...entry, 'references/design.md', 'references/design-walkthrough.md', 'references/authoring.md'];
   const review = 'references/review.md', google = 'references/google-slides.md';
   const readingPaths = {
     scopedPptx: path([...entry, 'references/editing.md', review]),
     scopedGoogle: path([...entry, google, review]),
-    newPptxNative: path([...design, 'references/templates.md', review]),
-    newGoogleNative: path([...design, 'references/templates.md', google, review]),
+    newPptxNative: path([...design, 'references/templates.md', 'references/native-critique.md', review]),
+    newGoogleNative: path([...design, 'references/templates.md', google, 'references/native-critique.md', review]),
     newPptxScene: path([...design, 'references/authoring-pptx.md', review], ['sceneContract']),
     newGoogleScene: path([...design, 'references/authoring-google.md', google, review], ['sceneContract']),
     contentLedPptx: path([...design,'references/content-components.md','references/brand-addons.md','references/quality.md',review],['comparisonContract']),

@@ -27,7 +27,7 @@ stay pinned. A build regenerates font measurements and binds critique to its
 current scene, quality revision and artifact digest:
 
 ```sh
-node scripts/harness-slides.mjs workspace init --project WORKSPACE --file COMPILED/scene.json --brand COMPILED/brand-contract.json --design-report COMPILED/design-report.json --format pptx
+node scripts/harness-slides.mjs workspace init --project WORKSPACE --file COMPILED/scene.json --brand COMPILED/brand-contract.json --design-report COMPILED/design-report.json --design-project CONTENT --format pptx
 node scripts/harness-slides.mjs workspace quality --project WORKSPACE --slide SLIDE_ID
 node scripts/harness-slides.mjs workspace critique --project WORKSPACE --assessment critique.json
 ```
@@ -60,7 +60,8 @@ a list. Repeated objection/response comparisons can be appropriate; different
 technical relationships in equivalent panels need a specific recomposition
 finding. Geometry signals request judgment and never force variety.
 
-Native-template authoring uses the same questions and concise per-slide decision
-records against the native revision and actual slide/object IDs. Custom scenes
+Native-template authoring requires [structured native critique](native-critique.md)
+against the native revision and actual slide/object IDs, plus the approved proposal.
+A bulk pixel note does not complete this assessment. Custom scenes
 carry optional intent; new creative work should supply it. Existing pinned tasks
 keep their recorded guidance/runtime; don't rewrite them to meet new contracts.

@@ -7,6 +7,13 @@ source hash. These are observations; the brand package supplies actual policy.
 ties produce candidates for a user decision. Image-heavy exemplars do not imply
 their pixels are editable geometry; inspect native masters/layouts.
 
+For new content, preserve brand identity, native masters, typography and protected
+artwork while choosing the body construction from the content. A column exemplar
+that can contain the text does not necessarily explain layers, topology, ownership
+or a decision. Search suitable exemplars, then adapt/recompose the body when a
+stronger supported treatment is needed. Preserve effective composition in faithful
+adaptation and narrower editing modes; honor an explicit layout requirement.
+
 Choose among the template's native layouts for each slide's content and
 relationships. Reuse its theme and protected identity without treating one
 selected layout as the default composition for the entire deck. Honor any

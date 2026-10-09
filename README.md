@@ -14,6 +14,19 @@ and a separate author-voice handoff. The agent handles these choices and helpers
 font files, reviews each slide’s title and evidence, and checks native rendering.
 Missing fonts and uncertain claims are reported for resolution.
 
+## Review the design before it builds
+
+For a new deck, the agent walks you through each proposed slide: its message,
+visible copy, layout, diagram/icons/image and important caveats. Approve it, ask
+for a change, or review the remaining plan together. Claude and Codex use their
+available question interface; chat works when a question tool is unavailable.
+The agent waits for your answer before construction. You can explicitly ask for
+an autonomous build when you prefer that.
+
+After building, it shows the rendered slides and pauses for revisions again.
+Technical checks, design critique and your acceptance are tracked separately.
+You never need to edit a JSON plan or run the internal helpers.
+
 ## 1. Install once
 
 You need **Git**, **Node.js 20 or newer**, and **Codex, Claude Code, or Cursor**.
@@ -22,7 +35,7 @@ PowerPoint inspection also needs **Python 3.9 or newer**.
 Run these commands in your terminal:
 
 ```sh
-git clone --branch v0.8.0 --depth 1 https://github.com/dbbaskette/harness-slides-skill.git
+git clone --branch v0.9.0 --depth 1 https://github.com/dbbaskette/harness-slides-skill.git
 cd harness-slides-skill
 bash scripts/Install-Harness-Slides.sh
 ```
@@ -33,8 +46,8 @@ skills. To preview the changes first, add `--dry-run` to the installer command.
 
 ## Know which version you are using
 
-The current published release is [v0.8.0](https://github.com/dbbaskette/harness-slides-skill/releases/tag/v0.8.0).
-The skill reports “Using Harness Slides v0.8.0” when starting or resuming work.
+The current published release is [v0.9.0](https://github.com/dbbaskette/harness-slides-skill/releases/tag/v0.9.0).
+The skill reports “Using Harness Slides v0.9.0” when starting or resuming work.
 A resumed deck may use its older saved runtime and will report that version.
 Guidance can refresh independently; its revision does not replace the runtime version.
 
@@ -239,16 +252,16 @@ representative guidance-start response. Bootstrap activation is shown separately
 | --- | ---: |
 | Discovery metadata | 39 |
 | Installed bootstrap | 412 |
-| Bootstrap + current guidance entry | 1,271 |
-| Scoped PPTX edit + final review | 2,854 |
-| Scoped Google edit + final review | 3,441 |
-| New PPTX deck from native template + review | 3,965 |
-| New Google deck from native template + review | 4,992 |
-| New PPTX scene + contract + review | 4,260 |
-| New Google scene + contract + review | 5,395 |
-| Content-led PPTX + selected component + review | 6,195 |
-| Font screening + structured critique + review | 3,251 |
-| Optional image guidance + download result | 2,365 |
+| Bootstrap + current guidance entry | 1,365 |
+| Scoped PPTX edit + final review | 3,022 |
+| Scoped Google edit + final review | 3,609 |
+| New PPTX deck from native template + review | 6,788 |
+| New Google deck from native template + review | 7,815 |
+| New PPTX scene + contract + review | 6,034 |
+| New Google scene + contract + review | 7,173 |
+| Content-led PPTX + selected component + review | 8,013 |
+| Font screening + structured critique + review | 3,439 |
+| Optional image guidance + download result | 2,507 |
 
 Intake, workspace, brand integration and image guidance load only when needed. Native-template
 authoring skips the scene contract; scene routes include its actual helper output.

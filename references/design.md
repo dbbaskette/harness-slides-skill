@@ -1,5 +1,6 @@
 # Design that carries meaning
 
+Use [the design walkthrough](design-walkthrough.md) before new creative construction.
 Use a clear takeaway per slide and make the hierarchy visible. Prefer a short
 claim title and evidence, relationship or example that supports it. A briefing
 deck can be denser than a live talk. Preserve required content and qualifications.
@@ -25,7 +26,9 @@ Consider the alternatives that serve this slide:
 | An experience, setting or conceptual idea | Relevant supplied, sourced or generated illustration/image |
 | A statement or a few items best read directly | Attributed quote or concise text/list |
 
-These are options, not a rotation schedule or a fixed menu. Decide whether icons,
+These are options, not a rotation schedule or a fixed menu. Identify a specific asset concept/construction and route before choosing no asset.
+A deck-level dismissal of icons or imagery does not decide subsequent slides.
+Decide whether icons,
 imagery, a diagram, colored grouping, or plain text improves comprehension on
 this slide. Use available authorized asset/generation tools when imagery serves
 the message; keep explanatory diagrams and labels editable. Generated imagery
@@ -39,7 +42,9 @@ Before selecting a component, record a concise decision (not a reasoning transcr
 - Selected treatment and what it makes easier to understand.
 - Visual family and communicative purpose: text/no asset, icon, native diagram,
   regions, table/chart, supplied/sourced image or generated art.
-- One plausible alternative and a content-specific reason for rejecting it.
+- The strongest feasible alternative for this content and a specific reason for
+  rejecting it. Rejecting invented metrics or unrelated decoration is not a comparison
+  with a useful diagram, image or approved functional icon.
 
 Topology, flow, ownership, containment and decision content needs visible supported
 objects and relationships. Headings and prose inside boxes are not automatically
@@ -59,11 +64,34 @@ Keep palette, typography, hierarchy, recurring anchors and asset treatment
 coherent. The narrative thread comes from the takeaways and their progression;
 it does not require every slide to share the same body layout.
 
+For new work/redesigns, establish an art direction as well as an information
+structure: the focal scale, contrast between dominant and supporting elements,
+color roles and label treatment. A technically correct diagram can still look
+like an unfinished wireframe. Make its mechanism visually prominent, with
+deliberate proportions and a clear silhouette at thumbnail size; then judge the
+actual full-size pixels. White space should frame a focal element rather than
+leave a small diagram stranded. Choose restraint or richer color for this brief;
+neither all-neutral panels nor saturated panels are a default for every slide.
+
 Give color a role: emphasize the finding, distinguish meaningful categories or
 signal sections. Use the selected brand palette if present. Align repeated
 components to common anchors; group related objects, preserve whitespace and
 keep enough room for native text wrapping. Use color boxes to make meaningful
 grouping visible, with labels or other cues besides color.
+
+Use a compact working palette: default to at most 3–4 chromatic content colors
+per slide, often fewer, and reuse their meanings across the deck. Neutrals and
+required identity artwork are separate; do not add an accent simply because the
+brand palette offers it. Honor the user's selected subset and excluded colors
+in text, shapes, connectors, charts and image briefs. More colors for necessary
+data categories require an explicit task-specific decision, not random variety.
+
+Place node labels inside their object or consistently beside it; put captions
+next to their visual and path labels beside the specific connector segment they
+describe. Leave clearance around arrowheads and route connectors around text.
+Use consistent insets within comparable regions. A label centered in leftover
+space, or halfway between two unrelated objects, has an ambiguous owner even
+when it does not overlap. Repair ownership and reading order before shrinking it.
 
 Use native objects for diagrams and editable labels. Prefer an available approved
 functional icon library when a recognizable concept benefits from an icon;
