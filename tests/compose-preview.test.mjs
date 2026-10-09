@@ -100,3 +100,16 @@ test('a filled box inside a card keeps its own contrast finding',async t=>{
   const {scene,structure}=await compileComposition(comp,c),findings=await screenComposition({scene,structure});
   assert.ok(findings.some(f=>f.object==='inner_box'&&f.code==='contrast'));
 });
+
+test('screens ask for a direction and briefs, and notice dense runs and label titles',async t=>{
+  const c=await brand(await temporary(t)),canvas=n=>({type:'stack',direction:'row',children:[{type:'box',id:`left_${n}`,text:'A'},{type:'box',id:`right_${n}`,text:'B'}]});
+  const page=(n,title,brief)=>({id:`slide_${n}`,title,sources:['brief:test'],canvas:canvas(n),...(brief?{brief}:{})});
+  const plain={version:1,title:'Deck',slides:[page('aa','Overview')]},bare=await compileComposition(plain,c);
+  const first=await screenComposition(bare),codes=(found,id)=>found.filter(f=>f.slide===id).map(f=>f.code);
+  assert.ok(codes(first,'slide_aa').includes('no-direction'));assert.ok(codes(first,'slide_aa').includes('no-brief'));assert.ok(codes(first,'slide_aa').includes('label-title'));
+  const direction={focal:'headingPrimary',neutral:'canvasSecondary'},dense={relation:'contrast',rhythm:'dense'};
+  const run={version:1,title:'Deck',direction,slides:[...['aa','bb','cc','dd','ee'].map(n=>page(n,`Team ${n} owns one part of the system`,dense)),{...page('ff','A pause before the next part',{relation:'contrast',rhythm:'breathing'})}]};
+  const found=await screenComposition(await compileComposition(run,c));
+  assert.ok(!found.some(f=>['no-direction','no-brief','label-title'].includes(f.code)));
+  assert.deepEqual(found.filter(f=>f.code==='dense-run').map(f=>f.slide),['slide_dd','slide_ee']);
+});

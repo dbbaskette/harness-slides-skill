@@ -9,6 +9,59 @@ must make the audience understand before choosing its structure.
 node scripts/harness-slides.mjs compose contract
 ```
 
+## Decide the deck's direction once
+
+Before the first slide, write a `direction` for the whole deck:
+
+| Field | Decide |
+| --- | --- |
+| `focal` | The one color that means "look here" |
+| `neutral` | The panel color everything else starts as |
+| `meanings` | What each other color stands for, such as one product or one state |
+| `motif` | One recurring device and the job it does, if the deck has one |
+
+Every slide then follows it. Boxes start neutral, and fills come only from the
+neutral, the meanings and the brand's canvas color. A color in `meanings` keeps
+that meaning on every slide; never borrow it for decoration. Nothing uses the
+focal color except the one node a slide names as its point: not another box, not
+text, not an arrow. Arrows are drawn in an ink color. The focal color does not
+count toward the brand's limit on fill colors per slide.
+
+## Give every content slide a brief
+
+```json
+"brief": {"relation": "order", "focal": "step_three", "rhythm": "dense"}
+```
+
+1. **The title is the claim.** Write it as a sentence the slide then supports.
+2. **Count the real units.** How many things are on this slide? Take the number
+   from the content, never from a layout.
+3. **Name the relation between them.** It decides the form:
+
+| Relation | The parts are | Draw it as |
+| --- | --- | --- |
+| `order` | steps in sequence | nodes joined by edges, chevrons, or steps stacked in a column |
+| `dependency` | things that rely on or feed each other | nodes joined by edges |
+| `hierarchy` | levels, parents and children | edges, nested boxes or stacked layers |
+| `membership` | a group and its members | a box holding two or more members |
+| `contrast` | things compared | side by side |
+| `overlap` | things that share a part | intersecting shapes |
+| `quantity` | a number that matters | the `metric` text role, with its context |
+| `none` | words best read directly | text, a quote or an image |
+
+4. **Name the focal node**, the box or text that carries the claim. The compiler
+   colors it: a box gets the focal fill, a text gets the focal color. Leave its own
+   fill and color unset. A slide that compares equals may have none. A focal node
+   needs a direction.
+5. **Tag the rhythm:** `anchor` for structure, `dense` for information, `breathing`
+   for a pause. Content slides default to dense; cover, section and closing slides
+   are anchors and take only `rhythm` in their brief. Four dense slides in a row is
+   a finding.
+
+`compile` refuses a relation that is not drawn, a second node in the focal color,
+and a fill outside the direction, for every slide in one pass. Choose `none` when
+the words really are enough; do not draw a diagram to satisfy the rule.
+
 ## Design each slide from its content
 
 There are no slide types to pick from. Build the structure the content needs
@@ -84,7 +137,8 @@ proposal file. Add `--design-project CONTENT` to `compile` only when slides carr
 Open every image. After each new slide, look at it and revise once before moving
 on. Findings point at things to look at: wording that describes a relationship
 with nothing drawn, a layout repeated from the previous slide, an arrow that
-could not be attached, an icon that blends into the card behind it. They are not approval, and no finding does not mean the
+could not be attached, an icon that blends into the card behind it, a deck with
+no direction, a slide with no brief, a title that reads as a label. They are not approval, and no finding does not mean the
 slide is good. A card that is mostly empty, a diagram crowded into a corner or
 an arrow crossing a label are yours to see.
 
