@@ -18,7 +18,8 @@ export async function renderPptxScene(scene,output,{base=process.cwd(),brand}={}
       if(e.type==='text')slide.addText(e.text,{...box,...style});
       else if(e.type==='shape') {
         slide.addShape(shapeKinds[e.shape??'rect'][0],{...box,fill:e.fill?{color:hex(e.fill)}:{color:hex('background'),transparency:100},line:{transparency:100}});
-        if(e.text)slide.addText(e.text,{...box,...style,objectName:`${e.id}_text`});
+        // The label is a separate box here; keep it inside the preset's own text area so it cannot spill past the outline.
+        if(e.text){const [,,,fx,fy]=shapeKinds[e.shape??'rect'];slide.addText(e.text,{...box,x:box.x+box.w*(1-fx)/2,y:box.y+box.h*(1-fy)/2,w:box.w*fx,h:box.h*fy,...style,objectName:`${e.id}_text`});}
       } else if(e.type==='line')slide.addShape(pptx.ShapeType.line,{...box,flipH:e.flipH??false,flipV:e.flipV??false,line:{color:hex(e.color??'accent'),width:e.weight??2,...(e.arrow?{endArrowType:'triangle'}:{})}});
       else if(e.type==='table')slide.addTable(e.rows.map((row,i)=>row.map(text=>({text,options:{bold:i===0,color:hex(i===0?(e.headerColor??e.color??'text'):(e.color??'text')),fill:hex(i===0?(e.headerFill??'muted'):(e.bodyFill??'background'))}}))),{...box,...style,margin:e.padding??3.6,valign:'middle',border:{pt:0.5,color:'CCCCCC'},fill:hex('background'),autoPage:false,rowH:e.height/e.rows.length/72,colW:(e.columnWidths??e.rows[0].map(()=>e.width/e.rows[0].length)).map(v=>v/72)});
       else if(e.type==='image') {

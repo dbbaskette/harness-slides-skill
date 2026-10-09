@@ -59,7 +59,7 @@ async function build(t,comp=flow(),options) {
 test('slides replace the template samples and keep its master, layout and theme bytes',async t=>{
   const {output,c,result}=await build(t),list=await names(output),source=c.design.nativeTemplate.path;
   assert.equal(result.slides,1);assert.equal(result.emitter,'native template');assert.ok(result.removedTemplateParts>=2);
-  assert.deepEqual(list.filter(n=>/^ppt\/slides\/slide\d+\.xml$/.test(n)),['ppt/slides/slide1.xml']);
+  assert.deepEqual(list.filter(n=>/^ppt\/slides\/[^_/]+\.xml$/.test(n)),['ppt/slides/harnessSlide1.xml']);
   assert.equal(list.filter(n=>n.startsWith('ppt/notesSlides/')&&n.endsWith('.xml')&&!n.includes('_rels')).length,1);
   for(const name of ['ppt/slideMasters/slideMaster1.xml','ppt/slideLayouts/slideLayout1.xml','ppt/theme/theme1.xml'])assert.equal(await part(output,name),await part(source,name));
   const types=await part(output,'[Content_Types].xml'),presentation=await part(output,'ppt/presentation.xml'),rels=await part(output,'ppt/_rels/presentation.xml.rels');
@@ -69,7 +69,7 @@ test('slides replace the template samples and keep its master, layout and theme 
 });
 
 test('the title uses the layout placeholder and shape text lives inside its shape',async t=>{
-  const {output,result}=await build(t),xml=await part(output,'ppt/slides/slide1.xml');
+  const {output,result}=await build(t),xml=await part(output,'ppt/slides/harnessSlide1.xml');
   assert.equal(result.titlePlaceholder,'title');assert.equal(result.native[0].titlePlaceholder,true);
   const title=xml.match(/<p:sp>(?:(?!<\/p:sp>).)*<p:ph type="title"\/>.*?<\/p:sp>/s)[0];
   assert.match(title,/<p:spPr\/>/);assert.match(title,/Requests pass through stages/);assert.doesNotMatch(title,/a:xfrm/);
@@ -79,13 +79,13 @@ test('the title uses the layout placeholder and shape text lives inside its shap
 });
 
 test('a template layout without a title placeholder gets a positioned title text box',async t=>{
-  const {output,result}=await build(t,flow(),{title:false}),xml=await part(output,'ppt/slides/slide1.xml');
+  const {output,result}=await build(t,flow(),{title:false}),xml=await part(output,'ppt/slides/harnessSlide1.xml');
   assert.equal(result.titlePlaceholder,null);assert.doesNotMatch(xml,/<p:ph /);
   assert.match(xml,/name="flow_slide_title"\/><p:cNvSpPr txBox="1">/);
 });
 
 test('edges attach to the facing connection sites and box children form a group',async t=>{
-  const {output,result}=await build(t),xml=await part(output,'ppt/slides/slide1.xml'),id=name=>xml.match(new RegExp(`<p:cNvPr id="(\\d+)" name="${name}"`))[1];
+  const {output,result}=await build(t),xml=await part(output,'ppt/slides/harnessSlide1.xml'),id=name=>xml.match(new RegExp(`<p:cNvPr id="(\\d+)" name="${name}"`))[1];
   assert.deepEqual(result.native[0].attached,['edge_one']);assert.deepEqual(result.native[0].unattached,[]);assert.deepEqual(result.native[0].groups,['node_card_group']);
   const connector=xml.match(/<p:cxnSp>.*?<\/p:cxnSp>/s)[0];
   assert.match(connector,new RegExp(`<a:stCxn id="${id('node_from')}" idx="3"/><a:endCxn id="${id('node_card')}" idx="1"/>`));
@@ -98,13 +98,13 @@ test('edges attach to the facing connection sites and box children form a group'
 
 test('an edge to a shape without known connection sites is drawn but reported unattached',async t=>{
   const comp=flow();comp.slides[0].canvas.children[0].shape='hexagon';
-  const {output,result}=await build(t,comp),xml=await part(output,'ppt/slides/slide1.xml');
+  const {output,result}=await build(t,comp),xml=await part(output,'ppt/slides/harnessSlide1.xml');
   assert.deepEqual(result.native[0].unattached,['edge_one']);assert.match(xml,/<p:cxnSp>/);assert.doesNotMatch(xml,/stCxn/);
 });
 
 test('nested groups are written inside their parent group',async t=>{
   const comp=flow();Object.assign(comp.slides[0].canvas,{id:'whole_row',group:true});
-  const {output,result}=await build(t,comp),xml=await part(output,'ppt/slides/slide1.xml');
+  const {output,result}=await build(t,comp),xml=await part(output,'ppt/slides/harnessSlide1.xml');
   assert.deepEqual(result.native[0].groups.sort(),['node_card_group','whole_row']);
   const outer=xml.match(/<p:grpSp><p:nvGrpSpPr><p:cNvPr id="\d+" name="whole_row"\/>.*<\/p:grpSp>/s)[0];
   assert.match(outer,/name="node_from"/);assert.match(outer,/<p:grpSp><p:nvGrpSpPr><p:cNvPr id="\d+" name="node_card_group"\/>/);
@@ -115,8 +115,8 @@ test('notes use the template notes master and escape their text',async t=>{
   const {output}=await build(t),list=await names(output),notes=list.find(n=>/^ppt\/notesSlides\/harnessNotes1\.xml$/.test(n));
   assert.ok(notes);const xml=await part(output,notes),rels=await part(output,'ppt/notesSlides/_rels/harnessNotes1.xml.rels');
   assert.match(xml,/<a:t>First line<\/a:t>/);assert.match(xml,/<a:t>Second &amp; &lt;last&gt;<\/a:t>/);
-  assert.match(rels,/notesMasters\/notesMaster1\.xml/);assert.match(rels,/slides\/slide1\.xml/);
-  assert.match(await part(output,'ppt/slides/_rels/slide1.xml.rels'),/notesSlides\/harnessNotes1\.xml/);
+  assert.match(rels,/notesMasters\/notesMaster1\.xml/);assert.match(rels,/slides\/harnessSlide1\.xml/);
+  assert.match(await part(output,'ppt/slides/_rels/harnessSlide1.xml.rels'),/notesSlides\/harnessNotes1\.xml/);
   assert.match(await part(output,'[Content_Types].xml'),/PartName="\/ppt\/notesSlides\/harnessNotes1\.xml" ContentType="[^"]*notesSlide\+xml"/);
 });
 
@@ -124,12 +124,12 @@ test('images are embedded with alt text, fitted for contain and cropped for cove
   const dir=await temporary(t);await writeFile(join(dir,'wide.png'),png);
   const comp=fit=>({version:1,title:'Images',slides:[{id:'image_slide',title:'An image',sources:['brief:test'],canvas:{type:'image',id:'wide_image',src:'wide.png',alt:'A "wide" picture',fit}}]});
   const c=await brand(dir),render=async(fit,name)=>{const compiled=await compileComposition(comp(fit),c),output=join(dir,name);await emitNativePptx({...compiled,brand:c,output,base:dir});return output;};
-  const contain=await render('contain','contain.pptx'),xml=await part(contain,'ppt/slides/slide1.xml'),list=await names(contain);
+  const contain=await render('contain','contain.pptx'),xml=await part(contain,'ppt/slides/harnessSlide1.xml'),list=await names(contain);
   assert.equal(list.filter(n=>/^ppt\/media\/harness-[0-9a-f]{16}\.png$/.test(n)).length,1);
   assert.match(xml,/descr='A "wide" picture'/);assert.match(xml,/<a:blip r:embed="rId2"\/>/);assert.doesNotMatch(xml,/srcRect/);
   const ext=xml.match(/<p:pic>.*?<a:ext cx="(\d+)" cy="(\d+)"\/>/s);assert.equal(Math.round(ext[1]/ext[2]),2);
-  assert.match(await part(contain,'ppt/slides/_rels/slide1.xml.rels'),/relationships\/image" Target="\.\.\/media\/harness-/);
-  assert.match(await part(await render('cover','cover.pptx'),'ppt/slides/slide1.xml'),/<a:srcRect t="\d+" b="\d+"\/>/);
+  assert.match(await part(contain,'ppt/slides/_rels/harnessSlide1.xml.rels'),/relationships\/image" Target="\.\.\/media\/harness-/);
+  assert.match(await part(await render('cover','cover.pptx'),'ppt/slides/harnessSlide1.xml'),/<a:srcRect t="\d+" b="\d+"\/>/);
 });
 
 test('unsupported scene objects and a missing template are refused by name',async t=>{
@@ -156,8 +156,92 @@ test('compose render picks the native emitter for a branded folder and the gener
 test('preset shapes keep a small inset and a chevron pins its point depth to its width',async t=>{
   const comp={version:1,title:'Shapes',slides:[{id:'shape_slide',title:'Shapes',sources:['brief:test'],canvas:{type:'grid',columns:3,children:[
     {type:'box',id:'plain_rect',shape:'rect',text:'rect'},{type:'box',id:'wide_chevron',shape:'chevron',text:'next'},{type:'box',id:'inner_diamond',shape:'diamond',text:'ok'}]}}]};
-  const {output}=await build(t,comp),xml=await part(output,'ppt/slides/slide1.xml'),shape=name=>xml.match(new RegExp(`<p:sp><p:nvSpPr><p:cNvPr id="\\d+" name="${name}"/>.*?</p:sp>`,'s'))[0];
+  const {output}=await build(t,comp),xml=await part(output,'ppt/slides/harnessSlide1.xml'),shape=name=>xml.match(new RegExp(`<p:sp><p:nvSpPr><p:cNvPr id="\\d+" name="${name}"/>.*?</p:sp>`,'s'))[0];
   assert.match(shape('plain_rect'),/lIns="228600"/);assert.match(shape('inner_diamond'),/lIns="45720"/);
   // The cell is 276pt wide and 360pt tall, so a fifth of the width is 20000 units of the shorter side.
   assert.match(shape('wide_chevron'),/<a:gd name="adj" fmla="val 20000"\/>/);assert.match(shape('wide_chevron'),/lIns="45720"/);
+});
+
+// Package-level checks a strict reader would make.
+async function audit(file) {
+  const script=`import sys,zipfile,re,posixpath,json
+from xml.dom import minidom
+z=zipfile.ZipFile(sys.argv[1]);names=set(z.namelist());problems=[]
+for n in names:
+    if n.endswith('.xml') or n.endswith('.rels'):
+        try: minidom.parseString(z.read(n))
+        except Exception as e: problems.append('malformed '+n+': '+str(e))
+types=z.read('[Content_Types].xml').decode()
+seen=re.findall(r'PartName="/([^"]+)"',types)
+problems+=['duplicate override '+p for p in set(seen) if seen.count(p)>1]
+problems+=['override without part '+p for p in seen if p not in names]
+for n in names:
+    if not n.endswith('.rels'): continue
+    folder=posixpath.dirname(posixpath.dirname(n))
+    for tag in re.findall(r'<Relationship\\b[^>]*>',z.read(n).decode()):
+        if 'TargetMode="External"' in tag: continue
+        t=re.search(r'Target="([^"]*)"',tag).group(1)
+        path=t[1:] if t.startswith('/') else posixpath.normpath(posixpath.join(folder,t))
+        if path not in names: problems.append('dangling '+n+' -> '+path)
+print(json.dumps(sorted(problems)))`;
+  return JSON.parse((await exec('python3',['-c',script,file])).stdout);
+}
+// Rewrite template parts the way other producers write them.
+async function rewrite(source,target,edits) {
+  const script=`import sys,zipfile,json
+src,dst,edits=sys.argv[1],sys.argv[2],json.loads(sys.argv[3])
+with zipfile.ZipFile(src) as a, zipfile.ZipFile(dst,'x',zipfile.ZIP_DEFLATED) as b:
+    for i in a.infolist():
+        if i.filename in edits.get('drop',[]): continue
+        data=a.read(i).decode('utf-8','surrogateescape') if i.filename.endswith(('.xml','.rels')) else a.read(i)
+        for find,replace in edits.get('replace',{}).get(i.filename,[]): data=data.replace(find,replace)
+        b.writestr(i,data.encode('utf-8','surrogateescape') if isinstance(data,str) else data)
+    for name,text in edits.get('add',{}).items(): b.writestr(name,text)`;
+  await exec('python3',['-c',script,source,target,JSON.stringify(edits)]);
+}
+async function rebrand(c,path) {
+  const sha256=hash(await readFile(path)),next=structuredClone(c);
+  next.sources=[{path,sha256}];Object.assign(next.design.nativeTemplate,{path,sha256});next.revision=contractRevision(next);return next;
+}
+
+test('the emitted package is well formed, with unique content types and no dangling relationships',async t=>{
+  const {output}=await build(t);
+  assert.deepEqual(await audit(output),[]);
+  assert.ok((await names(output)).includes('ppt/slides/harnessSlide1.xml'));
+});
+
+test('templates written with paired tags, stale view relationships or no slides still emit a clean package',async t=>{
+  const dir=await temporary(t),c=await brand(dir),source=c.design.nativeTemplate.path,{scene,structure}=await compileComposition(flow(),c);
+  const rels=await part(source,'ppt/_rels/presentation.xml.rels'),types=await part(source,'[Content_Types].xml');
+  const paired=join(dir,'paired.pptx');
+  await rewrite(source,paired,{replace:{'ppt/_rels/presentation.xml.rels':[[rels,rels.replace(/<Relationship ([^>]*)\/>/g,'<Relationship $1></Relationship>')]],'[Content_Types].xml':[[types,types.replace(/<Override ([^>]*)\/>/g,'<Override $1></Override>')]]},
+    add:{'ppt/_rels/viewProps.xml.rels':'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide2.xml"/></Relationships>'}});
+  const first=join(dir,'paired-out.pptx');await emitNativePptx({scene,structure,brand:await rebrand(c,paired),output:first,base:dir});
+  assert.deepEqual(await audit(first),[]);
+  assert.equal(((await part(first,'ppt/_rels/presentation.xml.rels')).match(/relationships\/slide"/g)??[]).length,1);
+  const presentation=await part(source,'ppt/presentation.xml'),empty=join(dir,'empty.pptx');
+  await rewrite(source,empty,{drop:['ppt/slides/slide1.xml','ppt/slides/slide2.xml','ppt/slides/_rels/slide1.xml.rels','ppt/slides/_rels/slide2.xml.rels'],
+    replace:{'ppt/presentation.xml':[[presentation.match(/<p:sldIdLst>.*<\/p:sldIdLst>/s)[0],'']],'ppt/_rels/presentation.xml.rels':[[rels,rels.replace(/<Relationship [^>]*relationships\/slide"[^>]*\/>/g,'')]],'[Content_Types].xml':[[types,types.replace(/<Override [^>]*\/ppt\/slides\/[^>]*\/>/g,'')]]}});
+  const second=join(dir,'empty-out.pptx');await emitNativePptx({scene,structure,brand:await rebrand(c,empty),output:second,base:dir});
+  assert.deepEqual(await audit(second),[]);assert.match(await part(second,'ppt/presentation.xml'),/<p:sldIdLst><p:sldId id="256" r:id="rId\d+"\/><\/p:sldIdLst><p:sldSz/);
+});
+
+test('hand-edited structure that would corrupt the slide is refused, and failures leave no partial file',async t=>{
+  const dir=await temporary(t),c=await brand(dir),{scene,structure}=await compileComposition(flow(),c),out=name=>join(dir,name);
+  const emit=(groups,name)=>emitNativePptx({scene,structure:{...structure,groups},brand:c,output:out(name),base:dir});
+  await assert.rejects(()=>emit([{slide:'flow_slide',id:'node_from',members:['node_card','card_head']}],'a.pptx'),/group ID node_from repeats an element ID/);
+  await assert.rejects(()=>emit([{slide:'flow_slide',id:'title_group',members:['flow_slide_title','node_from']}],'b.pptx'),/title cannot be grouped/);
+  await assert.rejects(()=>emit([{slide:'flow_slide',id:'gap_group',members:['node_from','card_body']}],'c.pptx'),/members must be consecutive/);
+  await assert.rejects(()=>emit([{slide:'flow_slide',id:'ghost_group',members:['node_from','missing_node']}],'d.pptx'),/two or more elements of its slide/);
+    const {readdir}=await import('node:fs/promises');assert.deepEqual((await readdir(dir)).filter(n=>/^[abcd]\.pptx$/.test(n)),[]);
+});
+
+test('image type comes from the file contents and alt text cannot break the slide',async t=>{
+  const dir=await temporary(t);await writeFile(join(dir,'mislabelled.jpg'),png);
+  const comp={version:1,title:'Images',slides:[{id:'image_slide',title:'An image',sources:['brief:test'],canvas:{type:'image',id:'odd_image',src:'mislabelled.jpg',alt:'Control \u0001 character'}}]};
+  const c=await brand(dir),compiled=await compileComposition(comp,c),output=join(dir,'image.pptx');
+  await emitNativePptx({...compiled,brand:c,output,base:dir});
+  assert.deepEqual(await audit(output),[]);
+  assert.equal((await names(output)).filter(n=>/^ppt\/media\/harness-[0-9a-f]{16}\.png$/.test(n)).length,1);
+  assert.match(await part(output,'ppt/slides/harnessSlide1.xml'),/descr="Control  character"/);
 });

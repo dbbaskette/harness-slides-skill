@@ -10,7 +10,7 @@ const types = new Set(['text','shape','line','image','table','chart']);
 // Native preset shapes every emitter can draw: [PowerPoint preset, Google Slides shape type, CSS preview radius,
 // fraction of the shape's width its text area spans, fraction of its height]. A preset's text area is smaller
 // than its bounding box, so layout must measure text against these fractions.
-export const shapeKinds = Object.freeze({rect:['rect','RECTANGLE','0',1,1],ellipse:['ellipse','ELLIPSE','50%',.7,.7],roundRect:['roundRect','ROUND_RECTANGLE','12px',1,1],diamond:['diamond','DIAMOND','0',.5,.5],hexagon:['hexagon','HEXAGON','0',.6,.75],chevron:['chevron','CHEVRON','0',.6,1],can:['can','CAN','10px',1,.75]});
+export const shapeKinds = Object.freeze({rect:['rect','RECTANGLE','0',1,1],ellipse:['ellipse','ELLIPSE','50%',.7,.7],roundRect:['roundRect','ROUND_RECTANGLE','12px',1,1],diamond:['diamond','DIAMOND','0',.5,.5],hexagon:['hexagon','HEXAGON','0',.6,.65],chevron:['chevron','CHEVRON','0',.6,1],can:['can','CAN','10px',1,.6]});
 const positive = (n, name, max=2000) => { if (!Number.isFinite(n) || n<=0 || n>max) throw new Error(`Invalid ${name}`); };
 const nonempty = (s, name) => { if (typeof s !== 'string' || !s.trim() || s.length>20000) throw new Error(`Invalid ${name}`); };
 export function themeFor(scene) {

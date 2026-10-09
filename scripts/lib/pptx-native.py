@@ -15,7 +15,8 @@ import posixpath
 import re
 import sys
 import zipfile
-from xml.sax.saxutils import escape, quoteattr
+import os
+from xml.sax.saxutils import escape, quoteattr as _quoteattr
 
 EMU = 12700
 NS = ('xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
@@ -33,6 +34,13 @@ SITES = {
     'ellipse': {'top': 0, 'left': 2, 'bottom': 4, 'right': 6},
 }
 IMAGE_TYPES = {'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'gif': 'image/gif'}
+
+
+def TAG(name):
+    """Match one element written either self-closed or as an empty pair."""
+    return rf'<{name}\b[^>]*?(?:/>|>\s*</{name}>)'
+
+
 TREE = ('<p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm>'
         '<a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>')
 
@@ -41,9 +49,28 @@ def emu(points):
     return int(round(points * EMU))
 
 
-def text(value):
+def clean(value):
     # XML 1.0 forbids most control characters; drop them rather than write a broken part.
-    return escape(re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', value))
+    return re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', value)
+
+
+def text(value):
+    return escape(clean(value))
+
+
+def quoteattr(value):
+    return _quoteattr(clean(value))
+
+
+def image_type(data):
+    """File extension from the image's own header, so a mislabelled file still gets the right content type."""
+    if data[:8] == b'\x89PNG\r\n\x1a\n':
+        return 'png'
+    if data[:3] == b'\xff\xd8\xff':
+        return 'jpeg'
+    if data[:6] in (b'GIF87a', b'GIF89a'):
+        return 'gif'
+    return None
 
 
 def xfrm(e, flip=''):
@@ -163,8 +190,8 @@ class Slide:
     def picture(self, e):
         with open(e['path'], 'rb') as stream:
             data = stream.read()
-        extension = e['path'].rsplit('.', 1)[-1].lower()
-        if extension not in IMAGE_TYPES:
+        extension = image_type(data)
+        if not extension:
             raise ValueError(f'{e["id"]}: use a PNG, JPEG or GIF image')
         name = f'harness-{hashlib.sha256(data).hexdigest()[:16]}.{extension}'
         self.media[name] = data
@@ -209,6 +236,10 @@ class Slide:
             members = set(group['members'])
             if len(members) < 2 or not members <= set(order):
                 raise ValueError(f'{group["id"]}: a group needs two or more elements of its slide')
+            if group['id'] in self.elements:
+                raise ValueError(f'group ID {group["id"]} repeats an element ID')
+            if any(self.elements[m].get('role') == 'title' for m in members):
+                raise ValueError(f'{group["id"]}: the title cannot be grouped; it belongs to the layout placeholder')
 
             def covered(node):
                 return node in members if isinstance(node, str) else set(flatten(node)) <= members
@@ -217,6 +248,8 @@ class Slide:
             if set(flatten(picked)) != members:
                 raise ValueError(f'{group["id"]}: groups may nest but not partly overlap')
             position = tree.index(picked[0])
+            if tree[position:position + len(picked)] != picked:
+                raise ValueError(f'{group["id"]}: members must be consecutive in drawing order, or grouping would restack them')
             tree = [node for node in tree if not covered(node)]
             tree.insert(position, (group['id'], picked))
         return tree
@@ -280,7 +313,7 @@ def reachable(parts):
         if rels not in parts:
             continue
         seen.add(rels)
-        for tag in re.findall(r'<Relationship\b[^>]*>', parts[rels].decode('utf-8')):
+        for tag in re.findall(TAG('Relationship'), parts[rels].decode('utf-8')):
             target = re.search(r'Target="([^"]*)"', tag)
             if not target or 'TargetMode="External"' in tag:
                 continue
@@ -304,7 +337,7 @@ def emit(template, plan_path, output):
     for stale in ('p14:sectionLst', 'p:custShowLst'):
         presentation = re.sub(rf'<{stale}\b.*?</{stale}>', '', presentation, flags=re.S)
     pres_rels = parts['ppt/_rels/presentation.xml.rels'].decode('utf-8')
-    pres_rels = re.sub(rf'<Relationship\b[^>]*Type="{REL}/slide"[^>]*/>', '', pres_rels)
+    pres_rels = re.sub(TAG('Relationship'), lambda m: '' if re.search(r'Type="[^"]*/relationships/slide"', m.group(0)) else m.group(0), pres_rels)
     used = {int(n) for n in re.findall(r'Id="rId(\d+)"', pres_rels)}
     for name in [n for n in parts if re.match(r'ppt/slides/(_rels/)?slide\d+\.xml', n)]:
         del parts[name]
@@ -317,14 +350,15 @@ def emit(template, plan_path, output):
         slide = Slide(spec, plan, title_type)
         slide.relate(f'{REL}/slideLayout', posixpath.relpath(layout, 'ppt/slides'))
         xml = slide.xml()
-        part = f'ppt/slides/slide{index}.xml'
+        # A name no template uses, so nothing left in the template can point at a new slide by accident.
+        part = f'ppt/slides/harnessSlide{index}.xml'
         if spec.get('notes'):
             if not notes_master:
                 raise ValueError('Template has no notes master; remove the notes or use a template that has one')
             notes = f'ppt/notesSlides/harnessNotes{index}.xml'
             parts[notes] = notes_xml(spec['notes']).encode('utf-8')
             parts[rels_path(notes)] = rels_xml([('rId1', f'{REL}/notesMaster', posixpath.relpath(notes_master, 'ppt/notesSlides')),
-                                                ('rId2', f'{REL}/slide', f'../slides/slide{index}.xml')]).encode('utf-8')
+                                                ('rId2', f'{REL}/slide', f'../slides/harnessSlide{index}.xml')]).encode('utf-8')
             slide.relate(f'{REL}/notesSlide', f'../notesSlides/harnessNotes{index}.xml')
             overrides.append((notes, f'{CT}.notesSlide+xml'))
         parts[part] = xml.encode('utf-8')
@@ -334,7 +368,7 @@ def emit(template, plan_path, output):
         number = max(used | {0}) + 1
         used.add(number)
         ids.append(f'<p:sldId id="{255 + index}" r:id="rId{number}"/>')
-        new_rels.append(f'<Relationship Id="rId{number}" Type="{REL}/slide" Target="slides/slide{index}.xml"/>')
+        new_rels.append(f'<Relationship Id="rId{number}" Type="{REL}/slide" Target="slides/harnessSlide{index}.xml"/>')
         overrides.append((part, f'{CT}.slide+xml'))
         report.append(slide.report)
 
@@ -350,17 +384,42 @@ def emit(template, plan_path, output):
     removed = sorted(n for n in parts if n not in keep)
     for name in removed:
         del parts[name]
-    types = parts['[Content_Types].xml'].decode('utf-8')
-    types = re.sub(r'<Override\b[^>]*/>', lambda m: m.group(0) if re.search(r'PartName="/([^"]*)"', m.group(0)).group(1) in parts else '', types)
+    # Relationships that now point at a dropped part would make a strict reader reject the package.
+    for name in [n for n in parts if n.endswith('.rels')]:
+        owner = posixpath.dirname(posixpath.dirname(name))
+
+        def alive(match):
+            tag = match.group(0)
+            target = re.search(r'Target="([^"]*)"', tag)
+            if not target or 'TargetMode="External"' in tag:
+                return tag
+            path = target.group(1)
+            path = path[1:] if path.startswith('/') else posixpath.normpath(posixpath.join(owner, path))
+            return tag if path in parts else ''
+
+        parts[name] = re.sub(TAG('Relationship'), alive, parts[name].decode('utf-8')).encode('utf-8')
+
+    def declared(match):
+        name = re.search(r'PartName="/([^"]*)"', match.group(0))
+        return match.group(0) if not name or name.group(1) in parts else ''
+
+    types = re.sub(TAG('Override'), declared, parts['[Content_Types].xml'].decode('utf-8'))
+    # A template file (.potx) declares itself a template; the output is a presentation.
+    types = types.replace(f'{CT}.template.main+xml', f'{CT}.presentation.main+xml')
     extensions = {n.rsplit('.', 1)[-1].lower() for n in parts if n.startswith('ppt/media/harness-')}
     defaults = ''.join(f'<Default Extension="{x}" ContentType="{IMAGE_TYPES[x]}"/>' for x in sorted(extensions)
                        if not re.search(rf'<Default\b[^>]*Extension="{x}"', types, flags=re.I))
     added = ''.join(f'<Override PartName="/{name}" ContentType="{kind}"/>' for name, kind in overrides)
     parts['[Content_Types].xml'] = types.replace('</Types>', defaults + added + '</Types>').encode('utf-8')
 
-    with open(output, 'xb') as stream, zipfile.ZipFile(stream, 'w', zipfile.ZIP_DEFLATED) as target:
-        for name in ['[Content_Types].xml'] + sorted(n for n in parts if n != '[Content_Types].xml'):
-            target.writestr(name, parts[name])
+    with open(output, 'xb') as stream:
+        try:
+            with zipfile.ZipFile(stream, 'w', zipfile.ZIP_DEFLATED) as target:
+                for name in ['[Content_Types].xml'] + sorted(n for n in parts if n != '[Content_Types].xml'):
+                    target.writestr(name, parts[name])
+        except BaseException:
+            os.unlink(output)
+            raise
     return {'output': output, 'slides': len(report), 'layoutPart': layout, 'titlePlaceholder': title_type,
             'removedTemplateParts': len(removed), 'report': report}
 
