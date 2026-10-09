@@ -47,7 +47,7 @@ export async function measureContext() {
     newGoogleScene: path([...design, 'references/authoring-google.md', google, review], ['sceneContract']),
     composedDeck: path([...creative,'references/compositions.md'],['composeContract']),
     parallelLead: path([...creative,'references/compositions.md','references/parallel-build.md'],['composeContract']),
-    parallelWorker: path(['references/compositions.md','references/parallel-build.md'],['composeContract']),
+    parallelWorker: path(['references/design.md','references/compositions.md','references/parallel-build.md'],['composeContract']),
     contentLedPptx: path([...design,'references/content-components.md','references/brand-addons.md','references/quality.md',review],['comparisonContract']),
     contentCritique: path([...entry,'references/quality.md',review]),
     intake: path([...entry, 'references/intake.md']),
