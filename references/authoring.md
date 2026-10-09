@@ -1,25 +1,23 @@
-# Choose the authoring method
+# Other authoring methods
 
-Approve [the creative proposal](design-walkthrough.md) first for new/redesigned decks.
+New slides in a brand template are [composed](compositions.md). Use a method
+below only for a deck compositions cannot express; one build uses one method. Approve [the proposal](design-walkthrough.md) first; these methods keep
+it in [checkpoint records](design-records.md).
 
-**New slides in a brand template: [compose them](compositions.md).** Describe each
-slide's structure and let the compiler place, fit and build it as editable native
-objects. This is the default for new decks, redesigns and reworks. The methods
-below are for what compositions cannot yet express.
+| Need | Method |
+| --- | --- |
+| A table or a chart | [Typed components](content-components.md) |
+| A template's own rich slide, reused or adapted | [Template reuse](templates.md); no contract needed |
+| Anything else, or an unbranded deck | An AI-owned scene, below |
 
-For a native template, copy it and reuse its real layouts, masters and elements.
-Read [template reuse](templates.md); no scene contract is needed. Keep complex
-or unsupported native content in native tools rather than flattening it.
+Keep complex or unsupported native content in native tools rather than
+flattening it.
 
-For supported new content, use [content-led components](content-components.md)
-to compile per-slide intent into native objects. Unbranded plans use neutral
-defaults; selected brands supply their resolved contract. Use the primitive scene or a native
-layout when a component does not fit.
+## Scenes
 
-For supported new compositions, an AI-owned scene provides stable object IDs,
-geometry in points, semantic roles and evidence references. It creates HTML
-previews and native output; it is not a general CSS converter. Only this method
-needs the scene contract:
+A scene gives stable object IDs, geometry in points, semantic roles and evidence
+references. It creates HTML previews and native output; it is not a general CSS
+converter. Only this method needs the scene contract:
 
 ```sh
 node scripts/harness-slides.mjs scene contract
@@ -32,3 +30,7 @@ Mark illustrative data and proposed ideas. Load only the selected format:
 [Google scene authoring](authoring-google.md) or
 [PowerPoint scene authoring](authoring-pptx.md). Inspect HTML during composition,
 then follow [native review](review.md) before delivery.
+
+For a starting pattern, query one for the slide's relationship, for example
+`layouts --query "comparison" --limit 3`. Prefer a brand add-on's verified
+native layouts where it offers them. Choose per slide; do not load the catalog.

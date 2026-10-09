@@ -17,11 +17,13 @@ export async function checkIcons(structure,brand) {
   const library=brand.design.slides.icon?.library;
   if(!library?.path||!library?.index||![library.path,library.index].every(path=>brand.sources.some(s=>s.path===path)))throw new Error('This composition uses icons, but the brand contract names no hashed icon library and index');
   const index=JSON.parse(await readFile(library.index,'utf8'));
+  const wrong=[];
   for(const i of icons) {
     const entry=index.entries.find(e=>e.id===i.icon);
-    if(!entry)throw new Error(`${i.id}: unknown icon ${i.icon}; search the brand icon library for a current ID`);
-    if(!entry.native||!(entry.bounds?.[2]>0)||!(entry.bounds?.[3]>0))throw new Error(`${i.id}: icon ${i.icon} is a picture, not native geometry; choose another`);
+    if(!entry)wrong.push(`${i.id}: unknown icon ${i.icon}; search the brand icon library for a current ID`);
+    else if(!entry.native||!(entry.bounds?.[2]>0)||!(entry.bounds?.[3]>0))wrong.push(`${i.id}: icon ${i.icon} is a picture, not native geometry; choose another`);
   }
+  if(wrong.length)throw new Error(wrong.join('\n'));
   return library;
 }
 
@@ -87,9 +89,11 @@ export async function checkLayouts(structure,brand) {
   const wanted=structure.layouts??[];if(!wanted.length)return;
   if(!brand.design.nativeTemplate)throw new Error('This composition uses template layouts, which need a brand with a native template');
   const {layouts}=await templateLayouts(brand),tidy=name=>String(name).replace(/\s+/g,' ').trim();
+  const wrong=[];
   for(const w of wanted) {
     const match=layouts.find(l=>tidy(l.name)===tidy(w.layout));
-    if(!match)throw new Error(`${w.slide}: the template has no layout named ${w.layout}. Available: ${layouts.map(l=>l.name).join(', ')}`);
-    if(w.placeholders.length>match.subtitles)throw new Error(`${w.slide}: layout ${match.name} has ${match.subtitles} subtitle placeholders; remove the extra text`);
+    if(!match)wrong.push(`${w.slide}: the template has no layout named ${w.layout}. Available: ${layouts.map(l=>l.name).join(', ')}`);
+    else if(w.placeholders.length>match.subtitles)wrong.push(`${w.slide}: layout ${match.name} has ${match.subtitles} subtitle placeholders; remove the extra text`);
   }
+  if(wrong.length)throw new Error(wrong.join('\n'));
 }

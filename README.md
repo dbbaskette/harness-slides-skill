@@ -35,7 +35,7 @@ PowerPoint inspection also needs **Python 3.9 or newer**.
 Run these commands in your terminal:
 
 ```sh
-git clone --branch v0.10.2 --depth 1 https://github.com/dbbaskette/harness-slides-skill.git
+git clone --branch v0.11.0 --depth 1 https://github.com/dbbaskette/harness-slides-skill.git
 cd harness-slides-skill
 bash scripts/Install-Harness-Slides.sh
 ```
@@ -48,8 +48,8 @@ skills. To preview the changes first, add `--dry-run` to the installer command.
 
 ## Know which version you are using
 
-The current published release is [v0.10.2](https://github.com/dbbaskette/harness-slides-skill/releases/tag/v0.10.2).
-The skill reports “Using Harness Slides v0.10.2” when starting or resuming work.
+The current published release is [v0.11.0](https://github.com/dbbaskette/harness-slides-skill/releases/tag/v0.11.0).
+The skill reports “Using Harness Slides v0.11.0” when starting or resuming work.
 A resumed deck may use its older saved runtime and will report that version.
 Guidance can refresh independently; its revision does not replace the runtime version.
 
@@ -254,17 +254,19 @@ representative guidance-start response. Bootstrap activation is shown separately
 | --- | ---: |
 | Discovery metadata | 39 |
 | Installed bootstrap | 412 |
-| Bootstrap + current guidance entry | 1,365 |
-| Scoped PPTX edit + final review | 3,022 |
-| Scoped Google edit + final review | 3,609 |
-| New PPTX deck from native template + review | 6,853 |
-| New Google deck from native template + review | 7,880 |
-| New composed deck + contract + review | 8,098 |
-| New PPTX scene + contract + review | 6,112 |
-| New Google scene + contract + review | 7,251 |
-| Content-led PPTX + selected component + review | 8,109 |
-| Font screening + structured critique + review | 3,439 |
-| Optional image guidance + download result | 2,507 |
+| Bootstrap + current guidance entry | 1,419 |
+| Scoped PPTX edit + final review | 3,177 |
+| Scoped Google edit + final review | 3,764 |
+| New PPTX deck from native template + review | 7,118 |
+| New Google deck from native template + review | 8,145 |
+| New composed deck + contract | 7,428 |
+| Parallel build, lead | 8,503 |
+| Parallel build, each worker | 6,691 |
+| New PPTX scene + contract + review | 6,377 |
+| New Google scene + contract + review | 7,516 |
+| Content-led PPTX + selected component + review | 8,401 |
+| Font screening + structured critique + review | 3,609 |
+| Optional image guidance + download result | 2,561 |
 
 Intake, workspace, brand integration and image guidance load only when needed. Native-template
 authoring skips the scene contract; scene routes include its actual helper output.

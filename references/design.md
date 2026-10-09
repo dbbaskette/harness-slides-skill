@@ -20,7 +20,7 @@ Consider the alternatives that serve this slide:
 | Steps, dependencies or milestones | Editable flow, timeline or branching diagram |
 | Components, layers or spatial relationships | Architecture, ecosystem or labeled diagram |
 | Alternatives or tradeoffs | Comparison, matrix or aligned evidence |
-| Parallel themes or categories | Grouped color boxes, meaningful icons or distinct regions |
+| Parallel themes or categories | Distinct regions, meaningful icons, or a color per category that recurs |
 | Measured change or a finding | Evidence chart or a prominent metric with context |
 | Product behavior or a concrete example | Screenshot/image with editable annotations |
 | An experience, setting or conceptual idea | Relevant supplied, sourced or generated illustration/image |
@@ -35,7 +35,8 @@ the message; keep explanatory diagrams and labels editable. Generated imagery
 can illustrate an idea, but must not masquerade as measured evidence or an actual
 product screenshot. Follow the selected brand's asset policy.
 
-Before selecting a component, record a concise decision (not a reasoning transcript):
+Before choosing a structure, settle these for each slide (a decision, not a
+reasoning transcript):
 
 - Takeaway and audience question.
 - Source evidence, actors and the actual relationship.
@@ -49,11 +50,9 @@ Before selecting a component, record a concise decision (not a reasoning transcr
 Topology, flow, ownership, containment and decision content needs visible supported
 objects and relationships. Headings and prose inside boxes are not automatically
 a diagram. Missing evidence calls for explicit limits, not invented connections.
-Use schema-2 plan intent or scene intent for authored work; native-template work
-keeps equivalent records against slide/object IDs in private task notes.
 
-Keep a brief content-to-composition rationale in the agent's working notes for
-each slide. Similar content may justify similar layouts; different content needs
+This list is for deciding, not for filing. Write down only what the chosen
+method asks for. Similar content may justify similar layouts; different content needs
 its own decision. Do not force variety, insert decorative assets, or remove
 evidence to meet a layout quota. In preservation work, honor the agreed scope:
 brand-only and polish do not authorize redesigning the composition.
@@ -66,25 +65,23 @@ it does not require every slide to share the same body layout.
 
 For new work/redesigns, establish an art direction as well as an information
 structure: the focal scale, contrast between dominant and supporting elements,
-color roles and label treatment. A technically correct diagram can still look
+color roles and label treatment. Decide it once for the deck, before the first
+slide. A technically correct diagram can still look
 like an unfinished wireframe. Make its mechanism visually prominent, with
 deliberate proportions and a clear silhouette at thumbnail size; then judge the
 actual full-size pixels. White space should frame a focal element rather than
-leave a small diagram stranded. Choose restraint or richer color for this brief;
-neither all-neutral panels nor saturated panels are a default for every slide.
+leave a small diagram stranded.
 
-Give color a role: emphasize the finding, distinguish meaningful categories or
-signal sections. Use the selected brand palette if present. Align repeated
-components to common anchors; group related objects, preserve whitespace and
-keep enough room for native text wrapping. Use color boxes to make meaningful
-grouping visible, with labels or other cues besides color.
+Give color a job. One focal color marks the point of a slide. Panels start in a
+neutral. Any further color stands for one thing, such as a product or a state,
+and keeps that meaning on every slide, with a label or other cue besides color.
+Use as many as the content has things to tell apart, and none because the
+brand palette offers it. Use the selected brand palette and its rules.
+Honor the user's selected subset and excluded colors in text, shapes,
+connectors, charts and image briefs.
 
-Use a compact working palette: default to at most 3–4 chromatic content colors
-per slide, often fewer, and reuse their meanings across the deck. Neutrals and
-required identity artwork are separate; do not add an accent simply because the
-brand palette offers it. Honor the user's selected subset and excluded colors
-in text, shapes, connectors, charts and image briefs. More colors for necessary
-data categories require an explicit task-specific decision, not random variety.
+Align repeated components to common anchors; group related objects, preserve
+whitespace and keep enough room for native text wrapping.
 
 Place node labels inside their object or consistently beside it; put captions
 next to their visual and path labels beside the specific connector segment they
@@ -97,12 +94,6 @@ Use native objects for diagrams and editable labels. Prefer an available approve
 functional icon library when a recognizable concept benefits from an icon;
 skip icons that add decoration or crowding. Keep the same treatment for the same
 concept, even when the surrounding slide composition differs.
-
-Query patterns for the current slide's relationship, for example
-`layouts --query "comparison" --limit 3`; query again when the content changes.
-If a brand add-on offers verified native layouts, prefer those and use these
-patterns as composition guidance. Select a suitable layout per slide; the first
-match is not a deck-wide default. Do not load the whole layout catalog.
 
 Keep chart data editable. Label units, periods, series and sources; use zero
 baselines for bars and consistent scales for comparisons. Avoid 3D decoration.

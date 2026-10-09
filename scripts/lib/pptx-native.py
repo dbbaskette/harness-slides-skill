@@ -250,12 +250,66 @@ class Slide:
                 f'<p:blipFill><a:blip r:embed="{rel}"/>{crop}<a:stretch><a:fillRect/></a:stretch></p:blipFill>'
                 f'<p:spPr>{xfrm(box)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>')
 
+    def restyle(self, group, e):
+        """Recolor a library icon, and redraw its disc as a ring or drop it. Returns a new width/height ratio when the bounds change.
+
+        Library icons are a filled disc with light geometry on top. Parts in the disc's color that are not the disc are cut-outs.
+        """
+        style, color = e.get('style'), e.get('color')
+        if not style and not color:
+            return None
+        tools = self.library.tools
+        A, P = '{' + tools.NS['a'] + '}', '{' + tools.NS['p'] + '}'
+        shapes, frame = group.findall('p:sp', tools.NS), group.find('p:grpSpPr/a:xfrm', tools.NS)
+        extent, disc = frame.find('a:chExt', tools.NS), None
+        if shapes:
+            first = shapes[0]
+            preset, size = first.find('p:spPr/a:prstGeom', tools.NS), first.find('p:spPr/a:xfrm/a:ext', tools.NS)
+            fill = first.find('p:spPr/a:solidFill/a:srgbClr', tools.NS)
+            if preset is not None and preset.get('prst') == 'ellipse' and size is not None and fill is not None and int(size.get('cx')) >= .9 * int(extent.get('cx')) and int(size.get('cy')) >= .9 * int(extent.get('cy')):
+                disc = first
+        style = (style or 'solid') if disc is not None else 'bare'
+        old = disc.find('p:spPr/a:solidFill/a:srgbClr', tools.NS).get('val').upper() if disc is not None else None
+        tint = (color or '#' + (old or '000000')).lstrip('#').upper()
+        if style == 'bare':
+            # No disc to work with: the icon is already bare geometry, so only its color changes.
+            for node in group.iter(A + 'srgbClr'):
+                node.set('val', tint)
+            return None
+        if style == 'solid':
+            glyph = e.get('glyph', '#FFFFFF').lstrip('#').upper()
+            for node in group.iter(A + 'srgbClr'):
+                value = node.get('val', '').upper()
+                node.set('val', tint if value == old else glyph if value == 'FFFFFF' else value)
+            return None
+        surface = e.get('surface', '#FFFFFF').lstrip('#').upper()
+        for node in group.iter(A + 'srgbClr'):
+            value = node.get('val', '').upper()
+            node.set('val', surface if value == old else tint if value == 'FFFFFF' else value)
+        if style == 'outline':
+            properties = disc.find('p:spPr', tools.NS)
+            for name in ('solidFill', 'ln'):
+                for node in properties.findall('a:' + name, tools.NS):
+                    properties.remove(node)
+            tools.E.SubElement(properties, A + 'noFill')
+            line = tools.E.SubElement(properties, A + 'ln', w='25400')
+            tools.E.SubElement(tools.E.SubElement(line, A + 'solidFill'), A + 'srgbClr', val=tint)
+            return None
+        # Plain: drop the disc and enlarge the geometry by the same factor for every icon, so a set of icons stays one size.
+        group.remove(disc)
+        offset, keep = frame.find('a:chOff', tools.NS), .7
+        width, height = int(extent.get('cx')), int(extent.get('cy'))
+        offset.attrib.update(x=str(round(int(offset.get('x')) + width * (1 - keep) / 2)), y=str(round(int(offset.get('y')) + height * (1 - keep) / 2)))
+        extent.attrib.update(cx=str(round(width * keep)), cy=str(round(height * keep)))
+        return None
+
     def icon(self, e):
         """Native library geometry as one group, fitted inside its slot without changing its proportions."""
         if self.library is None:
             raise ValueError(f'{e["id"]}: the plan names no icon library')
         entry, group = self.library.group(e['icon'])
         tools, ratio = self.library.tools, entry['bounds'][2] / entry['bounds'][3]
+        ratio = self.restyle(group, e) or ratio
         width = e['width'] if ratio >= 1 else e['height'] * ratio
         height = width / ratio
         frame = group.find('p:grpSpPr/a:xfrm', tools.NS)
@@ -275,7 +329,11 @@ class Slide:
                 if node.get('id') not in remap:
                     raise ValueError(f'{e["id"]}: icon connector points outside the icon')
                 node.set('id', remap[node.get('id')])
-        fills = sorted({node.get('val').upper() for node in group.iter('{' + tools.NS['a'] + '}srgbClr') if node.get('val')})
+        fills = {node.get('val').upper() for node in group.iter('{' + tools.NS['a'] + '}srgbClr') if node.get('val')}
+        if e.get('style') in ('outline', 'plain'):
+            # Cut-outs are drawn in the surface color on purpose, so they are not reported as part of the icon.
+            fills.discard(e.get('surface', '#FFFFFF').lstrip('#').upper())
+        fills = sorted(fills)
         self.report['icons'].append({'id': e['id'], 'icon': e['icon'], 'label': entry['label'], 'colors': fills})
         return tools.E.tostring(group, encoding='unicode')
 
