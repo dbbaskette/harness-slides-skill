@@ -220,3 +220,48 @@ test('image type comes from the file contents and alt text cannot break the slid
   assert.equal((await names(output)).filter(n=>/^ppt\/media\/harness-[0-9a-f]{16}\.png$/.test(n)).length,1);
   assert.match(await part(output,'ppt/slides/harnessSlide1.xml'),/descr="Control  character"/);
 });
+
+// A one-slide "library" whose two shapes form one icon, with the index the brand would ship.
+async function iconLibrary(dir) {
+  const path=join(dir,'icons.pptx'),index=join(dir,'icon-index.json');
+  await renderPptxScene({version:2,title:'Icons',mode:'new',canvas:{width:960,height:540},slides:[{id:'icon_page',title:'Icons',sources:['brief:test'],elements:[
+    {id:'icon_ring',type:'shape',shape:'ellipse',x:100,y:100,width:80,height:40,fill:'#2867B2'},{id:'icon_core',type:'shape',shape:'rect',x:130,y:110,width:20,height:20,fill:'#FFFFFF'}]}]},path);
+  const objects=(await pptxTool('inspect',[path])).slides[0].objects,ids=['icon_ring','icon_core'].map(name=>objects.find(o=>o.name===name).id);
+  await writeFile(index,JSON.stringify({schemaVersion:1,sourceSha256:hash(await readFile(path)),entries:[
+    {id:'fi-test-s001-l001',slide:1,labelIndex:1,label:'Test ring',shapeIds:ids,bounds:[100*12700,100*12700,80*12700,40*12700],native:true},
+    {id:'fi-test-s001-l002',slide:1,labelIndex:2,label:'A picture',shapeIds:ids,bounds:[0,0,12700,12700],native:false}]}));
+  return {path,index};
+}
+async function withIcons(dir,c) {
+  const library=await iconLibrary(dir),next=structuredClone(c);
+  next.design.slides.icon={size:54,library};
+  for(const path of [library.path,library.index])next.sources.push({path,kind:'icon library',sha256:hash(await readFile(path))});
+  next.revision=contractRevision(next);return next;
+}
+const iconDeck=icon=>({version:1,title:'Icons',slides:[{id:'icon_slide',title:'An icon',sources:['brief:test'],canvas:{type:'stack',direction:'row',children:[{type:'icon',id:'lead_icon',icon},{type:'box',id:'side_box',text:'Beside it',weight:3}]}}]});
+
+test('icons are copied from the brand library as grouped native geometry, fitted and centred in their slot',async t=>{
+  const dir=await temporary(t),c=await withIcons(dir,await brand(dir)),compiled=await compileComposition(iconDeck('fi-test-s001-l001'),c),output=join(dir,'icons-deck.pptx');
+  assert.deepEqual(compiled.structure.icons.map(i=>[i.slide,i.id,i.icon,i.width,i.height]),[['icon_slide','lead_icon','fi-test-s001-l001',108,108]]);
+  assert.ok(!compiled.scene.slides[0].elements.some(e=>e.id==='lead_icon'));
+  const result=await emitNativePptx({...compiled,brand:c,output,base:dir}),xml=await part(output,'ppt/slides/harnessSlide1.xml');
+  assert.deepEqual(result.icons,[{id:'lead_icon',icon:'fi-test-s001-l001',label:'Test ring'}]);assert.deepEqual(await audit(output),[]);
+  const group=xml.match(/<p:grpSp>(?:(?!<\/p:grpSp>).)*name="fi-test-s001-l001".*?<\/p:grpSp>/s)[0],slot=compiled.structure.icons[0];
+  assert.match(group,/descr="Test ring"/);assert.match(group,/prst="ellipse"/);assert.doesNotMatch(group,/<p:pic>/);
+  const [,x,y]=group.match(/<a:off x="(\d+)" y="(\d+)"/),[,cx,cy]=group.match(/<a:ext cx="(\d+)" cy="(\d+)"/);
+  // The 2:1 icon fills the slot's width and is centred vertically in it.
+  assert.equal(Math.round(cx/12700),108);assert.equal(Math.round(cy/12700),54);assert.equal(Math.round(x/12700),Math.round(slot.x));assert.equal(Math.round(y/12700),Math.round(slot.y+27));
+  const ids=[...xml.matchAll(/<p:cNvPr id="(\d+)"/g)].map(m=>m[1]);assert.equal(new Set(ids).size,ids.length);
+});
+
+test('icon problems are reported against the composition node and leave no output',async t=>{
+  const dir=await temporary(t),plain=await brand(dir),c=await withIcons(dir,plain),{readdir}=await import('node:fs/promises');
+  const emit=async(icon,contract,name)=>emitNativePptx({...await compileComposition(iconDeck(icon),contract),brand:contract,output:join(dir,name),base:dir});
+  await assert.rejects(()=>emit('fi-test-s001-l001',plain,'a.pptx'),/names no hashed icon library/);
+  await assert.rejects(()=>emit('fi-missing',c,'b.pptx'),/lead_icon: unknown icon fi-missing/);
+  await assert.rejects(()=>emit('fi-test-s001-l002',c,'c.pptx'),/lead_icon: icon fi-test-s001-l002 is a picture/);
+  assert.deepEqual((await readdir(dir)).filter(n=>/^[abc]\.pptx$/.test(n)),[]);
+  await assert.rejects(()=>compileComposition(iconDeck('not an id!'),c),/stable icon ID/);
+  const narrow={version:1,title:'Icons',slides:[{id:'icon_slide',title:'t',sources:['brief:test'],canvas:{type:'grid',columns:6,gap:'wide',children:Array.from({length:6},(_,i)=>({type:'stack',direction:'row',gap:'wide',children:[{type:'icon',id:`tiny_icon${i}`,icon:'fi-test-s001-l001'},{type:'spacer'},{type:'spacer'}]}))}}]};
+  await assert.rejects(()=>compileComposition(narrow,c),/needs 54pt of width for an icon/);
+});

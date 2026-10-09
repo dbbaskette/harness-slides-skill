@@ -12,6 +12,7 @@ const fields={
   box:['text','shape','fill','color','textRole','align','children','gap'],
   text:['text','textRole','color','align'],
   image:['src','alt','fit'],
+  icon:['icon'],
   spacer:[],
 };
 const common=['id','type','weight','at'],gapNames=['none','tight','normal','wide'],aligns=['start','center','end','stretch'];
@@ -22,7 +23,7 @@ const str=v=>typeof v==='string'&&v.trim()&&v.length<=20000;
 export const composeContract=`Composition v1 (AI-owned; describe structure, never coordinates).
 {version:1,title,slides:[{id,title,sources:[evidence IDs],canvas:NODE,connect?:[EDGE],notes?,intent?,layoutId?}]}
 NODE containers: {type:stack,direction:row|column,gap?,align?,children:[NODE]} | {type:grid,columns:1-6,gap?,children:[NODE]} | {type:free,children:[NODE with at:{x,y,width,height} as 0-1 fractions]}.
-NODE leaves: {type:box,id,text?|children?,shape?:rect|ellipse|roundRect|diamond|hexagon|chevron|can,fill?,color?,textRole?,align?} | {type:text,id,text,textRole?,color?,align?} | {type:image,id,src,alt,fit?} | {type:spacer}.
+NODE leaves: {type:icon,id,icon:STABLE ICON ID from the brand's icon search} | {type:box,id,text?|children?,shape?:rect|ellipse|roundRect|diamond|hexagon|chevron|can,fill?,color?,textRole?,align?} | {type:text,id,text,textRole?,color?,align?} | {type:image,id,src,alt,fit?} | {type:spacer}.
 Any node may set weight (relative share, default 1). Containers may set group:true and an id.
 gap: none|tight|normal|wide. align: start|center|end|stretch. fill/color: a brand color role name. textRole: a brand typography role name.
 EDGE: {id,from:NODE id,to:NODE id,label?,arrow?:boolean,color?}.
@@ -53,7 +54,7 @@ export function validateComposition(comp,contract) {
       if(depth>6)fail(where,'nest at most 6 levels');
       if(Object.keys(n).some(k=>!common.includes(k)&&!fields[n.type].includes(k)))fail(where,'unsupported node field; never silently drop content');
       if(++nodes>80)fail(s.id,'use at most 80 nodes per slide');
-      const needsId=['box','text','image'].includes(n.type)||n.group;
+      const needsId=['box','text','image','icon'].includes(n.type)||n.group;
       if(needsId||n.id!==undefined){claim(n.id,where);local.add(n.id);}
       if(n.group!==undefined&&typeof n.group!=='boolean')fail(where,'group must be boolean');
       if(n.weight!==undefined&&(!Number.isFinite(n.weight)||n.weight<=0||n.weight>10))fail(where,'weight must be 0–10');
@@ -73,6 +74,7 @@ export function validateComposition(comp,contract) {
         if(n.children!==undefined){if(n.align!==undefined)fail(where,'align applies to box text, not to a box with children');claim(`${n.id}_group`,where);}
         fills.add(n.fill??'canvasSecondary');
       }
+      if(n.type==='icon'&&(!str(n.icon)||n.icon.length>80||!/^[\w.-]+$/.test(n.icon)))fail(where,'icon needs a stable icon ID from the brand icon search');
       if(n.type==='image'){if(!str(n.src)||!str(n.alt))fail(where,'image needs src and alt');if(!['contain','cover'].includes(n.fit??'contain'))fail(where,'fit must be contain|cover');}
       const kids=n.children;
       if(['stack','grid','free'].includes(n.type)||kids!==undefined) {
@@ -122,7 +124,8 @@ export async function compileComposition(comp,contract,{fonts}={}) {
   const d=contract.design,sl=d.slides,roles=sl.typography,colors=d.colors,sp=sl.spacing??{},inset=sp.inset??16;
   const gapSize={none:0,tight:inset/2,normal:inset,wide:sp.column??28};
   const bodyRole=contract.medium.delivery==='live'?'body':'bodyReference',measure=await measurer(contract,fonts);
-  const scene={version:2,title:comp.title,mode:'new',canvas:sl.canvas,theme:brandTheme(contract),slides:[]},structure={groups:[],connectors:[]};
+  const iconSize=sl.icon?.size??48;
+  const scene={version:2,title:comp.title,mode:'new',canvas:sl.canvas,theme:brandTheme(contract),slides:[]},structure={groups:[],connectors:[],icons:[]};
 
   const style=n=>roles[n.textRole??bodyRole];
   const flexible=n=>n.type!=='text';
@@ -133,6 +136,7 @@ export async function compileComposition(comp,contract,{fonts}={}) {
     if(n.type==='text')return measure.height(n.text,style(n),width);
     if(n.type==='spacer'||n.type==='free')return 0;
     if(n.type==='image')return inset*4;
+    if(n.type==='icon')return iconSize;
     if(n.type==='box') {
       if(n.text!==undefined) {
         // Rectangles pad their text by the brand inset; other presets already confine text to an inner area.
@@ -164,6 +168,12 @@ export async function compileComposition(comp,contract,{fonts}={}) {
       const own=n.group?[]:members;
       if(n.type==='spacer')return;
       if(n.type==='text'){put({id:n.id,type:'text',...box(rect),text:n.text,...textProps(n)},own);return;}
+      if(n.type==='icon') {
+        // Icons are copied from the brand library as native geometry at render time, so the scene only reserves a centred square.
+        if(rect.width<iconSize-.5)fail(`${s.id}/${n.id}`,`needs ${round(iconSize)}pt of width for an icon but has ${round(rect.width)}pt`);
+        const side=Math.min(rect.width,rect.height,iconSize*2),slot={x:rect.x+(rect.width-side)/2,y:rect.y+(rect.height-side)/2,width:side,height:side};
+        rects.set(n.id,slot);structure.icons.push({slide:s.id,id:n.id,icon:n.icon,...box(slot)});return;
+      }
       if(n.type==='image'){put({id:n.id,type:'image',...box(rect),src:n.src,alt:n.alt,fit:n.fit??'contain'},own);return;}
       if(n.type==='box') {
         const base={id:n.id,type:'shape',...box(rect),shape:n.shape??'rect',fill:colors[n.fill??'canvasSecondary']};
