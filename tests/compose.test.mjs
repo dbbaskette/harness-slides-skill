@@ -264,6 +264,14 @@ test('text on a dark fill gets a readable color unless the author chose one',asy
   assert.equal(byId((await compileComposition(card,c)).scene,'card_text').color,'#FFFFFF');
 });
 
+test('ink gives way to the on-color wherever the on-color reads better',async()=>{
+  const c=brand();Object.assign(c.design.colors,{accentPurple:'#6C4B94',accentAzure:'#0098C7',onAccent:'#FFFFFF'});c.revision=contractRevision(c);
+  const {scene}=await compileComposition(deck(pair({fill:'accentPurple',textRole:'label'},{fill:'accentAzure',textRole:'label'})),c);
+  assert.equal(byId(scene,'node_a').color,'#FFFFFF');assert.equal(byId(scene,'node_b').color,'#202124');
+  const plain=(await compileComposition(deck({type:'box',id:'grey_card',children:[{type:'text',id:'grey_note',text:'Note',textRole:'caption'}]}),c)).scene;
+  assert.equal(byId(plain,'grey_note').color,'#555555');
+});
+
 test('a relation other than none must be drawn',async()=>{
   const c=brand(),ok=(canvas,relation,extra)=>validateComposition(directed(canvas,{relation},extra),c),no=(canvas,relation,pattern,extra)=>assert.throws(()=>ok(canvas,relation,extra),pattern);
   const edge={connect:[{id:'edge_ab',from:'node_a',to:'node_b'}]},column={type:'stack',direction:'column',children:[{type:'box',id:'node_a',text:'A'},{type:'box',id:'node_b',text:'B'}]};

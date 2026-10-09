@@ -51,8 +51,8 @@ Topology, flow, ownership, containment and decision content needs visible suppor
 objects and relationships. Headings and prose inside boxes are not automatically
 a diagram. Missing evidence calls for explicit limits, not invented connections.
 
-The chosen method says where this decision is written down; do not keep a
-second copy. Similar content may justify similar layouts; different content needs
+This list is for deciding, not for filing. Write down only what the chosen
+method asks for. Similar content may justify similar layouts; different content needs
 its own decision. Do not force variety, insert decorative assets, or remove
 evidence to meet a layout quota. In preservation work, honor the agreed scope:
 brand-only and polish do not authorize redesigning the composition.

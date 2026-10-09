@@ -4,8 +4,11 @@ For new slides in a brand template. You describe each slide's structure; the
 compiler places it, fits the text and builds editable native objects. Approve
 [the per-slide proposal](design-walkthrough.md) first, and decide what each slide
 must make the audience understand before choosing its structure. The `direction`
-and each slide's `brief` are where those [design](design.md) decisions are
-written down; keep no other record of them.
+and each slide's `brief` are the only record of those [design](design.md)
+decisions that a composition needs.
+
+Keep a `presentation-brief.md` beside the composition: the request, audience,
+delivery, the direction, and the user's approval in their own words.
 
 ```sh
 node scripts/harness-slides.mjs compose contract
@@ -61,7 +64,7 @@ many colors a slide uses; each one has to be in the direction, with a meaning.
    a finding.
 
 `compile` refuses a relation that is not drawn, a second node in the focal color,
-and a fill outside the direction, for every slide in one pass. Choose `none` when
+and a fill outside the direction. Choose `none` when
 the words really are enough; do not draw a diagram to satisfy the rule.
 
 ## Design each slide from its content
@@ -123,22 +126,24 @@ node scripts/harness-slides.mjs compose compile --file composition.json --brand 
 node scripts/harness-slides.mjs compose preview --file NEW_DIR --output NEW_PREVIEW_DIR --slide SLIDE_ID
 ```
 
-`compile` fails when content cannot fit at the brand's size, naming the node and
-the shortfall for every slide that needs a change, in one pass. Shorten the wording, split the slide or restructure. Text is
-never shrunk to fit.
+`compile` checks the whole file: structure first, then fit. At each stage it
+reports every slide's problems together. A fit failure names the node and the
+shortfall. Shorten the wording, split the slide or restructure. Text is never
+shrunk to fit.
 
 `preview` builds the deck, renders it and returns the slide image with findings.
 The first preview creates one Drive file named `Preview: …`; pass its ID as
 `--file-id` afterwards so the same file is reused. Use `--renderer local` when
 LibreOffice is installed and Google is unavailable.
 
-Record the user's actual approval of the per-slide design in the presentation
-brief, in their words. A composition without `intent` blocks needs no separate
+Record the user's actual approval of the per-slide design in
+`presentation-brief.md`, in their words. A composition without `intent` blocks needs no separate
 proposal file. Add `--design-project CONTENT` to `compile` only when slides carry
 `intent` blocks approved through `design propose`.
 
-Open every image. After each new slide, look at it and revise once before moving
-on. Findings point at things to look at: wording that describes a relationship
+Open every image. Because `compile` checks every slide in the file, either add
+slides one at a time or draft them all and then take them in turn with
+`--slide`. Either way, look at each slide and revise it once before the next. Findings point at things to look at: wording that describes a relationship
 with nothing drawn, a layout repeated from the previous slide, an arrow that
 could not be attached, an icon that blends into the card behind it, a deck with
 no direction, a slide with no brief, a title that reads as a label. They are not approval, and no finding does not mean the

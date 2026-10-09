@@ -33,11 +33,12 @@ const luminance=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255).map(v=>v<
 export const contrastRatio=(a,b)=>{const [hi,lo]=[luminance(a),luminance(b)].sort((x,y)=>y-x);return (hi+.05)/(lo+.05);};
 
 export const composeContract=`Composition v1 (AI-owned; describe structure, never coordinates).
-{version:1,title,direction?:DIRECTION,slides:[{id,title,sources:[evidence IDs],canvas:NODE,connect?:[EDGE],brief?:BRIEF,notes?,intent?,layoutId?} | {id,title,sources,layout:TEMPLATE LAYOUT NAME,subtitle?,detail?,notes?}]}
+{version:1,title,direction?:DIRECTION,slides:[{id,title,sources:[one or more IDs],canvas:NODE,connect?:[EDGE],brief?:BRIEF,notes?,intent?,layoutId?} | {id,title,sources,layout:TEMPLATE LAYOUT NAME,subtitle?,detail?,notes?}]}
 A slide with layout uses that template layout's own placeholders (cover, section break, closing) and has no canvas; run compose layouts for the names.
 NODE containers: {type:stack,direction:row|column,gap?,align?,children:[NODE]} | {type:grid,columns:1-6,gap?,children:[NODE]} | {type:free,children:[NODE with at:{x,y,width,height} as 0-1 fractions]}.
 NODE leaves: {type:icon,id,icon:STABLE ICON ID from the brand's icon search} | {type:box,id,text?|children?,shape?:rect|ellipse|roundRect|diamond|hexagon|chevron|can,fill?,color?,textRole?,align?} | {type:text,id,text,textRole?,color?,align?} | {type:image,id,src,alt,fit?} | {type:spacer}.
-Any node may set weight (relative share, default 1). Containers may set group:true and an id.
+sources name what a slide rests on: a document section, a finding, or one ID such as request or author_knowledge when it comes from the brief or general knowledge.
+Any node may set weight (relative share, above 0 up to 10, default 1). A node never goes below the size its content needs, so a small weight can be overridden; check proportions in the render. Containers may set group:true and an id.
 gap: none|tight|normal|wide. align: start|center|end|stretch. On a box with children, align (start|center|end) places its content vertically. fill/color: a brand color role name. textRole: a brand typography role name.
 EDGE: {id,from:NODE id,to:NODE id,label?,arrow?:boolean,color?}.
 DIRECTION, decided once for the deck: {focal:color role that means "look here",neutral:panel color role,meanings?:{color role:what it stands for in this deck},motif?:text}.
@@ -100,7 +101,7 @@ export function validateComposition(comp,contract) {
       if(n.gap!==undefined&&!gapNames.includes(n.gap))fail(where,`gap must be one of ${gapNames.join('|')}`);
       if(n.align!==undefined&&!aligns.includes(n.align))fail(where,`align must be one of ${aligns.join('|')}`);
       for(const key of ['fill','color'])if(n[key]!==undefined&&!Object.hasOwn(colors,n[key]))fail(where,`${key} must be a brand color role: ${Object.keys(colors).join(', ')}`);
-      if(dir&&n.color!==undefined){if(n.id===focalId)fail(where,'the focal node takes the focal color; remove its color');if(n.color===dir.focal)fail(where,`only the focal node may use the focal color${focalId?'':'; name it in brief.focal'}`);}
+      if(dir&&n.color!==undefined){if(n.id===focalId&&n.type==='text')fail(where,'the focal node takes the focal color; remove its color');if(n.color===dir.focal)fail(where,`only the focal node may use the focal color${focalId?'':'; name it in brief.focal'}`);}
       if(n.textRole!==undefined&&!Object.hasOwn(roles,n.textRole))fail(where,`textRole must be one of ${Object.keys(roles).join(', ')}`);
       if(n.type==='stack'&&!['row','column'].includes(n.direction))fail(where,'stack needs direction row|column');
       if(n.type==='grid'&&(!Number.isInteger(n.columns)||n.columns<1||n.columns>6))fail(where,'grid needs 1–6 columns');
@@ -229,7 +230,12 @@ export async function compileComposition(comp,contract,{fonts}={}) {
   for(const s of comp.slides) try {
     const elements=[],rects=new Map(),labels=[],focalId=s.brief?.focal;
     // Text keeps its role color where that is readable on the surface behind it; otherwise it takes the brand's on-color.
-    const ink=(wanted,surface,st)=>contrastRatio(wanted,surface)>=(st.size>=18||st.bold&&st.size>=14?3:4.5)?wanted:[colors.onAccent,colors.canvasPrimary,colors.inkDeep].filter(Boolean).sort((a,b)=>contrastRatio(b,surface)-contrastRatio(a,surface))[0];
+    // Plain ink also gives way to the on-color wherever the on-color reads better, so a mid-dark fill gets light text.
+    const onColor=colors.onAccent??colors.canvasPrimary,inks=[colors.inkDeep,colors.inkPrimary,colors.inkSecondary].filter(Boolean);
+    const ink=(wanted,surface,st)=>{
+      if(contrastRatio(wanted,surface)<(st.size>=18||st.bold&&st.size>=14?3:4.5))return [colors.onAccent,colors.canvasPrimary,colors.inkDeep].filter(Boolean).sort((a,b)=>contrastRatio(b,surface)-contrastRatio(a,surface))[0];
+      return onColor&&inks.includes(wanted)&&contrastRatio(onColor,surface)>contrastRatio(wanted,surface)?onColor:wanted;
+    };
     const fillRole=n=>dir&&n.id===focalId?dir.focal:n.fill??dir?.neutral??'canvasSecondary';
     const put=(element,members)=>{elements.push(element);members?.push(element.id);return element;};
     const short=(n,rect,required)=>!Number.isFinite(required)?fail(`${s.id}/${n.id??n.name??n.type}`,'has no usable room; use fewer siblings, less nesting or larger weights'):fail(`${s.id}/${n.id??n.name??n.type}`,`needs ${round(required)}pt of height but has ${round(rect.height)}pt at ${round(rect.width)}pt wide; shorten the text, split the slide or restructure`);

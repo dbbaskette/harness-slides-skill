@@ -46,8 +46,8 @@ this engine. Apply its selected contract and assets; do not mix identities.
 | A table, a chart, or a slide compositions cannot express | [Other methods](references/authoring.md); load only the one chosen |
 | Polish, content-preserving patch or selected-slide edit | [PPTX editing](references/editing.md) or [Google operations](references/google-slides.md), matching the destination |
 | Native Google access/operations | [Google Slides](references/google-slides.md) |
-| Template or brand extension | [Brand add-ons](references/brand-addons.md); [template reuse](references/templates.md) only for inspection/composition |
-| Final rendering and verification | [Review](references/review.md); its first table says which checks apply to the method used |
+| Writing a brand add-on or choosing among templates | [Brand add-ons](references/brand-addons.md); [template reuse](references/templates.md) only for inspection/composition. A deck that only uses an exported brand contract needs neither |
+| Final rendering and verification, other than of a composed deck | [Review](references/review.md); its first table says which checks apply to the method used |
 | Workspace browser and version controls | [Workspace](references/workspace.md) |
 | Custom image generation or image setup | [Images](references/images.md) |
 
