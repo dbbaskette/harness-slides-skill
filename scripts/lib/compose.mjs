@@ -219,7 +219,7 @@ export async function composeSizes(contract,{fonts}={}) {
   return `Sizes for ${contract.identity.id}, in points.
 Content area ${round(sl.contentBox.width)} wide by ${round(sl.contentBox.height)} high. The title holds ${lines} line${lines>1?'s':''} at ${t.title.size}pt across ${round(sl.titleBox.width)}.
 Gaps: tight ${inset/2}, normal ${inset}, wide ${sp.column??28}. A box pads its content by ${inset} on each side. An icon is ${sl.icon?.size??48} square.
-One line of text needs: ${Object.keys(t).filter(k=>k!=='title').map(k=>`${k} ${line(k)}`).join(', ')}. Text with no textRole uses ${body}.`;
+One line of text needs: ${Object.keys(t).filter(k=>k!=='title').map(k=>`${k} ${line(k)}`).join(', ')}. Text with no textRole uses ${body}, the size for a deck delivered ${contract.medium.delivery==='live'?'live':'for reading'}. Do not step below it to make content fit.`;
 }
 export async function compileComposition(comp,contract,{fonts}={}) {
   // Structure and fit are reported together: slides that break a rule are skipped, the rest are still laid out.
@@ -228,7 +228,7 @@ export async function compileComposition(comp,contract,{fonts}={}) {
   const gapSize={none:0,tight:inset/2,normal:inset,wide:sp.column??28};
   const bodyRole=contract.medium.delivery==='live'?'body':'bodyReference',measure=await measurer(contract,fonts);
   const iconSize=sl.icon?.size??48;
-  const scene={version:2,title:comp.title,mode:'new',canvas:sl.canvas,theme:brandTheme(contract),slides:[]},structure={groups:[],connectors:[],icons:[],layouts:[],adjusted:[],direction:comp.direction??null,briefs:[]},room=[],dir=comp.direction;
+  const scene={version:2,title:comp.title,mode:'new',canvas:sl.canvas,theme:brandTheme(contract),slides:[]},structure={groups:[],connectors:[],icons:[],layouts:[],adjusted:[],reading:[],direction:comp.direction??null,briefs:[]},room=[],dir=comp.direction;
 
   const style=n=>roles[n.textRole??bodyRole];
   // Text and icons keep their own size; everything else shares the space that is left.
@@ -279,7 +279,9 @@ export async function compileComposition(comp,contract,{fonts}={}) {
     // A slide that breaks a rule is not laid out, but its title can still be measured.
     if(summary.bad.has(s?.id)){if(s&&!s.layout&&str(s.title)&&str(s.id))titleFit(s,problems);continue;}
     // Every part of a slide that cannot fit is reported, not only the first.
-    const elements=[],rects=new Map(),labels=[],focalId=s.brief?.focal,tight=[];
+    const elements=[],rects=new Map(),labels=[],focalId=s.brief?.focal,tight=[],sizes={body:0,reading:[]};
+    // In a live deck, text set in the reading size has been shrunk to fit. Count it against text left at the live size.
+    const sized=n=>{if(bodyRole!=='body'||!roles.bodyReference||!(roles.bodyReference.size<roles.body.size))return;const role=n.textRole??bodyRole;if(role==='body')sizes.body++;else if(role==='bodyReference')sizes.reading.push(n.id);};
     // Text keeps its role color where that is readable on the surface behind it; otherwise it takes the brand's on-color.
     // Plain ink also gives way to the on-color wherever the on-color reads better, so a mid-dark fill gets light text.
     const onColor=colors.onAccent??colors.canvasPrimary,inks=[colors.inkDeep,colors.inkPrimary,colors.inkSecondary].filter(Boolean);
@@ -318,7 +320,7 @@ export async function compileComposition(comp,contract,{fonts}={}) {
       if(n.id)rects.set(n.id,rect);
       const own=n.group?[]:members;
       if(n.type==='spacer')return;
-      if(n.type==='text'){put({id:n.id,type:'text',...box(rect),text:n.text,...textProps(n,surface)},own);return;}
+      if(n.type==='text'){sized(n);put({id:n.id,type:'text',...box(rect),text:n.text,...textProps(n,surface)},own);return;}
       if(n.type==='icon') {
         // Icons are copied from the brand library as native geometry at render time, so the scene only reserves a centred square.
         if(rect.width<iconSize-.5)fail(`${s.id}/${n.id}`,`needs ${round(iconSize)}pt of width for an icon but has ${round(rect.width)}pt`);
@@ -333,7 +335,7 @@ export async function compileComposition(comp,contract,{fonts}={}) {
       if(n.type==='image'){put({id:n.id,type:'image',...box(rect),src:n.src,alt:n.alt,fit:n.fit??'contain'},own);return;}
       if(n.type==='box') {
         const base={id:n.id,type:'shape',...box(rect),shape:n.shape??'rect',fill:colors[fillRole(n)]};
-        if(n.text!==undefined){put({...base,text:n.text,...textProps(n,base.fill)},own);return;}
+        if(n.text!==undefined){sized(n);put({...base,text:n.text,...textProps(n,base.fill)},own);return;}
         const inner=[];put(base,inner);
         const [,,,fx,fy]=shapeKinds[base.shape],area=fx===1&&fy===1?{x:rect.x+inset,y:rect.y+inset,width:rect.width-inset*2,height:rect.height-inset*2}:{x:rect.x+rect.width*(1-fx)/2,y:rect.y+rect.height*(1-fy)/2,width:rect.width*fx,height:rect.height*fy};
         if(n.children)place({type:'stack',direction:'column',gap:n.gap,align:n.align,children:n.children,name:n.id},area,inner,base.fill);
@@ -384,6 +386,7 @@ export async function compileComposition(comp,contract,{fonts}={}) {
       structure.layouts.push({slide:s.id,layout:s.layout,placeholders});
     } else place(s.canvas,sl.contentBox,null);
     if(tight.length){problems.push(...tight);continue;}
+    if(sizes.reading.length>1&&sizes.reading.length>sizes.body)structure.reading.push({slide:s.id,nodes:sizes.reading,size:roles.bodyReference.size,live:roles.body.size});
     if(!s.layout){const used=need(s.canvas,sl.contentBox.width);if(Number.isFinite(used))room.push({slide:s.id,needs:round(used),has:round(sl.contentBox.height)});}
     if(s.brief?.relation==='overlap') {
       // Overlap is geometric: two shapes must intersect without one simply sitting inside the other.

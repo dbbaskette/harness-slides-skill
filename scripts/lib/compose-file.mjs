@@ -27,7 +27,7 @@ export async function compileCompositionFile({file,brand,output,fonts,'design-pr
   for(const check of [native.checkIcons,native.checkLayouts])try{await check(wanted,contract);}catch(error){problems.push(...lines(error));}
   if(problems.length)throw new Error(problems.length===1?problems[0]:`${problems.length} problems to fix:\n${problems.join('\n')}`);
   const {scene,structure,report}=compiled;
-  const summary={slides:scene.slides.length,brandRevision:contract.revision,measurement:report.measurement,groups:structure.groups.length,connectors:structure.connectors.length,icons:structure.icons.length,room:Object.fromEntries(report.room.map(r=>[r.slide,`${r.needs} of ${r.has}`])),...(structure.adjusted?.length?{weightOverridden:structure.adjusted}:{})};
+  const summary={slides:scene.slides.length,brandRevision:contract.revision,measurement:report.measurement,groups:structure.groups.length,connectors:structure.connectors.length,icons:structure.icons.length,room:Object.fromEntries(report.room.map(r=>[r.slide,`${r.needs} of ${r.has}`])),...(structure.adjusted?.length?{weightOverridden:structure.adjusted}:{}),...(structure.reading?.length?{readingSizeInLiveDeck:structure.reading.map(r=>`${r.slide}: ${r.nodes.length} items at ${r.size}pt`)}:{})};
   if(!output)return {status:'fits; nothing written. Add a new --output directory to write the build',...summary};
   const approved=await requireSceneDesign(scene,designProject);
   if(approved)report.designRevision=approved.revision;

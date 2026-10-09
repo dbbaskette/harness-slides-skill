@@ -132,7 +132,14 @@ renders as an empty panel. Content slides stay on the default layout.
 ## Brand roles, not values
 
 Colours and type sizes are the brand contract's role names. The contract text
-lists them; raw colours and font sizes are refused. Search the brand's icon
+lists them; raw colours and font sizes are refused.
+
+Text with no `textRole` takes the body size the brand sets for how this deck is
+delivered: larger for a live talk, smaller for reading. Keep it. Do not step
+down to a smaller role to make content fit; cut words, split the slide or
+restructure. The smaller roles are for what they name: `caption` for a caveat
+or a source, `label` for a heading. A live deck whose slides are set in the
+reading size is a defect, and `preview` reports it. Search the brand's icon
 library for icon IDs. An icon keeps the library's colors unless you set its
 `color` and `style`: `solid` is a light icon on a colored disc, `outline` a
 colored icon in a ring, `plain` a colored icon with no container. On a filled

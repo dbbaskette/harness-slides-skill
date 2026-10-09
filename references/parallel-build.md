@@ -70,7 +70,9 @@ Tell the user which preview files the build left in their Drive.
 The claims are settled; the drawing is yours. Read [design](design.md) from
 "Choose each slide from its content" and [compositions](compositions.md), and
 run `compose contract --brand` for the sizes. Design each slide from what it
-must make the audience understand, not from the nearest row of boxes. Write
+must make the audience understand, not from the nearest row of boxes. Keep the
+brand's body size for this deck's delivery; a section that shrinks its text to
+fit more in will not match the others. Write
 only your section file, with the deck's `direction` copied unchanged and your ID
 prefix on every node. Check with `compose compile` and no `--output` until it
 fits, then preview each slide, and revise and look again where it needs it,

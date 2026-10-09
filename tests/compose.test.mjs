@@ -402,3 +402,12 @@ test('in a row an icon takes its own width and the rest share what is left',asyn
   const alone=await compileComposition(deck({type:'stack',direction:'row',children:[{type:'icon',id:'icon_a',icon:'fi-x'},{type:'icon',id:'icon_b',icon:'fi-y'}]}),c);
   assert.ok(alone.structure.icons[1].x>alone.structure.icons[0].x+200);
 });
+
+test('a live deck reports slides whose text was shrunk to the reading size',async()=>{
+  const live=brand();live.medium.delivery='live';live.revision=contractRevision(live);
+  const slide=role=>deck({type:'stack',direction:'column',children:[{type:'text',id:'line_one',text:'One',textRole:role},{type:'text',id:'line_two',text:'Two',textRole:role},{type:'text',id:'line_cap',text:'Source',textRole:'caption'}]});
+  assert.deepEqual((await compileComposition(slide('bodyReference'),live)).structure.reading,[{slide:'slide_one',nodes:['line_one','line_two'],size:20,live:24}]);
+  assert.deepEqual((await compileComposition(slide(undefined),live)).structure.reading,[]);
+  // A reading deck is meant to be set at that size.
+  assert.deepEqual((await compileComposition(slide('bodyReference'),brand())).structure.reading,[]);
+});
