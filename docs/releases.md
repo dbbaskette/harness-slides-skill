@@ -24,7 +24,7 @@ that is missing or invalid, the task is refused as before. A task pinned to a
 revision is never moved to older guidance. Runtimes up to 0.12.0 predate this and
 are still refused.
 
-Users see “Using Harness Slides v0.12.0”. `--version` is an offline human-readable
+Users see “Using Harness Slides v0.13.0”. `--version` is an offline human-readable
 check; `version` returns `package`, `runtimeVersion` and resolved `runtime` as
 JSON. Run it from the returned runtime. This does not authenticate Google or
 query releases. The existing `workspace restore --version v000001` remains a
