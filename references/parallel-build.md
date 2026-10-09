@@ -42,9 +42,10 @@ back, at the quality of a one-line sketch.
    A part whose direction differs, or that reuses another part's IDs, is refused.
    Then compile, preview the whole deck and do the final review in
    [compositions](compositions.md). Rhythm, a layout echoed across a section
-   boundary and one concept drawn two ways only show up here. Name the three
-   weakest slides in the whole deck. Fix small things yourself; send a slide
-   back to the worker that owns it when it needs redesigning.
+   boundary and one concept drawn two ways only show up here, on the contact
+   sheet. Have the deck critiqued and name its three weakest slides. Fix small
+   things yourself; send a slide back to the worker that owns it when it needs
+   redesigning.
 
 Tell the user which preview files the build left in their Drive.
 

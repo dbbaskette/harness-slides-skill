@@ -246,13 +246,32 @@ node scripts/harness-slides.mjs compose render --file NEW_DIR --output deck.pptx
 node scripts/harness-slides.mjs drive import --file deck.pptx --name TITLE
 ```
 
-Before delivering, run `compose preview` on the finished build without `--slide`
-and open every image, in order: each slide, then the run of slides as a deck.
-Name the three weakest slides and what is wrong with each, fix them, and
-preview again. That is the final review for a composed deck. Note what you
-found and fixed in `presentation-brief.md`, with the deck hash the preview
-returns. Show the user those images and
-wait, as [the walkthrough](design-walkthrough.md#show-rendered-output-and-pause-again)
+Before delivering, run `compose preview` on the finished build without
+`--slide`. Beside the slide images it writes `contact-sheet.png`, every slide
+numbered on one sheet, and `critic.json`, eight yes-or-no questions to answer
+for each slide.
+
+**Have it reviewed by someone who did not draw it.** Where the harness runs
+subagents, hand one the preview directory and nothing else. It reads
+`critic.json`, looks at the contact sheet and then each image, and answers the
+questions; it sees what is on the slide, not what was meant. Where there is no
+subagent, answer them yourself and record the reviewer as `author`.
+
+```sh
+node scripts/harness-slides.mjs compose critique --file PREVIEW_DIR --assessment critique.json
+```
+
+Each no is a finding: `critical` when the slide misleads or its point cannot be
+found, `major` when it is clearly weaker than it should be, `minor` otherwise.
+The critique also names the three weakest slides. A critical finding blocks
+delivery. Fix the critical and major findings in one pass, preview again and
+have the new render critiqued; undo a fix that causes a new finding. A reviewer
+does not change brand colors or what a slide says.
+
+That is the final review for a composed deck. Note what was found and fixed in
+`presentation-brief.md`, with the deck hash the preview returns. Then show the
+user the contact sheet and the images and wait, as
+[the walkthrough](design-walkthrough.md#show-rendered-output-and-pause-again)
 describes. The preview file and the delivered file are imports of the same
 build.
 
