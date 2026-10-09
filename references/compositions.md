@@ -78,18 +78,20 @@ the words really are enough; do not draw a diagram to satisfy the rule.
 ## Design each slide from its content
 
 There are no slide types to pick from. Build the structure the content needs
-from three containers and a handful of leaves:
+from four containers and a handful of leaves:
 
 | Use | For |
 | --- | --- |
 | `stack` (row or column) | Things read in order, or side by side |
 | `grid` | Peers of equal weight |
-| `free` | A hub, a map, anything placed by position (fractions of the area) |
+| `free` | A map, an overlap, anything placed by position (fractions of the area) |
+| `ring` | Three to eight things around a circle, in order, with an optional `hub` at the center |
 | `box` | A shape with text inside, or a card holding other nodes |
 | `text`, `icon`, `image` | Words, an approved icon by ID, supplied or generated artwork |
 | `metric` | The one number a slide is about, with its label beneath |
 | `badge` | A small numbered or lettered disc, for steps and references |
 | `rule` | A thin line between the parts of a column or a row |
+| `table` | A native table in the brand's table style, for comparing values across rows |
 | `spacer` | Deliberate empty space, and room for an arrow label |
 
 A box has three looks, set with `style`:
@@ -97,7 +99,11 @@ A box has three looks, set with `style`:
 - `solid` fills it. Keep that for the point of the slide and for a color that
   carries a meaning.
 - `outline` draws it as a line and leaves the inside open.
-- `bar` is a neutral card with a strip of its color down the left edge.
+- `bar` is a neutral card with a strip of color down the left edge.
+
+The line or strip is the focal color on the slide's point, the box's `fill`
+where it has one, and a quiet ink otherwise. Under a direction a `fill` is still
+one of its meanings, so a plain supporting card sets none.
 
 A slide of nothing but solid boxes is heavy and flat. Give the supporting cards
 `outline` or `bar`, and let the one solid shape be the thing to look at.
@@ -149,9 +155,18 @@ equal weight. A role's own color gives way to plain ink when the deck's
 direction has given that color a job, and takes the focal color when the node
 is the slide's point.
 
-`connect` joins two nodes with an arrow. A label on an arrow needs room: on a
-straight arrow it must fit the gap between the two nodes, so leave a spacer; on a
-slanted arrow it is placed beside the line, clear of every node.
+`connect` joins two nodes with an arrow. It runs the way the layout does:
+across between the parts of a row, down between the parts of a column. Between
+nodes that are not level a straight arrow slants; set `route` to `elbow` for
+right angles, which suits a fan-out or a tree, or to `curve`. Between two
+children of a `ring` an elbow or a curve turns once around the outside, which
+draws a cycle. A label on an arrow needs room: on a straight arrow it must fit
+the gap between the two nodes, so leave a spacer; on a slanted arrow it is
+placed beside the line, clear of every node.
+
+A `table` takes `rows`, the first being the header, and optional `widths` that
+share the width between columns. Each row is as tall as its tallest cell. Keep
+cells to a few words; a table compares values and is not a place for sentences.
 
 Show a sequence, a dependency or a
 hand-off with nodes and edges, not with a sentence that describes it. Show
@@ -192,8 +207,12 @@ library for icon IDs. An icon keeps the library's colors unless you set its
 `color` and `style`: `solid` is a light icon on a colored disc, `outline` a
 colored icon in a ring, `plain` a colored icon with no container. On a filled
 card use `plain` or `outline` in a color that reads on the fill. Follow the
-brand's own icon rules where it has them. Shapes: `rect`, `roundRect`, `ellipse`, `diamond`,
-`hexagon`, `chevron`, `can`. Arrows attach to the first four.
+brand's own icon rules where it has them. An icon needs its label beside it,
+stands for one thing throughout the deck, and is not repeated across the cards
+of one slide; `preview` reports each of these. Shapes: `rect`, `roundRect`,
+`ellipse`, `diamond`, `hexagon`, `chevron`, `can`. An arrow stays attached to
+any of them and to an icon with a disc or a ring, so it follows when someone
+moves the node.
 
 ## Build, look, fix
 
@@ -280,7 +299,7 @@ placeholder, labels sit inside their shapes, arrows are attached, and each card
 is one group. All of that survives the import into Google Slides. Read
 [review](review.md) only for a requested PDF export or an editability check.
 
-Native tables, charts and hyperlinks are not available in compositions yet. A
-small comparison table can be built as a grid of boxes and text. A deck that
-needs a real table or chart is built with [another method](authoring.md); the
-methods cannot yet be mixed in one build.
+Native charts and hyperlinks are not available in compositions yet. Show a
+few numbers as bars drawn to scale or as a table. A deck that needs a real
+chart is built with [another method](authoring.md); the methods cannot yet be
+mixed in one build.

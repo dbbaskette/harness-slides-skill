@@ -62,7 +62,7 @@ export function compileGoogleScene(scene,deck,{localImages=false}={}) {
         if(e.colors||e.labelSize)limitations.push({object:e.id,detail:'Linked Google charts retain Sheets source styling; apply brand colors and typography in the source spreadsheet and inspect the native chart'});
         requests.push({createSheetsChart:{objectId:e.id,spreadsheetId:c.spreadsheetId,chartId:c.chartId,linkingMode:'LINKED',elementProperties:props(s,e)}});
       } else if(e.type==='line') {
-        const lineProps=props(s,e);lineProps.transform={...lineProps.transform,scaleX:e.flipH?-1:1,scaleY:e.flipV?-1:1,translateX:e.x+(e.flipH?e.width:0),translateY:e.y+(e.flipV?e.height:0)};requests.push({createLine:{objectId:e.id,lineCategory:'STRAIGHT',elementProperties:lineProps}});
+        const lineProps=props(s,e);lineProps.transform={...lineProps.transform,scaleX:e.flipH?-1:1,scaleY:e.flipV?-1:1,translateX:e.x+(e.flipH?e.width:0),translateY:e.y+(e.flipV?e.height:0)};requests.push({createLine:{objectId:e.id,lineCategory:e.route==='elbow'?'BENT':e.route==='curve'?'CURVED':'STRAIGHT',elementProperties:lineProps}});
         requests.push({updateLineProperties:{objectId:e.id,lineProperties:{lineFill:{solidFill:{color:solid(e.color??'accent'),alpha:1}},weight:{magnitude:e.weight??2,unit:'PT'},endArrow:e.arrow?'FILL_ARROW':'NONE'},fields:'lineFill,weight,endArrow'}});
       } else if(e.type==='table') {
         requests.push({createTable:{objectId:e.id,rows:e.rows.length,columns:e.rows[0].length,elementProperties:{pageObjectId:s.id}}});

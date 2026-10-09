@@ -12,7 +12,7 @@ import {updateDeck,exportPdf} from '../scripts/google-drive-deck.mjs';
 
 const slide=(id,title,canvas,connect)=>({id,title,sources:['brief:test'],canvas,...(connect?{connect}:{})});
 const deck=()=>({version:1,title:'Preview deck',slides:[
-  slide('flow_slide','Requests move through stages',{type:'stack',direction:'row',gap:'none',children:[{type:'box',id:'node_from',text:'Edge'},{type:'spacer',weight:.4},{type:'box',id:'node_to',shape:'hexagon',text:'App'}]},[{id:'edge_one',from:'node_from',to:'node_to'}]),
+  slide('flow_slide','Requests move through stages',{type:'stack',direction:'row',gap:'none',children:[{type:'box',id:'node_from',text:'Edge'},{type:'spacer',weight:.4},{type:'text',id:'node_to',text:'App'}]},[{id:'edge_one',from:'node_from',to:'node_to'}]),
   slide('prose_slide','How a request is handled',{type:'text',id:'prose_text',text:'The edge authenticates, then the router sends the request to a backend.'}),
   slide('cards_one','Three teams',{type:'grid',columns:3,children:['a','b','c'].map(n=>({type:'box',id:`one_${n}`,text:`Team ${n}`}))}),
   slide('cards_two','Three more teams',{type:'grid',columns:3,children:['a','b','c'].map(n=>({type:'box',id:`two_${n}`,text:`Team ${n}`}))})]});
@@ -139,4 +139,20 @@ test('a critique is recorded against the render it judged, and a critical findin
   const single=join(dir,'single');await previewComposition({file:output,output:single,slide:'cards_one','file-id':'drive_file_1'},fakes().deps);
   await assert.rejects(()=>recordCritique({file:single,assessment:join(dir,'two.json')}),/No critic packet here; run compose preview on the whole deck/);
   assert.equal(criticQuestions.length,8);
+});
+
+test('icon screens flag an icon repeated, an icon with no words, and one icon given two meanings',async t=>{
+  const dir=await temporary(t),c=await brand(dir);c.design.slides.icon={size:54,library:{path:'/x/icons.pptx',index:'/x/index.json'}};
+  const {contractRevision}=await import('../scripts/lib/brand-contract.mjs');c.revision=contractRevision(c);
+  const card=(n,icon,label)=>({type:'box',id:`card_${n}`,children:[{type:'icon',id:`icon_${n}`,icon},...(label?[{type:'text',id:`text_${n}`,text:label}]:[])]});
+  const comp={version:1,title:'Icons',slides:[
+    slide('same_slide','Three things',{type:'grid',columns:3,children:[card('a1','fi-disk','Fast'),card('a2','fi-disk','Safe'),card('a3','fi-disk','Open')]}),
+    slide('lone_slide','A thing',{type:'stack',direction:'row',children:[{type:'icon',id:'icon_b1',icon:'fi-lock'},{type:'spacer',weight:4},{type:'box',id:'far_box',text:'Far away'}]}),
+    slide('mean_slide','Another thing',{type:'stack',direction:'row',children:[card('c1','fi-lock','Compliance')]}),
+    slide('again_slide','Yet another',{type:'stack',direction:'row',children:[card('d1','fi-lock','Storage')]})]};
+  const {scene,structure}=await compileComposition(comp,c),findings=await screenComposition({scene,structure}),codes=id=>findings.filter(f=>f.slide===id).map(f=>f.code);
+  assert.ok(codes('same_slide').includes('icon-repeated'));assert.match(findings.find(f=>f.code==='icon-repeated').detail,/appears 3 times/);
+  assert.ok(codes('lone_slide').includes('icon-alone'));assert.ok(!codes('mean_slide').includes('icon-alone'));
+  assert.ok(codes('again_slide').includes('icon-two-meanings'));assert.match(findings.find(f=>f.code==='icon-two-meanings').detail,/"storage" here and "compliance" on mean_slide/);
+  assert.ok(!codes('mean_slide').includes('icon-two-meanings'));
 });

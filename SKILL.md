@@ -45,7 +45,7 @@ this engine. Apply its selected contract and assets; do not mix identities.
 | New deck or full rework | First [draft](references/draft.md) it and get the draft approved, asking and waiting as the [walkthrough](references/design-walkthrough.md) says. Then, to build: [design](references/design.md) and [compositions](references/compositions.md) |
 | Redesign that keeps the content | [Design](references/design.md) and [walkthrough](references/design-walkthrough.md), then [compositions](references/compositions.md) |
 | More than about ten content slides, in a harness that runs subagents | Also [parallel build](references/parallel-build.md), once the walkthrough is approved |
-| A deck that needs a native table or chart, or that compositions cannot express | [Other methods](references/authoring.md); load only the one chosen |
+| A deck that needs a native chart, or that compositions cannot express | [Other methods](references/authoring.md); load only the one chosen |
 | Polish, content-preserving patch or selected-slide edit | [PPTX editing](references/editing.md) or [Google operations](references/google-slides.md), matching the destination |
 | Native Google access/operations | [Google Slides](references/google-slides.md) |
 | Writing a brand add-on or choosing among templates | [Brand add-ons](references/brand-addons.md); [template reuse](references/templates.md) only for inspection/composition. A deck that only uses an exported brand contract needs neither |

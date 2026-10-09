@@ -55,6 +55,7 @@ export async function screenComposition({scene,structure={groups:[],connectors:[
     // Only short titles in a spaced script are judged; a three-word claim with a number is still a claim.
     if(/^[\x20-\x7E]+$/.test(slide.title)&&slide.title.trim().split(/\s+/).length<3&&!/\d/.test(slide.title))findings.push({slide:slide.id,severity:'info',code:'label-title',detail:'The title reads as a label. Write the claim as a sentence the slide then supports.'});
   }
+  const labelled=[];
   scene.slides.forEach((slide,index)=>{
     if(templated.has(slide.id))return;
     const body=slide.elements.filter(e=>e.role!=='title'),words=body.map(e=>e.text??'').join(' '),edges=structure.connectors.filter(c=>c.slide===slide.id).length;
@@ -66,8 +67,21 @@ export async function screenComposition({scene,structure={groups:[],connectors:[
       const card=backdrop(slide,icon),drawn=native.find(n=>n.id===slide.id)?.icons?.find(i=>i.id===icon.id);
       if(card&&drawn?.colors?.includes(color(card.fill,theme).slice(1).toUpperCase()))findings.push({slide:slide.id,object:icon.id,severity:'warn',code:'icon-blends-into-fill',detail:`Part of this icon is the same color as the ${card.id} fill behind it, so that part disappears. Use a different fill for the card.`});
     }
-    for(const id of native.find(n=>n.id===slide.id)?.unattached??[])findings.push({slide:slide.id,object:id,severity:'info',code:'unattached-connector',detail:'This arrow is positioned but not attached, so it will not follow its shapes. Attach works for rect, roundRect, diamond and ellipse.'});
+    // An icon has a job: it marks one thing, and the words that say what are right beside it.
+    const here=(structure.icons??[]).filter(i=>i.slide===slide.id),counts=new Map();
+    for(const icon of here)counts.set(icon.icon,(counts.get(icon.icon)??0)+1);
+    for(const [name,count] of counts)if(count>=3)findings.push({slide:slide.id,object:here.find(i=>i.icon===name).id,severity:'warn',code:'icon-repeated',detail:`The same icon appears ${count} times on this slide, so it tells nothing apart. Give each thing its own icon, or use none.`});
+    const texts=slide.elements.filter(e=>e.text&&e.role!=='title'),centre=b=>({x:b.x+b.width/2,y:b.y+b.height/2});
+    for(const icon of here) {
+      const c=centre(icon),reach=Math.max(icon.width,icon.height)*2.5,near=texts.map(e=>({e,d:Math.hypot(Math.max(e.x-c.x,0,c.x-e.x-e.width),Math.max(e.y-c.y,0,c.y-e.y-e.height))})).filter(x=>x.d<=reach).sort((a,b)=>a.d-b.d)[0];
+      if(!near)findings.push({slide:slide.id,object:icon.id,severity:'warn',code:'icon-alone',detail:'No words sit beside this icon, so it cannot be read. Put its label next to it, or remove it.'});
+      else labelled.push({slide:slide.id,id:icon.id,icon:icon.icon,label:near.e.text.split('\n')[0].trim().toLowerCase()});
+    }
+    for(const id of native.find(n=>n.id===slide.id)?.unattached??[])findings.push({slide:slide.id,object:id,severity:'info',code:'unattached-connector',detail:'This arrow is positioned but not attached, so it will not follow its shapes. An arrow attaches to a box of any shape and to an icon with a disc or ring, not to a text or a plain icon.'});
   });
+  // One icon should mean one thing across the deck.
+  const meanings=new Map();
+  for(const use of labelled){const first=meanings.get(use.icon);if(!first)meanings.set(use.icon,use);else if(first.label!==use.label&&first.slide!==use.slide)findings.push({slide:use.slide,object:use.id,severity:'info',code:'icon-two-meanings',detail:`This icon is labelled "${use.label}" here and "${first.label}" on ${first.slide}. Keep one icon to one meaning.`});}
   return findings;
 }
 

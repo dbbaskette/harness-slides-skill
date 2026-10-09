@@ -71,10 +71,12 @@ test('edges attach to the facing connection sites and box children form a group'
   const ids=[...xml.matchAll(/<p:cNvPr id="(\d+)"/g)].map(m=>m[1]);assert.equal(new Set(ids).size,ids.length);
 });
 
-test('an edge to a shape without known connection sites is drawn but reported unattached',async t=>{
-  const comp=flow();comp.slides[0].canvas.children[0].shape='hexagon';
+test('an edge to something with no connection site is drawn but reported unattached',async t=>{
+  const comp=flow(),first=comp.slides[0].canvas.children[0];comp.slides[0].canvas.children[0]={type:'text',id:first.id,text:'Edge'};
   const {output,result}=await build(t,comp),xml=await part(output,'ppt/slides/harnessSlide1.xml');
   assert.deepEqual(result.native[0].unattached,['edge_one']);assert.match(xml,/<p:cxnSp>/);assert.doesNotMatch(xml,/stCxn/);
+  // A hexagon, a chevron and a cylinder attach on the sides they have sites for.
+  for(const shape of ['hexagon','chevron','can']){const sided=flow();sided.slides[0].canvas.children[0].shape=shape;const built=await build(t,sided);assert.deepEqual(built.result.native[0].unattached,[],shape);assert.match(await part(built.output,'ppt/slides/harnessSlide1.xml'),/stCxn/,shape);}
 });
 
 test('nested groups are written inside their parent group',async t=>{
@@ -109,8 +111,8 @@ test('images are embedded with alt text, fitted for contain and cropped for cove
 
 test('unsupported scene objects and a missing template are refused by name',async t=>{
   const dir=await temporary(t),c=await brand(dir),{scene,structure}=await compileComposition(flow(),c);
-  const table=structuredClone(scene);table.slides[0].elements.push({id:'data_table',type:'table',x:48,y:300,width:400,height:80,rows:[['a','b'],['c','d']]});
-  await assert.rejects(()=>emitNativePptx({scene:table,structure,brand:c,output:join(dir,'t.pptx')}),/data_table: the native emitter does not write table objects yet/);
+  const chart=structuredClone(scene);chart.slides[0].elements.push({id:'data_chart',type:'chart',x:48,y:300,width:400,height:80,chartType:'bar',series:[{name:'a',labels:['x'],values:[1]}],source:'s'});
+  await assert.rejects(()=>emitNativePptx({scene:chart,structure,brand:c,output:join(dir,'t.pptx')}),/data_chart: the native emitter does not write chart objects yet/);
   const plain=structuredClone(c);delete plain.design.nativeTemplate;plain.revision=contractRevision(plain);
   await assert.rejects(()=>emitNativePptx({scene,structure,brand:plain,output:join(dir,'p.pptx')}),/needs a brand contract with a native template/);
   await emitNativePptx({scene,structure,brand:c,output:join(dir,'once.pptx')});
@@ -229,7 +231,8 @@ async function iconLibrary(dir) {
   const objects=(await pptxTool('inspect',[path])).slides[0].objects,ids=['icon_ring','icon_core'].map(name=>objects.find(o=>o.name===name).id);
   await writeFile(index,JSON.stringify({schemaVersion:1,sourceSha256:hash(await readFile(path)),entries:[
     {id:'fi-test-s001-l001',slide:1,labelIndex:1,label:'Test ring',shapeIds:ids,bounds:[100*12700,100*12700,80*12700,40*12700],native:true},
-    {id:'fi-test-s001-l002',slide:1,labelIndex:2,label:'A picture',shapeIds:ids,bounds:[0,0,12700,12700],native:false}]}));
+    {id:'fi-test-s001-l002',slide:1,labelIndex:2,label:'A picture',shapeIds:ids,bounds:[0,0,12700,12700],native:false},
+    {id:'fi-test-s001-l003',slide:1,labelIndex:3,label:'Only a disc',shapeIds:ids.slice(0,1),bounds:[100*12700,100*12700,80*12700,40*12700],native:true}]}));
   return {path,index};
 }
 async function withIcons(dir,c) {
@@ -279,7 +282,8 @@ test('icon problems are reported against the composition node and leave no outpu
   await assert.rejects(()=>emit('fi-test-s001-l001',plain,'a.pptx'),/names no icon library/);
   await assert.rejects(()=>emit('fi-missing',c,'b.pptx'),/lead_icon: unknown icon fi-missing/);
   await assert.rejects(()=>emit('fi-test-s001-l002',c,'c.pptx'),/lead_icon: icon fi-test-s001-l002 is a picture/);
-  assert.deepEqual((await readdir(dir)).filter(n=>/^[abc]\.pptx$/.test(n)),[]);
+  await assert.rejects(()=>emit('fi-test-s001-l003',c,'d.pptx'),/lead_icon: icon fi-test-s001-l003 has no drawing in the library index, only its disc/);
+  assert.deepEqual((await readdir(dir)).filter(n=>/^[abcd]\.pptx$/.test(n)),[]);
   await assert.rejects(()=>compileComposition(iconDeck('not an id!'),c),/stable icon ID/);
   const narrow={version:1,title:'Icons',slides:[{id:'icon_slide',title:'t',sources:['brief:test'],canvas:{type:'grid',columns:6,gap:'wide',children:Array.from({length:6},(_,i)=>({type:'stack',direction:'row',gap:'wide',children:[{type:'icon',id:`tiny_icon${i}`,icon:'fi-test-s001-l001'},{type:'spacer'},{type:'spacer'},{type:'spacer'}]}))}}]};
   await assert.rejects(()=>compileComposition(narrow,c),/needs 54pt of width for an icon/);
@@ -362,5 +366,22 @@ test('an outlined box is written with a line and no fill, and a bar card as one 
   const xml=await part(output,'ppt/slides/harnessSlide1.xml'),shape=name=>xml.match(new RegExp(`<p:sp>(?:(?!</p:sp>).)*name="${name}".*?</p:sp>`,'s'))[0];
   assert.match(shape('line_box'),/<a:noFill\/><a:ln w="19050"><a:solidFill><a:srgbClr val="555555"\/><\/a:solidFill><\/a:ln>/);
   assert.match(shape('bar_box'),/<a:solidFill><a:srgbClr val="F0F2F5"\/><\/a:solidFill><a:ln><a:noFill\/><\/a:ln>/);assert.match(xml,/name="bar_box_group"/);assert.match(shape('step_one'),/prst="ellipse"/);
+  assert.deepEqual(await audit(output),[]);
+});
+
+test('bent connectors, a ring and a table are written as native objects',async t=>{
+  const dir=await temporary(t),c=await brand(dir),output=join(dir,'more.pptx');
+  const comp={version:1,title:'Deck',slides:[
+    {id:'fan_slide',title:'Fan',sources:['brief:test'],canvas:{type:'stack',direction:'row',gap:'wide',children:[{type:'box',id:'hub_node',text:'Hub'},{type:'stack',direction:'column',children:[{type:'box',id:'top_node',text:'Top'},{type:'box',id:'low_node',text:'Low'}]}]},connect:[{id:'edge_up',from:'hub_node',to:'top_node',route:'elbow'},{id:'edge_down',from:'hub_node',to:'low_node',route:'curve'}]},
+    {id:'ring_slide',title:'Ring',sources:['brief:test'],canvas:{type:'ring',children:['north','east','south','west'].map(n=>({type:'box',id:`ring_${n}`,text:n}))},connect:[{id:'ring_e1',from:'ring_north',to:'ring_east',route:'curve'},{id:'ring_e2',from:'ring_east',to:'ring_south',route:'curve'}]},
+    {id:'table_slide',title:'Table',sources:['brief:test'],canvas:{type:'table',id:'opt_table',rows:[['Option','Cost'],['Buy','High & rising'],['Build','Low']]}}]};
+  const result=await emitNativePptx({...await compileComposition(comp,c),brand:c,output,base:dir}),one=await part(output,'ppt/slides/harnessSlide1.xml'),two=await part(output,'ppt/slides/harnessSlide2.xml'),three=await part(output,'ppt/slides/harnessSlide3.xml');
+  assert.match(one,/prst="bentConnector3"/);assert.match(one,/prst="curvedConnector3"/);assert.equal((one.match(/<a:stCxn /g)??[]).length,2);
+  // Around a ring an edge turns once. North to east leads off across; east to south leads off down, so its frame is turned.
+  assert.equal((two.match(/prst="curvedConnector2"/g)??[]).length,2);assert.equal((two.match(/<a:xfrm rot="5400000"/g)??[]).length,1);assert.deepEqual(result.native[1].unattached,[]);
+  // North's right side to east's top, then east's bottom to south's right side.
+  assert.deepEqual([...two.matchAll(/<a:(stCxn|endCxn) id="\d+" idx="(\d)"\/>/g)].map(m=>Number(m[2])),[3,0,2,3]);
+  assert.match(three,/<p:graphicFrame>.*name="opt_table".*<a:tbl><a:tblPr firstRow="1"\/><a:tblGrid><a:gridCol w="\d+"\/><a:gridCol w="\d+"\/><\/a:tblGrid>/s);
+  assert.equal((three.match(/<a:tr /g)??[]).length,3);assert.equal((three.match(/<a:tc>/g)??[]).length,6);assert.match(three,/High &amp; rising/);
   assert.deepEqual(await audit(output),[]);
 });

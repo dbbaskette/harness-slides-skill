@@ -22,6 +22,8 @@ export async function checkIcons(structure,brand) {
     const entry=index.entries.find(e=>e.id===i.icon);
     if(!entry)wrong.push(`${i.id}: unknown icon ${i.icon}; search the brand icon library for a current ID`);
     else if(!entry.native||!(entry.bounds?.[2]>0)||!(entry.bounds?.[3]>0))wrong.push(`${i.id}: icon ${i.icon} is a picture, not native geometry; choose another`);
+    // Every library icon is a disc and a drawing; an entry that lists one shape would be copied as an empty disc.
+    else if(Array.isArray(entry.shapeIds)&&entry.shapeIds.length<2)wrong.push(`${i.id}: icon ${i.icon} has no drawing in the library index, only its disc; choose another`);
   }
   if(wrong.length)throw new Error(wrong.join('\n'));
   return library;
@@ -36,13 +38,14 @@ export async function emitNativePptx({scene,structure={groups:[],connectors:[]},
   for(const s of scene.slides) {
     const elements=[];
     for(const e of s.elements) {
-      if(e.type==='table'||e.type==='chart')throw new Error(`${e.id}: the native emitter does not write ${e.type} objects yet; use pptx render`);
+      if(e.type==='chart')throw new Error(`${e.id}: the native emitter does not write chart objects yet; use pptx render`);
       if(e.href)throw new Error(`${e.id}: the native emitter does not write hyperlinks yet; use pptx render`);
       const out={...e};
       if(e.type==='text'||e.type==='shape'&&e.text!==undefined){out.fontSize=e.fontSize??(e.role==='title'?theme.titleSize:theme.bodySize);out.color=hex(e.color??'text');}
       if(e.fill)out.fill=hex(e.fill);
       if(e.stroke)out.stroke=hex(e.stroke);
       if(e.type==='line')out.color=hex(e.color??'accent');
+      if(e.type==='table'){out.color=hex(e.color??'text');out.headerColor=hex(e.headerColor??e.color??'text');out.headerFill=hex(e.headerFill??'muted');out.bodyFill=hex(e.bodyFill??'background');out.fontSize=e.fontSize??theme.bodySize;out.ruleColor=hex('muted');}
       if(e.type==='image') {
         if(/^https?:/.test(e.src))throw new Error('Download authorized images to the workspace before PPTX rendering; no remote fetch during build');
         const path=resolve(base,e.src),bytes=await readFile(path);

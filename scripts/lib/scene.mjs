@@ -47,7 +47,7 @@ export function validateScene(scene) {
     if (!Array.isArray(s.elements) || !s.elements.length || s.elements.length>200) throw new Error('Provide 1–200 slide elements');
     if (s.notes !== undefined && typeof s.notes !== 'string') throw new Error('Notes must be text');
     for (const e of s.elements) {
-      const fields={text:['href','text','role','fontSize','color','fill','bold','align'],shape:['href','shape','text','role','fontSize','color','fill','bold','align','stroke','strokeWeight'],line:['color','weight','arrow','flipH','flipV'],image:['src','alt','fit'],table:['rows','fontSize','color','headerFill','headerColor','bodyFill','padding','columnWidths'],chart:['chartType','series','source','sheetsChart','colors','labelSize']};
+      const fields={text:['href','text','role','fontSize','color','fill','bold','align'],shape:['href','shape','text','role','fontSize','color','fill','bold','align','stroke','strokeWeight'],line:['color','weight','arrow','flipH','flipV','route','lead','turns'],image:['src','alt','fit'],table:['rows','fontSize','color','headerFill','headerColor','bodyFill','padding','columnWidths','rowHeights'],chart:['chartType','series','source','sheetsChart','colors','labelSize']};
       if (!types.has(e.type) || Object.keys(e).some(k=>!['id','type','x','y','width','height',...(fields[e.type]??[])].includes(k))) throw new Error(`Unsupported element field/type in ${e.id}; do not silently drop it`);
       claim(e.id);
       if (!types.has(e.type)) throw new Error(`Unsupported element type: ${e.type}; do not flatten it`);
@@ -59,6 +59,9 @@ export function validateScene(scene) {
       if (e.fontSize !== undefined) positive(e.fontSize,'font size',120);
       for (const k of ['bold','arrow','flipH','flipV']) if (e[k]!==undefined && typeof e[k]!=='boolean') throw new Error(`Invalid ${k}`);
       if (e.weight!==undefined) positive(e.weight,'line weight',20);
+      if (e.route!==undefined && !['elbow','curve'].includes(e.route)) throw new Error('A line route is elbow or curve');
+      if (e.lead!==undefined && !['horizontal','vertical'].includes(e.lead)) throw new Error('A line leads off horizontal or vertical');
+      if (e.turns!==undefined && e.turns!==1) throw new Error('A routed line turns once when turns is set');
       if (e.role!==undefined && !['title','body'].includes(e.role)) throw new Error('Unknown semantic text role');
       if(e.href!==undefined){let url;try{url=new URL(e.href);}catch{throw new Error('Use an absolute HTTP(S) hyperlink');}if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw new Error('Use an HTTP(S) hyperlink without credentials');}
       if (e.align !== undefined && !['left','center','right'].includes(e.align)) throw new Error('Invalid text alignment');
@@ -70,6 +73,7 @@ export function validateScene(scene) {
       if (e.type==='table') {
         if (!Array.isArray(e.rows)||!e.rows.length||e.rows.length>30||!e.rows[0]?.length||e.rows[0].length>12||e.rows.some(row=>!Array.isArray(row)||row.length!==e.rows[0].length||row.some(c=>typeof c!=='string'))) throw new Error('Use a rectangular table, maximum 30 × 12');
       }
+      if(e.type==='table'&&e.rowHeights!==undefined){if(!Array.isArray(e.rowHeights)||e.rowHeights.length!==e.rows.length||e.rowHeights.some(v=>!Number.isFinite(v)||v<=0)||Math.abs(e.rowHeights.reduce((a,v)=>a+v,0)-e.height)>.5)throw new Error('Table row heights must sum to its height in points');}
       if(e.type==='table'&&e.columnWidths!==undefined){if(!Array.isArray(e.columnWidths)||e.columnWidths.length!==e.rows[0].length||e.columnWidths.some(v=>!Number.isFinite(v)||v<=0)||Math.abs(e.columnWidths.reduce((a,v)=>a+v,0)-e.width)>.01)throw new Error('Table column widths must sum to its width in points');}
       if (e.type==='chart') {
         if (!['bar','line','pie'].includes(e.chartType)) throw new Error('Supported charts: bar, line, pie');
@@ -121,7 +125,7 @@ Coordinates are points. Stable IDs match [a-zA-Z_][a-zA-Z0-9_-]{4,49} and are un
 Slide: {id,title,sources:[evidence IDs],elements:[...],intent?:{takeaway,relationship,rationale,evidence,audienceQuestion,alternative:{treatment,reason},visual:{family,purpose,route?}},notes?:string,layoutId?:native Google layout ID,replace?:[existing object IDs],protect?:[existing object IDs]}.
 Element: {id,type:text|shape|line|table|image|chart,x,y,width,height,...}.
 Text/shape: text, href?:absolute HTTP(S) hyperlink, role?:title|body, fontSize, color/fill (hex or theme key), bold, align:left|center|right. Shape: rect|ellipse|roundRect|diamond|hexagon|chevron|can; stroke?:outline color, strokeWeight?:points.
-Line: color, weight, arrow, flipH/flipV. Table: rows (rectangular strings), fontSize, headerFill/headerColor/bodyFill, padding, columnWidths (points summing to width).
+Line: color, weight, arrow, flipH/flipV, route?:elbow|curve with lead?:horizontal|vertical and turns?:1 for a single corner. Table: rows (rectangular strings), fontSize, headerFill/headerColor/bodyFill, padding, columnWidths (points summing to width).
 Image: src (local path for PPTX, public HTTPS URL for Google), alt, fit:contain|cover.
 Chart: chartType:bar|line|pie, series:[{name,labels:[...],values:[...]}], source, colors?:[hex], labelSize?:points. Native editable chart data in PPTX; Google requires an existing linked Sheets chart via sheetsChart:{spreadsheetId,chartId}.
 For new creative work, include concise intent decisions on every slide; retained old scenes need not be rewritten. Native-template work records equivalent decisions against slide/object IDs.
