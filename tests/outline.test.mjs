@@ -47,7 +47,7 @@ test('a draft is one self-contained wireframe page that never fails on length',a
     content('hub_slide',{relation:'dependency',focal:'One',points:[{label:'One'},{label:'Two'},{label:'Three'}]}),
     content('overlap_slide',{relation:'overlap',focal:'Shared part'}),
     content('figure_slide',{relation:'quantity',points:[{label:'42%',text:'of something'}]}),
-    content('long_slide',{points:[{label:'One',text:long},{label:'Two',text:'<b>tag</b>'}],caveat:'A caveat'}),
+    content('long_slide',{points:[{label:'One',text:long},{label:'Two',text:'<b>tag</b>'}],caveat:'A caveat',source:'Source: a guide'}),
     {id:'close_slide',kind:'closing',title:'End',notes:'Thank the room.'}],{minutes:20,direction:{focal:'headingPrimary',neutral:'canvasSecondary',meanings:{accentAqua:'the product'}}});
   const {html,slides,words}=await draftOutline(deck,c);
   assert.equal(slides,7);assert.ok(words>200);assert.match(html,/^<!doctype html><!-- harness-slides draft -->/);
@@ -59,7 +59,7 @@ test('a draft is one self-contained wireframe page that never fails on length',a
   assert.equal(focal('hub_slide'),1);assert.equal((figure('hub_slide').match(/<line /g)??[]).length,2);
   assert.equal(focal('overlap_slide'),1);assert.equal((figure('overlap_slide').match(/ round/g)??[]).length,2);
   assert.match(figure('close_slide'),/Notes: Thank the room\./);assert.match(html,/20 minutes, about 4\.0 a content slide/);assert.match(html,/headingPrimary marks the point of a slide, on canvasSecondary panels; accentAqua means the product/);
-  assert.match(figure('figure_slide'),/figure/);assert.match(figure('long_slide'),/<mark>over-budget<\/mark>/);assert.match(figure('long_slide'),/A caveat/);
+  assert.match(figure('figure_slide'),/figure/);assert.match(figure('long_slide'),/<mark>over-budget<\/mark>/);assert.match(figure('long_slide'),/A caveat/);assert.match(figure('long_slide'),/Source: a guide/);
   assert.doesNotMatch(html,/#(?!fff|ddd|bbb|999|777|555|222|f4f4f4)[0-9a-f]{3,6}\b/i,'a draft uses no brand color');
 });
 

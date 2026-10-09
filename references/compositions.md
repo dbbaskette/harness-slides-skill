@@ -106,6 +106,36 @@ no minimum, and put the labels beside them.
 Give every content slide `notes`: what the presenter says, and the source
 behind the claim. A deck presented live without them gets a `no-notes` finding.
 
+## Slide furniture
+
+Three things are set on the slide itself, not drawn in the canvas, so they sit
+in the same place on every slide:
+
+| Field | What it is |
+| --- | --- |
+| `subtitle` | One line under the title, in the template's own subtitle line: the section, or the question the slide answers |
+| `caveat` | A ruled strip at the foot. Text, or `{"label":"Limit","text":"…"}` with a one-word label |
+| `source` | A line under the caveat naming where the claim comes from |
+
+Each takes its height from the canvas, so use the ones a slide needs. Decide
+once which of them every slide in the deck carries, and keep to it.
+
+## Use the type range
+
+A slide set in one size has no first thing to look at. The brand's roles give a
+range; use it:
+
+- `metric` for the one number a slide is about, with its context beside it in
+  the body size.
+- `quote` for a statement that is the point of the slide.
+- `label` for the heading of a card or a group, the body size for what is
+  read, `caption` for a caveat or a source.
+
+One large element and a few supporting ones reads better than six items of
+equal weight. A role's own color gives way to plain ink when the deck's
+direction has given that color a job, and takes the focal color when the node
+is the slide's point.
+
 `connect` joins two nodes with an arrow. A label on an arrow needs room: on a
 straight arrow it must fit the gap between the two nodes, so leave a spacer; on a
 slanted arrow it is placed beside the line, clear of every node.

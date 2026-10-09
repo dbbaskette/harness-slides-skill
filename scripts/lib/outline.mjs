@@ -18,13 +18,13 @@ const marker='<!-- harness-slides draft -->';
 export const outlineContract=`Outline v1 (AI-owned; words and decisions, no layout).
 {version:1,title,audience?,delivery?:live|reading,minutes?,direction?:DIRECTION,layouts?:{cover?,section?,closing?},material?:[paths or notes],house?:[lines],slides:[SLIDE]}
 SLIDE cover: {id,kind:cover,title,subtitle?,detail?,notes?}. section: {id,kind:section,title,subtitle?,notes?}. closing: {id,kind:closing,title,notes?}.
-SLIDE content: {id,kind:content,title,understand,relation,focal?,rhythm?,points:[{label?,text?}],caveat?,notes?,sources:[one or more IDs]}.
+SLIDE content: {id,kind:content,title,understand,relation,focal?,rhythm?,points:[{label?,text?}],caveat?,source?,notes?,sources:[one or more IDs]}.
 title is the claim, short enough for the brand's title lines. understand is one sentence: what the audience must leave the slide knowing.
 relation: ${relationNames.join('|')}. It says how the points relate; a relation other than quantity or none needs two or more points.
 focal names the point of the slide in words. Give the label of one of the points, or a short statement of its own, which is then shown on the slide too. Leave it out when the slide lists or compares equals.
 rhythm: anchor for structure, dense for information (the default), breathing for a pause. Four dense slides in a row is a finding; lighten one and mark it breathing, or put a section slide between.
 points are the real units, counted from the content: a label, a line of text, or both. For quantity the first point's label is the figure.
-caveat is one line. notes are for the speaker and are shown under the slide in the draft. sources are one or more IDs naming what the slide rests on: a section of the source material, or one ID such as request or author_knowledge.
+caveat is one line, and source is one line naming where the claim comes from; both are shown at the foot of the slide. notes are for the speaker and are shown under the slide in the draft. sources are one or more IDs naming what the slide rests on: a section of the source material, or one ID such as request or author_knowledge.
 minutes is the length of the talk; the draft shows what that leaves for each content slide.
 DIRECTION is the composition's: {focal,neutral,meanings?,motif?}, in brand color roles. A draft is drawn without it; the build uses it.
 layouts name the brand template layouts for cover, section and closing slides (run compose layouts); the build needs them.
@@ -59,7 +59,7 @@ export async function checkOutline(outline,contract,{fonts}={}) {
     try{validateComposition({version:1,title:'direction',direction:outline.direction,slides:[{id:'direction_probe',title:'t',sources:['s'],canvas:{type:'text',id:'direction_text',text:'t'}}]},contract);}catch(error){fail('outline',error.message);}
   }
   if(!Array.isArray(outline.slides)||!outline.slides.length||outline.slides.length>100){fail('outline','provide 1–100 slides');throw new Error(problems.join('\n'));}
-  const ids=new Set(),fields={cover:['subtitle','detail'],section:['subtitle'],closing:[],content:['understand','relation','focal','rhythm','points','caveat','sources']};
+  const ids=new Set(),fields={cover:['subtitle','detail'],section:['subtitle'],closing:[],content:['understand','relation','focal','rhythm','points','caveat','source','sources']};
   for(const [index,s] of outline.slides.entries()) {
     const where=str(s?.id)?s.id:`slide ${index+1}`;
     if(!s||typeof s!=='object'||Array.isArray(s)){fail(where,'each slide is an object');continue;}
@@ -67,7 +67,7 @@ export async function checkOutline(outline,contract,{fonts}={}) {
     if(!kinds.includes(s.kind)){fail(where,`kind is one of ${kinds.join('|')}`);continue;}
     for(const key of Object.keys(s))if(!['id','kind','title','notes',...fields[s.kind]].includes(key))fail(where,`a ${s.kind} slide has no ${key}`);
     if(!str(s.title))fail(where,'provide the title');
-    for(const key of ['subtitle','detail','notes','caveat','focal'])if(s[key]!==undefined&&!str(s[key]))fail(where,`provide ${key} text or omit it`);
+    for(const key of ['subtitle','detail','notes','caveat','source','focal'])if(s[key]!==undefined&&!str(s[key]))fail(where,`provide ${key} text or omit it`);
     if(s.detail!==undefined&&s.subtitle===undefined)fail(where,'detail needs a subtitle before it');
     if(s.kind!=='content')continue;
     if(!str(s.understand))fail(where,'say in one sentence what the audience must understand');
@@ -105,6 +105,7 @@ function arrange(s,area) {
   const shapes=[],arrows=[],gap=18,isFocal=p=>s.focal!==undefined&&p.label===s.focal;
   const box=(p,x,y,w,h,extra={})=>shapes.push({x,y,w,h,label:p.label,text:p.text,focal:isFocal(p),...extra});
   let {x,y,width:w,height:h}=area;
+  if(s.source){h-=26;shapes.push({x,y:y+h+2,w,h:24,text:s.source,kind:'caveat'});}
   if(s.caveat){h-=30;shapes.push({x,y:y+h+4,w,h:26,text:s.caveat,kind:'caveat'});}
   const hub=own&&s.relation==='dependency';
   if(own&&!hub){shapes.push({x,y,w,h:58,label:own,focal:true});y+=58+gap;h-=58+gap;}
@@ -246,7 +247,7 @@ ${group.map((s,k)=>`
 ${k+1}. **\`${s.id}\`: "${s.title}"**
    - The audience must understand: ${s.understand}
    - Relation \`${s.relation}\`${s.rhythm?`, rhythm \`${s.rhythm}\``:''}. ${s.focal?`The point of the slide: ${s.focal}.`:'No focal point: it compares equals.'}
-${(s.points??[]).map(p=>`   - ${[p.label,p.text].filter(Boolean).join(': ')}`).join('\n')}${s.caveat?`\n   - Caveat line: "${s.caveat}"`:''}${s.notes?`\n   - Speaker notes, to go in the slide's \`notes\`: ${s.notes}`:''}
+${(s.points??[]).map(p=>`   - ${[p.label,p.text].filter(Boolean).join(': ')}`).join('\n')}${s.caveat?`\n   - Caveat, to set on the slide as \`caveat\`: "${s.caveat}"`:''}${s.source?`\n   - Source line, to set on the slide as \`source\`: "${s.source}"`:''}${s.notes?`\n   - Speaker notes, to go in the slide's \`notes\`: ${s.notes}`:''}
    - Sources: ${JSON.stringify(s.sources)}`).join('\n')}
 
 Before your section comes ${beside(prev)}; after it comes ${beside(next)}. Do not echo a neighbour, and make your own slides differ from each other.

@@ -208,8 +208,9 @@ test('a template layout slide carries a title and subtitle lines and no canvas',
   assert.deepEqual(structure.layouts,[{slide:'cover_slide',layout:'Title 1 - dark',placeholders:['cover_slide_subtitle','cover_slide_detail']}]);
   assert.deepEqual(scene.slides[0].elements.map(e=>e.id),['cover_slide_title','cover_slide_subtitle','cover_slide_detail']);
   const bad=extra=>()=>validateComposition({version:1,title:'D',slides:[{id:'cover_slide',title:'T',sources:['brief:test'],...extra}]},brand());
-  assert.throws(bad({layout:'Cover',canvas:{type:'spacer'}}),/has no canvas or edges/);assert.throws(bad({layout:'Cover',detail:'x'}),/detail needs a subtitle/);
-  assert.throws(bad({canvas:{type:'box',id:'only_box',text:'x'},subtitle:'x'}),/belong to a slide with a template layout/);
+  assert.throws(bad({layout:'Cover',canvas:{type:'spacer'}}),/has no canvas, edges, caveat or source/);assert.throws(bad({layout:'Cover',detail:'x'}),/detail needs a subtitle/);
+  assert.throws(bad({canvas:{type:'box',id:'only_box',text:'x'},subtitle:'x',detail:'y'}),/detail belongs to a slide with a template layout/);
+  assert.throws(bad({layout:'Cover',caveat:'x'}),/has no canvas, edges, caveat or source/);
 });
 
 test('a slanted label is placed when its nodes sit inside a named or grouped container, and two labels do not share a spot',async()=>{
@@ -417,4 +418,40 @@ test('a live deck reports content slides with no speaker notes',async()=>{
   const comp={version:1,title:'Deck',slides:[{id:'said_slide',title:'T',sources:['s1'],notes:'Say this.',canvas:{type:'box',id:'said_box',text:'x'}},{id:'mute_slide',title:'T',sources:['s1'],canvas:{type:'box',id:'mute_box',text:'x'}}]};
   assert.deepEqual((await compileComposition(comp,live)).structure.unspoken,['mute_slide']);
   assert.deepEqual((await compileComposition(comp,brand())).structure.unspoken,[]);
+});
+
+test('a content slide carries its furniture: a subtitle line, a ruled caveat strip and a source line',async()=>{
+  const c=brand(),plain=await compileComposition(deck({type:'box',id:'only_box',text:'x'}),c);
+  const comp=deck({type:'box',id:'only_box',text:'x'});Object.assign(comp.slides[0],{subtitle:'Part two of four',caveat:{label:'Limit',text:'No drop-in claim.'},source:'Source: migration guide'});
+  const {scene,structure,report}=await compileComposition(comp,c),e=id=>byId(scene,id);
+  assert.deepEqual(structure.layouts,[{slide:'slide_one',layout:'@subtitled',placeholders:['slide_one_subtitle']}]);
+  // The title keeps one line, the subtitle sits under it, and the content starts below both.
+  assert.ok(e('slide_one_title').height<66);assert.equal(e('slide_one_subtitle').y,round(e('slide_one_title').y+e('slide_one_title').height));
+  const box=e('only_box'),full=byId(plain.scene,'only_box');
+  assert.ok(box.y>=e('slide_one_subtitle').y+e('slide_one_subtitle').height);assert.ok(box.height<full.height);
+  // From the foot up: source, caveat with its label, then the rule, then the content.
+  const source=e('slide_one_source'),caveat=e('slide_one_caveat'),label=e('slide_one_caveat_label'),rule=e('slide_one_caveat_rule');
+  const near=(x,y)=>assert.ok(Math.abs(x-y)<.05,`${x} is not ${y}`);
+  near(source.y+source.height,486);near(caveat.y+caveat.height,source.y);assert.equal(label.y,caveat.y);assert.equal(label.bold,true);near(label.x+label.width,caveat.x);
+  assert.equal(rule.type,'line');assert.equal(rule.arrow,false);assert.ok(rule.y<caveat.y&&rule.y>=box.y+box.height);
+  near(report.room[0].has,box.height);
+  // A plain caveat has no label, and the names are reserved.
+  const bare=deck({type:'box',id:'only_box',text:'x'});bare.slides[0].caveat='Just a line.';
+  assert.ok(!(await compileComposition(bare,c)).scene.slides[0].elements.some(x=>x.id==='slide_one_caveat_label'));
+  const clash=deck({type:'box',id:'slide_one_source',text:'x'});clash.slides[0].source='A source';
+  assert.throws(()=>validateComposition(clash,c),/invalid or repeated ID: slide_one_source/);
+  const bad=extra=>()=>validateComposition((d=>{Object.assign(d.slides[0],extra);return d;})(deck({type:'box',id:'only_box',text:'x'})),c);
+  assert.throws(bad({caveat:{label:'A label that is much too long to be a label',text:'x'}}),/caveat is a line of text, or \{label,text\}/);assert.throws(bad({caveat:{note:'x'}}),/caveat is a line of text/);assert.throws(bad({source:''}),/provide source text/);
+  await assert.rejects(()=>compileComposition((d=>{d.slides[0].subtitle='This subtitle line keeps going. '.repeat(8);return d;})(deck({type:'box',id:'only_box',text:'x'})),c),/slide_one\/subtitle: runs past one line/);
+});
+
+test('a role color the direction has given a job does not leak onto ordinary text',async()=>{
+  // The metric role is drawn in accentAqua, which this deck uses to mean one product.
+  const c=brand(),dir={focal:'headingPrimary',neutral:'canvasSecondary',meanings:{accentAqua:'the product'}};
+  const comp=brief=>({version:1,title:'D',direction:dir,slides:[{id:'slide_one',title:'T',sources:['s1'],brief,canvas:{type:'stack',direction:'row',children:[{type:'text',id:'big_number',text:'42%',textRole:'metric'},{type:'text',id:'its_context',text:'of something'}]}}]});
+  assert.equal(byId((await compileComposition(comp({relation:'quantity'}),c)).scene,'big_number').color,'#202124');
+  assert.equal(byId((await compileComposition(comp({relation:'quantity',focal:'big_number'}),c)).scene,'big_number').color,'#2867B2');
+  // Without a direction the role keeps its own color.
+  const free={version:1,title:'D',slides:[{id:'slide_one',title:'T',sources:['s1'],canvas:{type:'text',id:'big_number',text:'42%',textRole:'metric'}}]};
+  assert.equal(byId((await compileComposition(free,c)).scene,'big_number').color,'#0091DA');
 });

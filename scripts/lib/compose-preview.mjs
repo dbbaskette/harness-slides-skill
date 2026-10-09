@@ -34,7 +34,8 @@ export async function screenComposition({scene,structure={groups:[],connectors:[
     return contrast(color(e.color??'text',theme),color(card.fill,theme))<(large?3:4.5);
   });
   // Cover, section and closing slides are text by design and repeat on purpose.
-  const templated=new Set((structure.layouts??[]).map(l=>l.slide));
+  // A content slide that only borrows the template's subtitle line is still a content slide.
+  const templated=new Set((structure.layouts??[]).filter(l=>l.layout!=='@subtitled').map(l=>l.slide));
   for(const id of structure.unspoken??[])findings.push({slide:id,severity:'info',code:'no-notes',detail:'This deck is presented live and the slide has no speaker notes. Say what the presenter says here and name the source behind the claim.'});
   for(const r of structure.reading??[])findings.push({slide:r.slide,severity:'warn',code:'reading-size-in-live-deck',detail:`${r.nodes.length} text items here are set at ${r.size}pt, the reading size, in a deck delivered live at ${r.live}pt. Cut words, split the slide or restructure instead of shrinking the type.`});
   for(const a of structure.adjusted??[])findings.push({slide:a.slide,object:a.id,severity:'warn',code:'weight-overridden',detail:`${a.id} was given ${a.got}pt, not the ${a.asked}pt its weight asked for, because its content or a neighbour's needs more room. If the proportion is the point, use empty boxes or less text.`});
