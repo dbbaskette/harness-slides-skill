@@ -1,8 +1,10 @@
 {"version":1,"title":"Compose demo","slides":[{"id":"flow_slide","title":"Requests pass through three stages","sources":["brief:demo"],
 "canvas":{"type":"stack","direction":"column","gap":"wide","children":[
  {"type":"text","id":"flow_lead","text":"Each stage owns one decision, so failures are easy to place."},
- {"type":"stack","direction":"row","gap":"wide","children":[
+ {"type":"stack","direction":"row","gap":"none","children":[
   {"type":"box","id":"stage_edge","fill":"headingPrimary","color":"canvasPrimary","text":"Edge\nAuthenticate","align":"center"},
+  {"type":"spacer","weight":0.3},
   {"type":"box","id":"stage_route","fill":"canvasSecondary","text":"Router\nChoose a backend","align":"center"},
+  {"type":"spacer","weight":0.3},
   {"type":"box","id":"stage_app","fill":"canvasSecondary","children":[{"type":"text","id":"app_head","text":"Application","textRole":"label"},{"type":"text","id":"app_body","text":"Runs the request and records the result."}]}]}]},
 "connect":[{"id":"edge_one","from":"stage_edge","to":"stage_route","label":"token"},{"id":"edge_two","from":"stage_route","to":"stage_app"}]}]}

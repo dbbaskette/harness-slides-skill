@@ -26,6 +26,8 @@ NODE leaves: {type:box,id,text?|children?,shape?:rect|ellipse,fill?,color?,textR
 Any node may set weight (relative share, default 1). Containers may set group:true and an id.
 gap: none|tight|normal|wide. align: start|center|end|stretch. fill/color: a brand color role name. textRole: a brand typography role name.
 EDGE: {id,from:NODE id,to:NODE id,label?,arrow?:boolean,color?}.
+A labelled edge needs room: its label must fit the gap between the two nodes, so put a spacer between them.
+Generated IDs are reserved: <slide>_title, <box with children>_group, <labelled edge>_label.
 IDs match [a-zA-Z_][a-zA-Z0-9_-]{4,40} and are unique across the deck.
 Text is measured with the brand font. Content that cannot fit at its role's size fails with the shortfall; rewrite, split or restructure.`;
 
@@ -39,8 +41,9 @@ export function validateComposition(comp,contract) {
   const ids=new Set(),claim=(id,where)=>{if(!idPattern.test(id??'')||ids.has(id))fail(where,`invalid or repeated ID: ${id}`);ids.add(id);};
   const summary=[];
   for(const s of comp.slides) {
+    if(!s||typeof s!=='object'||Array.isArray(s))throw new Error('each slide must be an object');
     if(Object.keys(s).some(k=>!['id','title','sources','canvas','connect','notes','intent','layoutId'].includes(k)))fail(s.id,'unsupported slide field');
-    claim(s.id,'slide');
+    claim(s.id,'slide');claim(`${s.id}_title`,s.id);
     if(!str(s.title))fail(s.id,'provide a slide title');
     if(!Array.isArray(s.sources)||!s.sources.length||s.sources.some(x=>!str(x)))fail(s.id,'provide source references');
     const local=new Set(),fills=new Set();let nodes=0;
@@ -52,13 +55,14 @@ export function validateComposition(comp,contract) {
       if(++nodes>80)fail(s.id,'use at most 80 nodes per slide');
       const needsId=['box','text','image'].includes(n.type)||n.group;
       if(needsId||n.id!==undefined){claim(n.id,where);local.add(n.id);}
+      if(n.group!==undefined&&typeof n.group!=='boolean')fail(where,'group must be boolean');
       if(n.weight!==undefined&&(!Number.isFinite(n.weight)||n.weight<=0||n.weight>10))fail(where,'weight must be 0–10');
       if(inFree){const a=n.at;if(!a||['x','y','width','height'].some(k=>!Number.isFinite(a[k])||a[k]<0||a[k]>1)||a.width<=0||a.height<=0||a.x+a.width>1.0001||a.y+a.height>1.0001)fail(where,'free children need at:{x,y,width,height} within 0–1');}
       else if(n.at!==undefined)fail(where,'at is only valid inside a free container');
       if(n.gap!==undefined&&!gapNames.includes(n.gap))fail(where,`gap must be one of ${gapNames.join('|')}`);
       if(n.align!==undefined&&!aligns.includes(n.align))fail(where,`align must be one of ${aligns.join('|')}`);
-      for(const key of ['fill','color'])if(n[key]!==undefined&&!colors[n[key]])fail(where,`${key} must be a brand color role: ${Object.keys(colors).join(', ')}`);
-      if(n.textRole!==undefined&&!roles[n.textRole])fail(where,`textRole must be one of ${Object.keys(roles).join(', ')}`);
+      for(const key of ['fill','color'])if(n[key]!==undefined&&!Object.hasOwn(colors,n[key]))fail(where,`${key} must be a brand color role: ${Object.keys(colors).join(', ')}`);
+      if(n.textRole!==undefined&&!Object.hasOwn(roles,n.textRole))fail(where,`textRole must be one of ${Object.keys(roles).join(', ')}`);
       if(n.type==='stack'&&!['row','column'].includes(n.direction))fail(where,'stack needs direction row|column');
       if(n.type==='grid'&&(!Number.isInteger(n.columns)||n.columns<1||n.columns>6))fail(where,'grid needs 1–6 columns');
       if(n.type==='text'&&!str(n.text))fail(where,'provide text');
@@ -66,7 +70,8 @@ export function validateComposition(comp,contract) {
         if(n.text!==undefined&&n.children!==undefined)fail(where,'a box holds text or children, not both');
         if(n.text!==undefined&&!str(n.text))fail(where,'provide box text');
         if(!['rect','ellipse'].includes(n.shape??'rect'))fail(where,'shape must be rect|ellipse');
-        if(n.fill)fills.add(n.fill);
+        if(n.children!==undefined){if(n.align!==undefined)fail(where,'align applies to box text, not to a box with children');claim(`${n.id}_group`,where);}
+        fills.add(n.fill??'canvasSecondary');
       }
       if(n.type==='image'){if(!str(n.src)||!str(n.alt))fail(where,'image needs src and alt');if(!['contain','cover'].includes(n.fit??'contain'))fail(where,'fit must be contain|cover');}
       const kids=n.children;
@@ -77,12 +82,14 @@ export function validateComposition(comp,contract) {
     };
     walk(s.canvas,1,false);
     if(fills.size>maxFills)fail(s.id,`uses ${fills.size} fill colors; the brand allows ${maxFills} per slide`);
+    if(s.connect!==undefined&&(!Array.isArray(s.connect)||s.connect.length>40))fail(s.id,'connect must be a list of at most 40 edges');
     for(const c of s.connect??[]) {
+      if(!c||typeof c!=='object')fail(s.id,'each edge must be an object');
       if(Object.keys(c).some(k=>!['id','from','to','label','arrow','color'].includes(k)))fail(s.id,'unsupported edge field');
       claim(c.id,`${s.id}/edge`);
       if(!local.has(c.from)||!local.has(c.to)||c.from===c.to)fail(`${s.id}/${c.id}`,'edges connect two distinct nodes on this slide');
-      if(c.label!==undefined&&!str(c.label))fail(`${s.id}/${c.id}`,'provide an edge label or omit it');
-      if(c.color!==undefined&&!colors[c.color])fail(`${s.id}/${c.id}`,'edge color must be a brand color role');
+      if(c.label!==undefined){if(!str(c.label))fail(`${s.id}/${c.id}`,'provide an edge label or omit it');claim(`${c.id}_label`,`${s.id}/${c.id}`);}
+      if(c.color!==undefined&&!Object.hasOwn(colors,c.color))fail(`${s.id}/${c.id}`,'edge color must be a brand color role');
       if(c.arrow!==undefined&&typeof c.arrow!=='boolean')fail(`${s.id}/${c.id}`,'arrow must be boolean');
     }
     summary.push({id:s.id,nodes,fills:[...fills],edges:(s.connect??[]).length});
@@ -92,7 +99,8 @@ export function validateComposition(comp,contract) {
 
 async function measurer(contract,options) {
   const family=contract.design.fontFamily,fonts={};
-  for(const bold of [false,true])fonts[bold]=(await resolveFont(family,{bold,...options?.[bold?'bold':'regular']})).font;
+  if(options!==undefined&&(!options||typeof options!=='object'||Array.isArray(options)||Object.entries(options).some(([k,v])=>!['regular','bold'].includes(k)||!v?.path||Object.keys(v).some(f=>!['path','sha256'].includes(f)))))throw new Error('Fonts use regular/bold {path,sha256?} records');
+  for(const bold of [false,true]){const spec=options?.[bold?'bold':'regular'];fonts[bold]=(await resolveFont(family,{bold,file:spec?.path,expectedHash:spec?.sha256})).font;}
   const exact=Boolean(fonts.false&&fonts.true);
   const height=(value,style,width)=>{
     const font=fonts[style.bold];
@@ -100,7 +108,13 @@ async function measurer(contract,options) {
     const available=Math.max(1,width-7.2),lines=value.split('\n').reduce((n,line)=>n+Math.max(1,Math.ceil([...line].reduce((w,c)=>w+(/[MW@%]/.test(c)?.85:/[il., ']/.test(c)?.27:.53),0)*style.size/available)),0);
     return lines*style.size*1.25+7.2;
   };
-  return {height,exact};
+  // Natural single-line width including the text insets, for labels that must fit a gap.
+  const width=(value,style)=>{
+    const font=fonts[style.bold];
+    if(font)return measureText(value,{font,fontSize:style.size,width:1e6,height:1e6}).maxWidth+7.2;
+    return [...value].reduce((w,c)=>w+(/[MW@%]/.test(c)?.85:/[il., ']/.test(c)?.27:.53),0)*style.size+7.2;
+  };
+  return {height,width,exact};
 }
 
 export async function compileComposition(comp,contract,{fonts}={}) {
@@ -115,11 +129,13 @@ export async function compileComposition(comp,contract,{fonts}={}) {
   const gapOf=n=>gapSize[n.gap??'normal'];
   const rowWidths=(n,width)=>{const kids=n.children,total=kids.reduce((a,k)=>a+(k.weight??1),0),usable=width-gapOf(n)*(kids.length-1);return kids.map(k=>usable*(k.weight??1)/total);};
   const need=(n,width)=>{
+    if(!(width>7.2))return Infinity; // narrower than the text insets: nothing can be laid out
     if(n.type==='text')return measure.height(n.text,style(n),width);
-    if(n.type==='spacer'||n.type==='image'||n.type==='free')return 0;
+    if(n.type==='spacer'||n.type==='free')return 0;
+    if(n.type==='image')return inset*4;
     if(n.type==='box') {
       if(n.text!==undefined)return measure.height(n.text,style(n),width-inset*2)+inset*2;
-      if(n.children)return need({type:'stack',direction:'column',gap:n.gap,children:n.children},width-inset*2)+inset*2;
+      if(n.children)return need({type:'stack',direction:'column',gap:n.gap,children:n.children},Math.max(1,width-inset*2))+inset*2;
       return inset*2;
     }
     if(n.type==='grid'){const rows=Math.ceil(n.children.length/n.columns),w=(width-gapOf(n)*(n.columns-1))/n.columns;return rows*Math.max(...n.children.map(k=>need(k,w)))+gapOf(n)*(rows-1);}
@@ -130,11 +146,12 @@ export async function compileComposition(comp,contract,{fonts}={}) {
   for(const s of comp.slides) {
     const elements=[],rects=new Map();
     const put=(element,members)=>{elements.push(element);members?.push(element.id);return element;};
-    const short=(n,rect,required)=>fail(`${s.id}/${n.id??n.type}`,`needs ${round(required)}pt of height but has ${round(rect.height)}pt at ${round(rect.width)}pt wide; shorten the text, split the slide or restructure`);
+    const short=(n,rect,required)=>!Number.isFinite(required)?fail(`${s.id}/${n.id??n.name??n.type}`,'has no usable room; use fewer siblings, less nesting or larger weights'):fail(`${s.id}/${n.id??n.name??n.type}`,`needs ${round(required)}pt of height but has ${round(rect.height)}pt at ${round(rect.width)}pt wide; shorten the text, split the slide or restructure`);
     const textProps=n=>{const st=style(n);return {fontSize:st.size,bold:st.bold,color:colors[n.color??st.colorRole],...(n.align&&n.align!=='stretch'?{align:{start:'left',center:'center',end:'right'}[n.align]}:{})};};
     const box=r=>({x:round(r.x),y:round(r.y),width:round(r.width),height:round(r.height)});
 
     const place=(n,rect,members)=>{
+      if(!(rect.width>inset)||!(rect.height>0))fail(`${s.id}/${n.id??n.name??n.type}`,'has no usable room; use fewer siblings, less nesting or larger weights');
       // Leaves and column stacks own the fit check, so the error names the node to fix.
       const checks=!n.children||n.type==='stack'&&n.direction==='column';
       if(checks){const required=need(n,rect.width);if(required>rect.height+.5)short(n,rect,required);}
@@ -147,7 +164,7 @@ export async function compileComposition(comp,contract,{fonts}={}) {
         const base={id:n.id,type:'shape',...box(rect),shape:n.shape??'rect',fill:colors[n.fill??'canvasSecondary']};
         if(n.text!==undefined){put({...base,text:n.text,...textProps(n)},own);return;}
         const inner=[];put(base,inner);
-        if(n.children)place({type:'stack',direction:'column',gap:n.gap,children:n.children},{x:rect.x+inset,y:rect.y+inset,width:rect.width-inset*2,height:rect.height-inset*2},inner);
+        if(n.children)place({type:'stack',direction:'column',gap:n.gap,children:n.children,name:n.id},{x:rect.x+inset,y:rect.y+inset,width:rect.width-inset*2,height:rect.height-inset*2},inner);
         if(inner.length>1)structure.groups.push({slide:s.id,id:`${n.id}_group`,members:inner});
         own?.push(...inner);return;
       }
@@ -160,7 +177,10 @@ export async function compileComposition(comp,contract,{fonts}={}) {
       else if(n.direction==='row') {
         const widths=rowWidths(n,rect.width);let x=rect.x;
         n.children.forEach((k,i)=>{
-          const h=flexible(k)||(n.align??'stretch')==='stretch'?rect.height:need(k,widths[i]);
+          if(!(widths[i]>inset))fail(`${s.id}/${k.id??k.type}`,'has no usable room; use fewer siblings, less nesting or larger weights');
+          const min=need(k,widths[i]);
+          if(min>rect.height+.5)short(k,{width:widths[i],height:rect.height},min);
+          const h=flexible(k)||(n.align??'stretch')==='stretch'?rect.height:min;
           const y=rect.y+{start:0,stretch:0,center:(rect.height-h)/2,end:rect.height-h}[n.align??'stretch'];
           place(k,{x,y,width:widths[i],height:h},own);x+=widths[i]+g;
         });
@@ -174,10 +194,11 @@ export async function compileComposition(comp,contract,{fonts}={}) {
         let y=rect.y+(weight?0:{start:0,stretch:0,center:(rect.height-used)/2,end:rect.height-used}[n.align??'start']);
         kids.forEach((k,i)=>{place(k,{x:rect.x,y,width:rect.width,height:heights[i]},own);y+=heights[i]+g;});
       }
-      if(n.group&&own.length){structure.groups.push({slide:s.id,id:n.id,members:own});members?.push(...own);}
+      if(n.group){if(own.length>1)structure.groups.push({slide:s.id,id:n.id,members:own});members?.push(...own);}
     };
 
-    const title=roles.title;
+    const title=roles.title,titleNeed=measure.height(s.title,title,sl.titleBox.width);
+    if(titleNeed>sl.titleBox.height+.5)fail(`${s.id}/title`,`needs ${round(titleNeed)}pt of height but has ${round(sl.titleBox.height)}pt; shorten the title`);
     put({id:`${s.id}_title`,type:'text',...sl.titleBox,text:s.title,role:'title',fontSize:title.size,bold:title.bold,color:colors[title.colorRole]});
     place(s.canvas,sl.contentBox,null);
 
@@ -189,9 +210,12 @@ export async function compileComposition(comp,contract,{fonts}={}) {
       put({id:c.id,type:'line',x:round(Math.min(p1.x,p2.x)),y:round(Math.min(p1.y,p2.y)),width:round(Math.max(1,Math.abs(p2.x-p1.x))),height:round(Math.max(1,Math.abs(p2.y-p1.y))),color:colors[c.color??'headingPrimary'],weight:2,arrow:c.arrow??true,flipH:p2.x<p1.x,flipV:p2.y<p1.y});
       const record={slide:s.id,id:c.id,from:c.from,to:c.to};
       if(c.label) {
-        const st=roles.caption,width=Math.min(160,sl.canvas.width/4),height=measure.height(c.label,st,width),mid={x:(p1.x+p2.x)/2,y:(p1.y+p2.y)/2};
-        const x=Math.min(Math.max(0,mid.x-width/2),sl.canvas.width-width),y=Math.min(Math.max(0,mid.y-height-2),sl.canvas.height-height);
-        put({id:`${c.id}_label`,type:'text',x:round(x),y:round(y),width:round(width),height:round(height),text:c.label,fontSize:st.size,bold:st.bold,color:colors[st.colorRole],align:'center'});
+        // The label lives in the gap the line crosses: above a horizontal line, beside a vertical one.
+        const st=roles.caption,width=measure.width(c.label,st),height=measure.height(c.label,st,width+1),mid={x:(p1.x+p2.x)/2,y:(p1.y+p2.y)/2};
+        const gap=horizontal?Math.abs(p2.x-p1.x):Math.abs(p2.y-p1.y),required=horizontal?width:height,cb=sl.contentBox;
+        if(required>gap+.5)fail(`${s.id}/${c.id}`,`label needs ${round(required)}pt but the gap between ${c.from} and ${c.to} is ${round(gap)}pt; put a spacer between them, shorten the label or remove it`);
+        const x=horizontal?mid.x-width/2:Math.min(mid.x+4,cb.x+cb.width-width),y=horizontal?Math.max(cb.y,mid.y-height-2):mid.y-height/2;
+        put({id:`${c.id}_label`,type:'text',x:round(x),y:round(y),width:round(width),height:round(height),text:c.label,fontSize:st.size,bold:st.bold,color:colors[st.colorRole],align:horizontal?'center':'left'});
         record.label=`${c.id}_label`;
       }
       structure.connectors.push(record);

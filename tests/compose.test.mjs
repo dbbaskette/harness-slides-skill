@@ -74,10 +74,82 @@ test('content that cannot fit fails with the shortfall instead of shrinking',asy
 });
 
 test('edges become arrow lines between facing sides, with an optional label',async()=>{
-  const comp=deck({type:'stack',direction:'row',gap:'wide',children:[{type:'box',id:'node_from',text:'A'},{type:'box',id:'node_to',text:'B'}]});
+  const comp=deck({type:'stack',direction:'row',gap:'none',children:[{type:'box',id:'node_from',text:'A'},{type:'spacer',weight:.5},{type:'box',id:'node_to',text:'B'}]});
   comp.slides[0].connect=[{id:'edge_ab',from:'node_from',to:'node_to',label:'sends'}];
   const {scene,structure}=await compileComposition(comp,brand()),line=byId(scene,'edge_ab'),a=byId(scene,'node_from'),b=byId(scene,'node_to');
   assert.equal(line.type,'line');assert.equal(line.x,round(a.x+a.width));assert.equal(round(line.x+line.width),b.x);assert.equal(line.arrow,true);assert.equal(line.flipH,false);
   assert.equal(byId(scene,'edge_ab_label').text,'sends');
   assert.deepEqual(structure.connectors,[{slide:'slide_one',id:'edge_ab',from:'node_from',to:'node_to',label:'edge_ab_label'}]);
+});
+
+const sentence='This sentence repeats to overflow its slot. ';
+test('aligned rows still fit-check their text children',async()=>{
+  for(const align of ['start','center','end'])await assert.rejects(()=>compileComposition(deck({type:'stack',direction:'row',align,children:[{type:'text',id:'tall_text',text:sentence.repeat(16)},{type:'box',id:'side_box',text:'x'}]}),brand()),/slide_one\/tall_text: needs [\d.]+pt of height but has 360pt/);
+});
+
+test('every emitted element stays inside the content box, or the title box for the title',async()=>{
+  const comp=deck({type:'stack',direction:'column',children:[{type:'text',id:'lead_text',text:'Lead'},{type:'stack',direction:'row',align:'center',children:[{type:'text',id:'side_text',text:'Short'},{type:'box',id:'main_box',children:[{type:'text',id:'main_head',text:'Head',textRole:'label'},{type:'image',id:'main_art',src:'https://example.com/a.png',alt:'Art'}]}]}]});
+  const c=brand(),b=c.design.slides.contentBox,{scene}=await compileComposition(comp,c);
+  for(const e of scene.slides[0].elements.filter(e=>e.id!=='slide_one_title')){assert.ok(e.x>=b.x-.01&&e.y>=b.y-.01&&e.x+e.width<=b.x+b.width+.01&&e.y+e.height<=b.y+b.height+.01,`${e.id} leaves the content box`);}
+  assert.ok(byId(scene,'main_art').height>=72);
+});
+
+test('role names must be own keys of the brand contract',()=>{
+  const c=brand(),bad=canvas=>()=>validateComposition(deck(canvas),c);
+  assert.throws(bad({type:'box',id:'proto_role',text:'x',textRole:'toString'}),/textRole must be one of/);
+  assert.throws(bad({type:'box',id:'proto_fill',text:'x',fill:'constructor'}),/brand color role/);
+});
+
+test('a title that cannot fit its box fails',async()=>{
+  const comp=deck({type:'box',id:'only_box',text:'x'});comp.slides[0].title='A very long title that keeps going. '.repeat(12);
+  await assert.rejects(()=>compileComposition(comp,brand()),/slide_one\/title: needs [\d.]+pt of height but has 66pt/);
+});
+
+test('edge labels sit in the gap between nodes and fail when the gap is too small',async()=>{
+  const row=gapNode=>{const comp=deck({type:'stack',direction:'row',gap:'none',children:[{type:'box',id:'node_from',text:'A'},...gapNode,{type:'box',id:'node_to',text:'B'}]});comp.slides[0].connect=[{id:'edge_ab',from:'node_from',to:'node_to',label:'sends tokens'}];return comp;};
+  const {scene}=await compileComposition(row([{type:'spacer',weight:.5}]),brand()),a=byId(scene,'node_from'),b=byId(scene,'node_to'),label=byId(scene,'edge_ab_label'),line=byId(scene,'edge_ab');
+  assert.ok(label.x>=a.x+a.width-.01&&label.x+label.width<=b.x+.01,'label stays between the nodes');
+  assert.ok(label.y+label.height<=line.y+.01,'label sits above the line');
+  await assert.rejects(()=>compileComposition(row([]),brand()),/slide_one\/edge_ab: label needs [\d.]+pt but the gap between node_from and node_to is 0pt/);
+});
+
+test('vertical edges put the label beside the line',async()=>{
+  const comp=deck({type:'stack',direction:'column',gap:'none',children:[{type:'box',id:'node_top',text:'A'},{type:'spacer',weight:.6},{type:'box',id:'node_low',text:'B'}]});
+  comp.slides[0].connect=[{id:'edge_down',from:'node_top',to:'node_low',label:'then'}];
+  const {scene}=await compileComposition(comp,brand()),top=byId(scene,'node_top'),low=byId(scene,'node_low'),label=byId(scene,'edge_down_label'),line=byId(scene,'edge_down');
+  assert.equal(line.y,round(top.y+top.height));assert.ok(label.x>=line.x);assert.ok(label.y>=top.y+top.height-.01&&label.y+label.height<=low.y+.01);
+});
+
+test('generated IDs are reserved and reported with their node',()=>{
+  const c=brand();
+  assert.throws(()=>validateComposition(deck({type:'text',id:'slide_one_title',text:'x'}),c),/repeated ID: slide_one_title/);
+  assert.throws(()=>validateComposition(deck({type:'stack',direction:'row',id:'card_main_group',group:true,children:[{type:'box',id:'card_main',children:[{type:'text',id:'card_text',text:'x'}]}]}),c),/repeated ID: card_main_group/);
+  const edge=deck({type:'stack',direction:'row',children:[{type:'box',id:'node_from',text:'a'},{type:'box',id:'edge_ab_label',text:'b'}]});edge.slides[0].connect=[{id:'edge_ab',from:'node_from',to:'edge_ab_label',label:'x'}];
+  assert.throws(()=>validateComposition(edge,c),/repeated ID: edge_ab_label/);
+});
+
+test('validation counts default fills and rejects malformed structure with a located message',()=>{
+  const c=brand(),bad=canvas=>()=>validateComposition(deck(canvas),c);
+  assert.throws(bad({type:'grid',columns:2,children:[{type:'box',id:'plain_box',text:'x'},...['canvasPrimary','headingPrimary','accentAqua'].map((fill,i)=>({type:'box',id:`fill_box${i}`,text:'x',fill}))]}),/uses 4 fill colors/);
+  assert.throws(bad({type:'box',id:'card_align',align:'center',children:[{type:'text',id:'card_text',text:'x'}]}),/align applies to box text/);
+  assert.throws(bad({type:'stack',direction:'row',id:'group_flag',group:'yes',children:[{type:'spacer'}]}),/group must be boolean/);
+  const shaped=deck({type:'box',id:'only_box',text:'x'});shaped.slides[0].connect={};assert.throws(()=>validateComposition(shaped,c),/connect must be a list/);
+  assert.throws(()=>validateComposition({version:1,title:'t',slides:[null]},c),/each slide must be an object/);
+});
+
+test('fit errors name the box, and nesting that leaves no room fails clearly',async()=>{
+  await assert.rejects(()=>compileComposition(deck({type:'stack',direction:'row',children:[{type:'box',id:'card_main',children:[{type:'text',id:'card_text',text:sentence.repeat(40)}]},{type:'box',id:'side_box',text:'x'}]}),brand()),/slide_one\/card_text|slide_one\/card_main/);
+  const many=(count,n)=>Array.from({length:count},(_,i)=>n(i));
+  await assert.rejects(()=>compileComposition(deck({type:'stack',direction:'row',gap:'wide',children:many(12,i=>({type:'stack',direction:'row',gap:'wide',children:many(5,j=>({type:'box',id:`tiny_${i}_${j}`,text:'x'}))}))}),brand()),/has no usable room/);
+});
+
+test('fonts use the regular/bold {path,sha256} records the quality audit uses',async()=>{
+  const comp=deck({type:'box',id:'only_box',text:'x'});
+  await assert.rejects(()=>compileComposition(comp,brand(),{fonts:{regular:{path:'/nonexistent/font.ttf'}}}),/ENOENT|font/i);
+  await assert.rejects(()=>compileComposition(comp,brand(),{fonts:{regular:{file:'/x.ttf'}}}),/Fonts use regular\/bold/);
+});
+
+test('a group with one member is not recorded',async()=>{
+  const {structure}=await compileComposition(deck({type:'stack',direction:'row',id:'lone_group',group:true,children:[{type:'box',id:'only_box',text:'x'}]}),brand());
+  assert.deepEqual(structure.groups,[]);
 });
