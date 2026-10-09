@@ -85,6 +85,13 @@ def fill(value):
     return f'<a:solidFill><a:srgbClr val="{value.lstrip("#").upper()}"/></a:solidFill>' if value else '<a:noFill/>'
 
 
+def outline(e):
+    """A shape's own line: none unless the scene gives it a stroke."""
+    if not e.get('stroke'):
+        return '<a:ln><a:noFill/></a:ln>'
+    return f'<a:ln w="{emu(e.get("strokeWeight", 1.5))}">{fill(e["stroke"])}</a:ln>'
+
+
 def paragraphs(e, font):
     align = {'left': 'l', 'center': 'ctr', 'right': 'r'}[e.get('align', 'left')]
     run = (f'<a:rPr lang="en-US" sz="{int(round(e["fontSize"] * 100))}" b="{1 if e.get("bold") else 0}" dirty="0">'
@@ -183,7 +190,7 @@ class Slide:
             depth = int(round(20000 * e['width'] / min(e['width'], e['height'])))
             guides = f'<a:gd name="adj" fmla="val {depth}"/>'
         return (f'<p:sp>{non_visual("Sp", self.numbers[e["id"]], e["id"])}<p:spPr>{xfrm(e)}<a:prstGeom prst="{preset}"><a:avLst>{guides}</a:avLst></a:prstGeom>'
-                f'{fill(e.get("fill"))}<a:ln><a:noFill/></a:ln></p:spPr>{inner}</p:sp>')
+                f'{fill(e.get("fill"))}{outline(e)}</p:spPr>{inner}</p:sp>')
 
     def side(self, target, point):
         """Which side of the target shape a line end touches, if any."""

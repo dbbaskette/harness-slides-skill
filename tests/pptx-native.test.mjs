@@ -354,3 +354,13 @@ test('a slide can use another template layout, filling its title and subtitle pl
   const crowded=structuredClone(comp);crowded.slides[0].layout=(await templateLayouts(b)).default;
   await assert.rejects(async()=>emitNativePptx({...await compileComposition(crowded,b),brand:b,output:join(dir,'many.pptx'),base:dir}),/has 0 subtitle placeholders/);
 });
+
+test('an outlined box is written with a line and no fill, and a bar card as one group',async t=>{
+  const dir=await temporary(t),c=await brand(dir),output=join(dir,'outline.pptx');
+  const comp={version:1,title:'Deck',slides:[{id:'look_slide',title:'Looks',sources:['brief:test'],canvas:{type:'stack',direction:'row',children:[{type:'box',id:'line_box',text:'Outlined',style:'outline'},{type:'box',id:'bar_box',text:'Barred',style:'bar'},{type:'badge',id:'step_one',text:'1'},{type:'rule'}]}}]};
+  await emitNativePptx({...await compileComposition(comp,c),brand:c,output,base:dir});
+  const xml=await part(output,'ppt/slides/harnessSlide1.xml'),shape=name=>xml.match(new RegExp(`<p:sp>(?:(?!</p:sp>).)*name="${name}".*?</p:sp>`,'s'))[0];
+  assert.match(shape('line_box'),/<a:noFill\/><a:ln w="19050"><a:solidFill><a:srgbClr val="555555"\/><\/a:solidFill><\/a:ln>/);
+  assert.match(shape('bar_box'),/<a:solidFill><a:srgbClr val="F0F2F5"\/><\/a:solidFill><a:ln><a:noFill\/><\/a:ln>/);assert.match(xml,/name="bar_box_group"/);assert.match(shape('step_one'),/prst="ellipse"/);
+  assert.deepEqual(await audit(output),[]);
+});

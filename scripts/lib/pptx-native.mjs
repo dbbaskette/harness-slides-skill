@@ -41,6 +41,7 @@ export async function emitNativePptx({scene,structure={groups:[],connectors:[]},
       const out={...e};
       if(e.type==='text'||e.type==='shape'&&e.text!==undefined){out.fontSize=e.fontSize??(e.role==='title'?theme.titleSize:theme.bodySize);out.color=hex(e.color??'text');}
       if(e.fill)out.fill=hex(e.fill);
+      if(e.stroke)out.stroke=hex(e.stroke);
       if(e.type==='line')out.color=hex(e.color??'accent');
       if(e.type==='image') {
         if(/^https?:/.test(e.src))throw new Error('Download authorized images to the workspace before PPTX rendering; no remote fetch during build');

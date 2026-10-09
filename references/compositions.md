@@ -78,7 +78,7 @@ the words really are enough; do not draw a diagram to satisfy the rule.
 ## Design each slide from its content
 
 There are no slide types to pick from. Build the structure the content needs
-from three containers and five leaves:
+from three containers and a handful of leaves:
 
 | Use | For |
 | --- | --- |
@@ -87,7 +87,20 @@ from three containers and five leaves:
 | `free` | A hub, a map, anything placed by position (fractions of the area) |
 | `box` | A shape with text inside, or a card holding other nodes |
 | `text`, `icon`, `image` | Words, an approved icon by ID, supplied or generated artwork |
+| `metric` | The one number a slide is about, with its label beneath |
+| `badge` | A small numbered or lettered disc, for steps and references |
+| `rule` | A thin line between the parts of a column or a row |
 | `spacer` | Deliberate empty space, and room for an arrow label |
+
+A box has three looks, set with `style`:
+
+- `solid` fills it. Keep that for the point of the slide and for a color that
+  carries a meaning.
+- `outline` draws it as a line and leaves the inside open.
+- `bar` is a neutral card with a strip of its color down the left edge.
+
+A slide of nothing but solid boxes is heavy and flat. Give the supporting cards
+`outline` or `bar`, and let the one solid shape be the thing to look at.
 
 A box that holds other nodes is a card. Its content starts at the top; set
 `align` to `center` or `end` to place it lower. Centre only when every card in a

@@ -455,3 +455,37 @@ test('a role color the direction has given a job does not leak onto ordinary tex
   const free={version:1,title:'D',slides:[{id:'slide_one',title:'T',sources:['s1'],canvas:{type:'text',id:'big_number',text:'42%',textRole:'metric'}}]};
   assert.equal(byId((await compileComposition(free,c)).scene,'big_number').color,'#0091DA');
 });
+
+test('a box can be drawn as an outline or as a card with a bar of its color',async()=>{
+  const c=brand(),dir={focal:'headingPrimary',neutral:'canvasSecondary',meanings:{accentAqua:'the product'}};
+  const slide=(children,brief)=>({version:1,title:'D',direction:dir,slides:[{id:'slide_one',title:'T',sources:['s1'],...(brief?{brief}:{}),canvas:{type:'stack',direction:'row',children}}]});
+  const {scene,structure}=await compileComposition(slide([{type:'box',id:'line_box',text:'Outlined',style:'outline'},{type:'box',id:'meaning_box',text:'Product',style:'outline',fill:'accentAqua'},{type:'box',id:'point_box',text:'The point',style:'outline'},{type:'box',id:'bar_box',text:'Barred',style:'bar',fill:'accentAqua'},{type:'box',id:'bar_card',style:'bar',children:[{type:'text',id:'bar_text',text:'Inside'}]}],{relation:'parallel',focal:'point_box'}),c),e=id=>byId(scene,id);
+  // An outline has a line and no fill; its text is read against what is behind it.
+  assert.deepEqual([e('line_box').fill,e('line_box').stroke,e('line_box').strokeWeight,e('line_box').color],[undefined,'#555555',1.5,'#202124']);
+  assert.equal(e('meaning_box').stroke,'#0091DA');assert.deepEqual([e('point_box').stroke,e('point_box').strokeWeight],['#2867B2',3]);
+  // A bar card stays neutral and carries its color in a strip, grouped with it.
+  assert.equal(e('bar_box').fill,'#F0F2F5');assert.deepEqual([e('bar_box_bar').fill,e('bar_box_bar').width,e('bar_box_bar').x,e('bar_box_bar').height],['#0091DA',6,e('bar_box').x,e('bar_box').height]);
+  assert.ok(structure.groups.some(g=>g.id==='bar_box_group'&&g.members.join()==='bar_box,bar_box_bar'));assert.ok(structure.groups.some(g=>g.id==='bar_card_group'&&g.members.join()==='bar_card,bar_card_bar,bar_text'));
+  const bad=node=>()=>validateComposition(slide([node,{type:'box',id:'other_box',text:'x'}]),c);
+  assert.throws(bad({type:'box',id:'odd_box',text:'x',style:'dotted'}),/style must be one of solid\|outline\|bar/);assert.throws(bad({type:'box',id:'round_bar',text:'x',style:'bar',shape:'ellipse'}),/a bar card is a rectangle/);
+  assert.throws(()=>validateComposition(slide([{type:'box',id:'bar_box',text:'x',style:'bar'},{type:'box',id:'bar_box_bar',text:'y'}]),c),/invalid or repeated ID: bar_box_bar/);
+});
+
+test('badges, rules and metrics are small fixed parts with their own size',async()=>{
+  const c=brand({icon:{size:50}}),col=children=>deck({type:'stack',direction:'column',children});
+  const {scene}=await compileComposition(deck({type:'stack',direction:'row',children:[{type:'badge',id:'step_one',text:'1'},{type:'box',id:'step_text',text:'First'},{type:'rule'},{type:'box',id:'more_text',text:'Second'}]}),c),e=id=>byId(scene,id);
+  // A badge is a disc 0.6 of the icon size; a rule is a hairline taking half an inset; the boxes share the rest.
+  assert.deepEqual([e('step_one').shape,e('step_one').width,e('step_one').height,e('step_one').text,e('step_one').bold,e('step_one').color],['ellipse',30,30,'1',true,'#FFFFFF']);
+  const rule=e('slide_one_rule1');assert.deepEqual([rule.type,rule.width,rule.arrow],['line',1,false]);assert.equal(rule.height,360);
+  assert.equal(e('step_text').width,e('more_text').width);assert.equal(round(e('step_text').width*2+30+9+18*3),864);
+  const stacked=(await compileComposition(col([{type:'text',id:'top_text',text:'Above'},{type:'rule',id:'named_rule'},{type:'text',id:'low_text',text:'Below'}]),c)).scene,across=byId(stacked,'named_rule');
+  assert.deepEqual([across.width,across.height],[864,1]);
+  // A metric is a number over its label, and can be the point of the slide.
+  const dir={focal:'headingPrimary',neutral:'canvasSecondary'},m={version:1,title:'D',direction:dir,slides:[{id:'slide_one',title:'T',sources:['s1'],brief:{relation:'quantity',focal:'big_share'},canvas:{type:'stack',direction:'row',children:[{type:'metric',id:'big_share',value:'42%',label:'of teams'},{type:'box',id:'side_box',text:'x'}]}}]};
+  const built=(await compileComposition(m,c)).scene;
+  assert.deepEqual([byId(built,'big_share').text,byId(built,'big_share').fontSize,byId(built,'big_share').color,byId(built,'big_share_label').text],['42%',64,'#2867B2','of teams']);
+  assert.ok(byId(built,'big_share_label').y>=byId(built,'big_share').y+byId(built,'big_share').height);
+  const bad=node=>()=>validateComposition(deck({type:'stack',direction:'row',children:[node,{type:'box',id:'other_box',text:'x'}]}),c);
+  assert.throws(bad({type:'badge',id:'long_badge',text:'1234'}),/a badge holds one to three characters/);assert.throws(bad({type:'metric',id:'half_metric',value:'42%'}),/a metric needs an id, a value and a label/);
+  assert.throws(()=>validateComposition({version:1,title:'D',direction:dir,slides:[{id:'slide_one',title:'T',sources:['s1'],canvas:{type:'badge',id:'loud_badge',text:'1',fill:'accentAqua'}}]},c),/fill accentAqua is not in the deck direction/);
+});

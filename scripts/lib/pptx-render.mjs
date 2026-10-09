@@ -17,7 +17,7 @@ export async function renderPptxScene(scene,output,{base=process.cwd(),brand}={}
       const style={fontFace:t.font,fontSize:e.fontSize??(e.role==='title'?t.titleSize:t.bodySize),color:hex(e.color??'text'),bold:e.bold??false,align:e.align??'left',margin:3.6,lineSpacingMultiple:1.25,paraSpaceBefore:0,paraSpaceAfter:0,breakLine:false,...(e.href?{hyperlink:{url:e.href}}:{}),vertAnchor:'ctr',...(e.fill?{fill:{color:hex(e.fill)}}:{})};
       if(e.type==='text')slide.addText(e.text,{...box,...style});
       else if(e.type==='shape') {
-        slide.addShape(shapeKinds[e.shape??'rect'][0],{...box,fill:e.fill?{color:hex(e.fill)}:{color:hex('background'),transparency:100},line:{transparency:100}});
+        slide.addShape(shapeKinds[e.shape??'rect'][0],{...box,fill:e.fill?{color:hex(e.fill)}:{color:hex('background'),transparency:100},line:e.stroke?{color:hex(e.stroke),width:e.strokeWeight??1.5}:{transparency:100}});
         // The label is a separate box here; keep it inside the preset's own text area so it cannot spill past the outline.
         if(e.text){const [,,,fx,fy]=shapeKinds[e.shape??'rect'];slide.addText(e.text,{...box,x:box.x+box.w*(1-fx)/2,y:box.y+box.h*(1-fy)/2,w:box.w*fx,h:box.h*fy,...style,objectName:`${e.id}_text`});}
       } else if(e.type==='line')slide.addShape(pptx.ShapeType.line,{...box,flipH:e.flipH??false,flipV:e.flipV??false,line:{color:hex(e.color??'accent'),width:e.weight??2,...(e.arrow?{endArrowType:'triangle'}:{})}});

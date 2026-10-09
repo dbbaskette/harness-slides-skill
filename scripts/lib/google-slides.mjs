@@ -73,7 +73,7 @@ export function compileGoogleScene(scene,deck,{localImages=false}={}) {
         e.rows.forEach((row,rowIndex)=>row.forEach((value,columnIndex)=>{if(value)requests.push(...text({...e,text:value,bold:rowIndex===0,color:rowIndex===0?(e.headerColor??e.color??'text'):(e.color??'text')}, {rowIndex,columnIndex}));requests.push({updateTableCellProperties:{objectId:e.id,tableRange:{location:{rowIndex,columnIndex},rowSpan:1,columnSpan:1},tableCellProperties:{tableCellBackgroundFill:{solidFill:{color:solid(rowIndex===0?(e.headerFill??'muted'):(e.bodyFill??'background')),alpha:1}},contentAlignment:'MIDDLE'},fields:'tableCellBackgroundFill,contentAlignment'}});}));
       } else {
         requests.push({createShape:{objectId:e.id,shapeType:e.type==='text'?'TEXT_BOX':shapeKinds[e.shape??'rect'][1],elementProperties:props(s,e)}});
-        requests.push({updateShapeProperties:{objectId:e.id,shapeProperties:{shapeBackgroundFill:e.fill?{solidFill:{color:solid(e.fill),alpha:1}}:{propertyState:'NOT_RENDERED'},outline:{propertyState:'NOT_RENDERED'},contentAlignment:'MIDDLE',autofit:{autofitType:'NONE'}},fields:'shapeBackgroundFill,outline,contentAlignment,autofit.autofitType'}});
+        requests.push({updateShapeProperties:{objectId:e.id,shapeProperties:{shapeBackgroundFill:e.fill?{solidFill:{color:solid(e.fill),alpha:1}}:{propertyState:'NOT_RENDERED'},outline:e.stroke?{outlineFill:{solidFill:{color:solid(e.stroke),alpha:1}},weight:{magnitude:e.strokeWeight??1.5,unit:'PT'},propertyState:'RENDERED'}:{propertyState:'NOT_RENDERED'},contentAlignment:'MIDDLE',autofit:{autofitType:'NONE'}},fields:'shapeBackgroundFill,outline,contentAlignment,autofit.autofitType'}});
         if(e.text)requests.push(...text(e));
       }
     }
