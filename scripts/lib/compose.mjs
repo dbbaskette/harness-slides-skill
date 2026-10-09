@@ -1,6 +1,8 @@
 // Model-authored relative layout, compiled into absolute brand-constrained scene objects.
 // The model chooses structure; this module owns arithmetic, fit and brand roles.
-import {validateBrandContract} from './brand-contract.mjs';
+import {validateScene} from './scene.mjs';
+import {brandTheme,validateBrandContract} from './brand-contract.mjs';
+import {resolveFont,measureText} from './text-metrics.mjs';
 
 const idPattern=/^[a-zA-Z_][a-zA-Z0-9_-]{4,40}$/;
 const fields={
@@ -86,4 +88,101 @@ export function validateComposition(comp,contract) {
     summary.push({id:s.id,nodes,fills:[...fills],edges:(s.connect??[]).length});
   }
   return {slides:summary};
+}
+
+async function measurer(contract,options) {
+  const family=contract.design.fontFamily,fonts={};
+  for(const bold of [false,true])fonts[bold]=(await resolveFont(family,{bold,...options?.[bold?'bold':'regular']})).font;
+  const exact=Boolean(fonts.false&&fonts.true);
+  const height=(value,style,width)=>{
+    const font=fonts[style.bold];
+    if(font)return measureText(value,{font,fontSize:style.size,width,height:1e6}).requiredHeight;
+    const available=Math.max(1,width-7.2),lines=value.split('\n').reduce((n,line)=>n+Math.max(1,Math.ceil([...line].reduce((w,c)=>w+(/[MW@%]/.test(c)?.85:/[il., ']/.test(c)?.27:.53),0)*style.size/available)),0);
+    return lines*style.size*1.25+7.2;
+  };
+  return {height,exact};
+}
+
+export async function compileComposition(comp,contract,{fonts}={}) {
+  const summary=validateComposition(comp,contract);
+  const d=contract.design,sl=d.slides,roles=sl.typography,colors=d.colors,sp=sl.spacing??{},inset=sp.inset??16;
+  const gapSize={none:0,tight:inset/2,normal:inset,wide:sp.column??28};
+  const bodyRole=contract.medium.delivery==='live'?'body':'bodyReference',measure=await measurer(contract,fonts);
+  const scene={version:2,title:comp.title,mode:'new',canvas:sl.canvas,theme:brandTheme(contract),slides:[]},structure={groups:[],connectors:[]};
+
+  const style=n=>roles[n.textRole??bodyRole];
+  const flexible=n=>n.type!=='text';
+  const gapOf=n=>gapSize[n.gap??'normal'];
+  const rowWidths=(n,width)=>{const kids=n.children,total=kids.reduce((a,k)=>a+(k.weight??1),0),usable=width-gapOf(n)*(kids.length-1);return kids.map(k=>usable*(k.weight??1)/total);};
+  const need=(n,width)=>{
+    if(n.type==='text')return measure.height(n.text,style(n),width);
+    if(n.type==='spacer'||n.type==='image'||n.type==='free')return 0;
+    if(n.type==='box') {
+      if(n.text!==undefined)return measure.height(n.text,style(n),width-inset*2)+inset*2;
+      if(n.children)return need({type:'stack',direction:'column',gap:n.gap,children:n.children},width-inset*2)+inset*2;
+      return inset*2;
+    }
+    if(n.type==='grid'){const rows=Math.ceil(n.children.length/n.columns),w=(width-gapOf(n)*(n.columns-1))/n.columns;return rows*Math.max(...n.children.map(k=>need(k,w)))+gapOf(n)*(rows-1);}
+    if(n.direction==='row'){const widths=rowWidths(n,width);return Math.max(...n.children.map((k,i)=>need(k,widths[i])));}
+    return n.children.reduce((a,k)=>a+need(k,width),0)+gapOf(n)*(n.children.length-1);
+  };
+
+  for(const s of comp.slides) {
+    const elements=[],rects=new Map();
+    const put=(element,members)=>{elements.push(element);members?.push(element.id);return element;};
+    const short=(n,rect,required)=>fail(`${s.id}/${n.id??n.type}`,`needs ${round(required)}pt of height but has ${round(rect.height)}pt at ${round(rect.width)}pt wide; shorten the text, split the slide or restructure`);
+    const textProps=n=>{const st=style(n);return {fontSize:st.size,bold:st.bold,color:colors[n.color??st.colorRole],...(n.align&&n.align!=='stretch'?{align:{start:'left',center:'center',end:'right'}[n.align]}:{})};};
+    const box=r=>({x:round(r.x),y:round(r.y),width:round(r.width),height:round(r.height)});
+
+    const place=(n,rect,members)=>{
+      // Leaves and column stacks own the fit check, so the error names the node to fix.
+      const checks=!n.children||n.type==='stack'&&n.direction==='column';
+      if(checks){const required=need(n,rect.width);if(required>rect.height+.5)short(n,rect,required);}
+      if(n.id)rects.set(n.id,rect);
+      const own=n.group?[]:members;
+      if(n.type==='spacer')return;
+      if(n.type==='text'){put({id:n.id,type:'text',...box(rect),text:n.text,...textProps(n)},own);return;}
+      if(n.type==='image'){put({id:n.id,type:'image',...box(rect),src:n.src,alt:n.alt,fit:n.fit??'contain'},own);return;}
+      if(n.type==='box') {
+        const base={id:n.id,type:'shape',...box(rect),shape:n.shape??'rect',fill:colors[n.fill??'canvasSecondary']};
+        if(n.text!==undefined){put({...base,text:n.text,...textProps(n)},own);return;}
+        const inner=[];put(base,inner);
+        if(n.children)place({type:'stack',direction:'column',gap:n.gap,children:n.children},{x:rect.x+inset,y:rect.y+inset,width:rect.width-inset*2,height:rect.height-inset*2},inner);
+        if(inner.length>1)structure.groups.push({slide:s.id,id:`${n.id}_group`,members:inner});
+        own?.push(...inner);return;
+      }
+      const g=gapOf(n);
+      if(n.type==='free'){for(const k of n.children)place(k,{x:rect.x+k.at.x*rect.width,y:rect.y+k.at.y*rect.height,width:k.at.width*rect.width,height:k.at.height*rect.height},own);}
+      else if(n.type==='grid') {
+        const rows=Math.ceil(n.children.length/n.columns),w=(rect.width-g*(n.columns-1))/n.columns,h=(rect.height-g*(rows-1))/rows;
+        n.children.forEach((k,i)=>place(k,{x:rect.x+(i%n.columns)*(w+g),y:rect.y+Math.floor(i/n.columns)*(h+g),width:w,height:h},own));
+      }
+      else if(n.direction==='row') {
+        const widths=rowWidths(n,rect.width);let x=rect.x;
+        n.children.forEach((k,i)=>{
+          const h=flexible(k)||(n.align??'stretch')==='stretch'?rect.height:need(k,widths[i]);
+          const y=rect.y+{start:0,stretch:0,center:(rect.height-h)/2,end:rect.height-h}[n.align??'stretch'];
+          place(k,{x,y,width:widths[i],height:h},own);x+=widths[i]+g;
+        });
+      }
+      else {
+        const kids=n.children,mins=kids.map(k=>need(k,rect.width)),flex=kids.map(flexible),gaps=g*(kids.length-1);
+        const fixed=mins.reduce((a,m,i)=>a+(flex[i]?0:m),0),weight=kids.reduce((a,k,i)=>a+(flex[i]?k.weight??1:0),0),pool=rect.height-gaps-fixed;
+        let heights=kids.map((k,i)=>flex[i]?pool*(k.weight??1)/weight:mins[i]);
+        if(heights.some((h,i)=>h<mins[i]-.5)){const spare=rect.height-gaps-mins.reduce((a,m)=>a+m,0);heights=kids.map((k,i)=>flex[i]?mins[i]+spare*(k.weight??1)/weight:mins[i]);}
+        const used=heights.reduce((a,h)=>a+h,0)+gaps;
+        let y=rect.y+(weight?0:{start:0,stretch:0,center:(rect.height-used)/2,end:rect.height-used}[n.align??'start']);
+        kids.forEach((k,i)=>{place(k,{x:rect.x,y,width:rect.width,height:heights[i]},own);y+=heights[i]+g;});
+      }
+      if(n.group&&own.length){structure.groups.push({slide:s.id,id:n.id,members:own});members?.push(...own);}
+    };
+
+    const title=roles.title;
+    put({id:`${s.id}_title`,type:'text',...sl.titleBox,text:s.title,role:'title',fontSize:title.size,bold:title.bold,color:colors[title.colorRole]});
+    place(s.canvas,sl.contentBox,null);
+
+    scene.slides.push({id:s.id,title:s.title,sources:s.sources,elements,...(s.notes!==undefined?{notes:s.notes}:{}),...(s.intent?{intent:s.intent}:{}),...(s.layoutId?{layoutId:s.layoutId}:{})});
+  }
+  validateScene(scene);
+  return {scene,structure,report:{schema:1,brandRevision:contract.revision,measurement:measure.exact?'exact brand font':'estimated; brand font unavailable',slides:summary.slides}};
 }
