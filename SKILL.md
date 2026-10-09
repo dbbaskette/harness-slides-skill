@@ -43,6 +43,7 @@ this engine. Apply its selected contract and assets; do not mix identities.
 | Task | Read |
 | --- | --- |
 | New deck, redesign or full rework | [Design](references/design.md) and [walkthrough](references/design-walkthrough.md), then [compositions](references/compositions.md) |
+| More than about ten content slides, in a harness that runs subagents | Also [parallel build](references/parallel-build.md), once the walkthrough is approved |
 | A deck that needs a native table or chart, or that compositions cannot express | [Other methods](references/authoring.md); load only the one chosen |
 | Polish, content-preserving patch or selected-slide edit | [PPTX editing](references/editing.md) or [Google operations](references/google-slides.md), matching the destination |
 | Native Google access/operations | [Google Slides](references/google-slides.md) |

@@ -32,3 +32,24 @@ test('compose compile writes a scene, structure, report and brand contract into 
 test('compose compile refuses flags that belong to other commands',async()=>{
   await assert.rejects(()=>exec('node',[cli,'compose','compile','--file',example,'--slide','1']),/not valid for this command/);
 });
+
+test('compose compile without an output checks the file and writes nothing',async t=>{
+  const dir=await temporary(t),{stdout}=await exec('node',[cli,'compose','compile','--file',example],{cwd:dir});
+  const result=JSON.parse(stdout);
+  assert.match(result.status,/^fits; nothing written/);assert.equal(result.slides,1);assert.equal(result.output,undefined);assert.match(Object.values(result.room)[0],/^[\d.]+ of [\d.]+$/);
+  assert.deepEqual(await readdir(dir),[]);
+});
+
+test('compose merge joins section files in order and refuses a part that disagrees',async t=>{
+  const dir=await temporary(t),{writeFile}=await import('node:fs/promises'),direction={focal:'accent',neutral:'muted'};
+  const part=(id,prefix,extra={})=>({version:1,title:'Section',direction,slides:[{id,title:'T',sources:['s1'],canvas:{type:'box',id:`${prefix}_box`,text:'x'}}],...extra});
+  const save=(name,value)=>writeFile(join(dir,name),JSON.stringify(value));
+  await save('a.json',part('slide_a','sec_a'));await save('b.json',part('slide_b','sec_b'));await save('parts.json',{title:'Whole deck',direction,parts:['a.json','b.json']});
+  const {stdout}=await exec('node',[cli,'compose','merge','--file',join(dir,'parts.json'),'--output',join(dir,'composition.json')]);
+  assert.deepEqual(JSON.parse(stdout).parts,[{part:'a.json',slides:1},{part:'b.json',slides:1}]);
+  const merged=JSON.parse(await readFile(join(dir,'composition.json')));
+  assert.equal(merged.title,'Whole deck');assert.deepEqual(merged.direction,direction);assert.deepEqual(merged.slides.map(s=>s.id),['slide_a','slide_b']);
+  await save('c.json',part('slide_c','sec_a',{direction:{focal:'muted',neutral:'accent'}}));await save('bad.json',{title:'Whole deck',direction,parts:['a.json','c.json','missing.json']});
+  await assert.rejects(()=>exec('node',[cli,'compose','merge','--file',join(dir,'bad.json'),'--output',join(dir,'other.json')]),e=>/3 problems to fix:/.test(e.stderr)&&/c\.json: its direction differs/.test(e.stderr)&&/c\.json: ID sec_a_box is already used in a\.json/.test(e.stderr)&&/missing\.json: cannot be read/.test(e.stderr));
+  await assert.rejects(()=>exec('node',[cli,'compose','merge','--file',join(dir,'parts.json'),'--output',join(dir,'composition.json')]),/EEXIST/);
+});

@@ -46,6 +46,8 @@ export async function measureContext() {
     newPptxScene: path([...design, 'references/authoring-pptx.md', review], ['sceneContract']),
     newGoogleScene: path([...design, 'references/authoring-google.md', google, review], ['sceneContract']),
     composedDeck: path([...creative,'references/compositions.md'],['composeContract']),
+    parallelLead: path([...creative,'references/compositions.md','references/parallel-build.md'],['composeContract']),
+    parallelWorker: path(['references/compositions.md','references/parallel-build.md'],['composeContract']),
     contentLedPptx: path([...design,'references/content-components.md','references/brand-addons.md','references/quality.md',review],['comparisonContract']),
     contentCritique: path([...entry,'references/quality.md',review]),
     intake: path([...entry, 'references/intake.md']),
@@ -56,7 +58,7 @@ export async function measureContext() {
   if (!description) throw new Error('Missing skill metadata');
   const activation = files['bootstrap/SKILL.md'] + files['SKILL.md'];
   const routes = { 'Discovery metadata': count(description), 'Installed bootstrap': files['bootstrap/SKILL.md'], 'Bootstrap + current guidance entry': activation,
-    ...Object.fromEntries(Object.entries({ scopedPptx: 'Scoped PPTX edit + final review', scopedGoogle: 'Scoped Google edit + final review', newPptxNative: 'New PPTX deck from native template + review', newGoogleNative: 'New Google deck from native template + review', composedDeck: 'New composed deck + contract', newPptxScene: 'New PPTX scene + contract + review', newGoogleScene: 'New Google scene + contract + review', contentLedPptx: 'Content-led PPTX + selected component + review', contentCritique:'Font screening + structured critique + review', customImages: 'Optional image guidance + download result' }).map(([name, label]) => [label, standalone[name].total])) };
+    ...Object.fromEntries(Object.entries({ scopedPptx: 'Scoped PPTX edit + final review', scopedGoogle: 'Scoped Google edit + final review', newPptxNative: 'New PPTX deck from native template + review', newGoogleNative: 'New Google deck from native template + review', composedDeck: 'New composed deck + contract', parallelLead: 'Parallel build, lead', parallelWorker: 'Parallel build, each worker', newPptxScene: 'New PPTX scene + contract + review', newGoogleScene: 'New Google scene + contract + review', contentLedPptx: 'Content-led PPTX + selected component + review', contentCritique:'Font screening + structured critique + review', customImages: 'Optional image guidance + download result' }).map(([name, label]) => [label, standalone[name].total])) };
   const hashes = Object.fromEntries(paths.map(path => [path, createHash('sha256').update(contents[path]).digest('hex')]));
   const inputDigest = createHash('sha256').update(JSON.stringify({ hashes, outputs, readingPaths, routes })).digest('hex');
   return { tokenizer: 'cl100k_base', inputDigest, files, samples, readingPaths, standalone, routes };

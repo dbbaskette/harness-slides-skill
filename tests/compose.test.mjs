@@ -379,3 +379,14 @@ test('an icon carries its color, style and the surface it sits on',async()=>{
   assert.deepEqual([plain.color,plain.style,plain.surface],['#FFFFFF','plain','#2867B2']);assert.deepEqual([disc.color,disc.style,disc.glyph],['#0091DA',undefined,'#202124']);
   assert.throws(()=>validateComposition(deck({type:'icon',id:'bad_icon',icon:'fi-x',style:'neon'}),c),/style must be one of solid\|outline\|plain/);
 });
+
+test('one compile reports every structure and fit problem on every slide',async()=>{
+  const long='This sentence repeats to overflow its box. '.repeat(40);
+  const comp={version:1,title:'Deck',slides:[
+    {id:'slide_one',title:'T',sources:[],canvas:{type:'stack',direction:'row',children:[{type:'box',id:'heavy_box',text:'a',weight:95},{type:'box',id:'tinted_box',text:'b',fill:'nope'}]}},
+    {id:'slide_two',title:'T',sources:['s1'],canvas:{type:'stack',direction:'row',children:[{type:'box',id:'long_left',text:long},{type:'box',id:'long_right',text:long}]}},
+    {id:'slide_three',title:'A very long title that keeps going. '.repeat(12),sources:['s1'],canvas:{type:'box',id:'only_box',text:'x',textRole:'missing'}}]};
+  const message=await compileComposition(comp,brand()).then(()=>'',e=>e.message),found=message.split('\n');
+  assert.equal(found[0],'7 problems to fix:');
+  for(const part of [/slide_one: provide source references/,/slide_one\/heavy_box: weight must be above 0 and at most 10/,/slide_one\/tinted_box: fill must be a brand color role/,/slide_three\/only_box: textRole must be one of/,/slide_two\/long_left: needs [\d.]+pt of height but has 360pt at [\d.]+pt wide: the text runs to \d+ lines of 20pt and \d+ fit;/,/slide_two\/long_right: needs/,/slide_three\/title: needs [\d.]+pt of height but has 66pt: it runs to \d+ lines of 28pt and 1 fits; shorten the title/])assert.ok(found.some(line=>part.test(line)),String(part));
+});

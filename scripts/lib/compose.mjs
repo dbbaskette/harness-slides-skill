@@ -57,7 +57,7 @@ IDs match [a-zA-Z_][a-zA-Z0-9_-]{4,40} and are unique across the deck.
 Nest at most 6 levels. Run compose contract --brand brand-contract.json for the brand's content area, gap, padding and line sizes.
 Text is measured with the brand font. Content that cannot fit at its role's size fails with the shortfall; rewrite, split or restructure.`;
 
-export function validateComposition(comp,contract) {
+export function validateComposition(comp,contract,{collect}={}) {
   validateBrandContract(contract,{medium:'slides'});
   const d=contract.design,roles=d.slides.typography,colors=d.colors;
   if(comp?.version!==1)throw new Error('Use composition version 1 (run compose contract)');
@@ -83,15 +83,17 @@ export function validateComposition(comp,contract) {
   if(!str(comp.title))throw new Error('Provide a deck title');
   if(!Array.isArray(comp.slides)||!comp.slides.length||comp.slides.length>100)throw new Error('Provide 1–100 slides');
   const ids=new Set(),claim=(id,where)=>{if(!idPattern.test(id??'')||ids.has(id))fail(where,`invalid or repeated ID: ${id}`);ids.add(id);};
-  const summary=[],invalid=[];
+  const summary=[],invalid=[],bad=new Set();
   for(const s of comp.slides) try {
+    // Every problem on a slide is gathered, so one compile shows all of them.
+    const found=[],attempt=check=>{try{check();}catch(error){found.push(error.message);}};
     if(!s||typeof s!=='object'||Array.isArray(s))throw new Error('each slide must be an object');
     if(Object.keys(s).some(k=>!['id','title','sources','canvas','connect','notes','intent','layoutId','layout','subtitle','detail','brief'].includes(k)))fail(s.id,'unsupported slide field');
     claim(s.id,'slide');claim(`${s.id}_title`,s.id);
-    if(!str(s.title))fail(s.id,'provide a slide title');
-    if(!Array.isArray(s.sources)||!s.sources.length||s.sources.some(x=>!str(x)))fail(s.id,'provide source references');
+    attempt(()=>{if(!str(s.title))fail(s.id,'provide a slide title');});
+    attempt(()=>{if(!Array.isArray(s.sources)||!s.sources.length||s.sources.some(x=>!str(x)))fail(s.id,'provide source references: one or more IDs naming what the slide rests on, such as request or author_knowledge');});
     const local=new Set(),fills=new Set(),leaves=new Set(),facts={edges:0,chevrons:0,members:false,pair:false,peers:false,nested:false,layers:false,metric:false},brief=s.brief,focalId=brief?.focal;let nodes=0;
-    const walk=(n,depth,inFree)=>{
+    const inspect=(n,depth,inFree)=>{
       const where=`${s.id}/${n?.id??n?.type}`;
       if(!n||typeof n!=='object'||!fields[n.type])fail(where,'unknown node type');
       if(depth>6)fail(where,'nest at most 6 levels');
@@ -100,7 +102,7 @@ export function validateComposition(comp,contract) {
       const needsId=['box','text','image','icon'].includes(n.type)||n.group;
       if(needsId||n.id!==undefined){claim(n.id,where);local.add(n.id);}
       if(n.group!==undefined&&typeof n.group!=='boolean')fail(where,'group must be boolean');
-      if(n.weight!==undefined&&(!Number.isFinite(n.weight)||n.weight<=0||n.weight>10))fail(where,'weight must be 0–10');
+      if(n.weight!==undefined&&(!Number.isFinite(n.weight)||n.weight<=0||n.weight>10))fail(where,'weight must be above 0 and at most 10; weights are relative shares, so 9.5 and 0.5 give 95% and 5%');
       if(inFree){const a=n.at;if(!a||['x','y','width','height'].some(k=>!Number.isFinite(a[k])||a[k]<0||a[k]>1)||a.width<=0||a.height<=0||a.x+a.width>1.0001||a.y+a.height>1.0001)fail(where,'free children need at:{x,y,width,height} within 0–1');}
       else if(n.at!==undefined)fail(where,'at is only valid inside a free container');
       if(n.gap!==undefined&&!gapNames.includes(n.gap))fail(where,`gap must be one of ${gapNames.join('|')}`);
@@ -138,8 +140,12 @@ export function validateComposition(comp,contract) {
       const kids=n.children;
       if(['stack','grid','free'].includes(n.type)||kids!==undefined) {
         if(!Array.isArray(kids)||!kids.length||kids.length>12)fail(where,'provide 1–12 children');
-        for(const k of kids)walk(k,depth+1,n.type==='free');
       }
+    };
+    // One bad node does not hide the others: each is checked on its own and its children are still visited.
+    const walk=(n,depth,inFree)=>{
+      attempt(()=>inspect(n,depth,inFree));
+      if(n&&typeof n==='object'&&Array.isArray(n.children)&&depth<=6)for(const k of n.children.slice(0,12))walk(k,depth+1,n.type==='free');
     };
     if(s.layout!==undefined) {
       // A template layout slide (cover, section break, closing) fills that layout's placeholders and draws nothing else.
@@ -150,19 +156,22 @@ export function validateComposition(comp,contract) {
       if(brief!==undefined&&(!brief||typeof brief!=='object'||Object.keys(brief).some(k=>k!=='rhythm')||!rhythms.includes(brief.rhythm)))fail(s.id,'a template layout slide takes only brief.rhythm (anchor|dense|breathing)');
       summary.push({id:s.id,nodes:0,fills:[],edges:0,layout:s.layout});continue;
     }
-    if(s.subtitle!==undefined||s.detail!==undefined)fail(s.id,'subtitle and detail belong to a slide with a template layout');
-    if(brief!==undefined) {
+    attempt(()=>{if(s.subtitle!==undefined||s.detail!==undefined)fail(s.id,'subtitle and detail belong to a slide with a template layout');});
+    attempt(()=>{if(brief!==undefined) {
       if(!brief||typeof brief!=='object'||Array.isArray(brief)||Object.keys(brief).some(k=>!['relation','focal','rhythm'].includes(k)))fail(s.id,'brief takes relation, focal and rhythm');
       if(!relations.includes(brief.relation))fail(s.id,`brief.relation must be one of ${relations.join('|')}`);
       if(brief.rhythm!==undefined&&!rhythms.includes(brief.rhythm))fail(s.id,`brief.rhythm must be one of ${rhythms.join('|')}`);
       if(brief.focal!==undefined&&!dir)fail(s.id,'brief.focal needs a deck direction that names the focal color');
-    }
-    walk(s.canvas,1,false);
+    }});
+    const before=found.length;walk(s.canvas,1,false);
     facts.edges=Array.isArray(s.connect)?s.connect.length:0;
-    if(focalId!==undefined&&!leaves.has(focalId))fail(s.id,`brief.focal names ${focalId}, which is not a box or text on this slide`);
-    if(brief&&drawn[brief.relation]&&!drawn[brief.relation][0](facts))fail(s.id,`relation "${brief.relation}" is not drawn. ${drawn[brief.relation][1]}, or set the relation to "none" if the words are enough`);
+    // These two read the whole structure, so they only mean something once every node in it is sound.
+    if(found.length===before) {
+      attempt(()=>{if(focalId!==undefined&&!leaves.has(focalId))fail(s.id,`brief.focal names ${focalId}, which is not a box or text on this slide`);});
+      attempt(()=>{if(brief&&drawn[brief.relation]&&!drawn[brief.relation][0](facts))fail(s.id,`relation "${brief.relation}" is not drawn. ${drawn[brief.relation][1]}, or set the relation to "none" if the words are enough`);});
+    }
     if(s.connect!==undefined&&(!Array.isArray(s.connect)||s.connect.length>40))fail(s.id,'connect must be a list of at most 40 edges');
-    for(const c of s.connect??[]) {
+    for(const c of s.connect??[])attempt(()=>{
       if(!c||typeof c!=='object')fail(s.id,'each edge must be an object');
       if(Object.keys(c).some(k=>!['id','from','to','label','arrow','color'].includes(k)))fail(s.id,'unsupported edge field');
       claim(c.id,`${s.id}/edge`);
@@ -171,10 +180,12 @@ export function validateComposition(comp,contract) {
       if(c.color!==undefined&&!Object.hasOwn(colors,c.color))fail(`${s.id}/${c.id}`,'edge color must be a brand color role');
       if(dir&&c.color===dir.focal)fail(`${s.id}/${c.id}`,'an edge cannot use the focal color; it belongs to the focal node');
       if(c.arrow!==undefined&&typeof c.arrow!=='boolean')fail(`${s.id}/${c.id}`,'arrow must be boolean');
-    }
+    });
+    if(found.length){invalid.push(...found);bad.add(s.id);continue;}
     summary.push({id:s.id,nodes,fills:[...fills],edges:(s.connect??[]).length});
-  } catch(error){invalid.push(error.message);}
-  // Report every slide that breaks a rule in one pass, so the author fixes them together.
+  } catch(error){invalid.push(error.message);if(s&&typeof s==='object')bad.add(s.id);}
+  // A caller that goes on to check fit collects these and reports everything together.
+  if(collect){collect.push(...invalid);return {slides:summary,bad};}
   if(invalid.length)throw new Error(invalid.length===1?invalid[0]:`${invalid.length} problems to fix:\n${invalid.join('\n')}`);
   return {slides:summary};
 }
@@ -211,12 +222,13 @@ Gaps: tight ${inset/2}, normal ${inset}, wide ${sp.column??28}. A box pads its c
 One line of text needs: ${Object.keys(t).filter(k=>k!=='title').map(k=>`${k} ${line(k)}`).join(', ')}. Text with no textRole uses ${body}.`;
 }
 export async function compileComposition(comp,contract,{fonts}={}) {
-  const summary=validateComposition(comp,contract);
+  // Structure and fit are reported together: slides that break a rule are skipped, the rest are still laid out.
+  const problems=[],summary=validateComposition(comp,contract,{collect:problems});
   const d=contract.design,sl=d.slides,roles=sl.typography,colors=d.colors,sp=sl.spacing??{},inset=sp.inset??16;
   const gapSize={none:0,tight:inset/2,normal:inset,wide:sp.column??28};
   const bodyRole=contract.medium.delivery==='live'?'body':'bodyReference',measure=await measurer(contract,fonts);
   const iconSize=sl.icon?.size??48;
-  const scene={version:2,title:comp.title,mode:'new',canvas:sl.canvas,theme:brandTheme(contract),slides:[]},structure={groups:[],connectors:[],icons:[],layouts:[],adjusted:[],direction:comp.direction??null,briefs:[]},problems=[],dir=comp.direction;
+  const scene={version:2,title:comp.title,mode:'new',canvas:sl.canvas,theme:brandTheme(contract),slides:[]},structure={groups:[],connectors:[],icons:[],layouts:[],adjusted:[],direction:comp.direction??null,briefs:[]},room=[],dir=comp.direction;
 
   const style=n=>roles[n.textRole??bodyRole];
   // Text and icons keep their own size; everything else shares the space that is left.
@@ -249,8 +261,17 @@ export async function compileComposition(comp,contract,{fonts}={}) {
     return n.children.reduce((a,k)=>a+need(k,width),0)+gapOf(n)*(n.children.length-1);
   };
 
+  const titleFit=(s,into)=>{
+    const title=roles.title,needs=measure.height(s.title,title,sl.titleBox.width);
+    if(!(needs>sl.titleBox.height+.5))return;
+    const one=measure.height('Ag',title,1e4),line=measure.height('Ag\nAg',title,1e4)-one,fit=Math.max(1,Math.floor((sl.titleBox.height-one+.5)/line)+1);
+    into.push(`${s.id}/title: needs ${round(needs)}pt of height but has ${round(sl.titleBox.height)}pt: it runs to ${Math.round((needs-one)/line)+1} lines of ${title.size}pt and ${fit} fit${fit===1?'s':''}; shorten the title`);
+  };
   for(const s of comp.slides) try {
-    const elements=[],rects=new Map(),labels=[],focalId=s.brief?.focal;
+    // A slide that breaks a rule is not laid out, but its title can still be measured.
+    if(summary.bad.has(s?.id)){if(s&&!s.layout&&str(s.title)&&str(s.id))titleFit(s,problems);continue;}
+    // Every part of a slide that cannot fit is reported, not only the first.
+    const elements=[],rects=new Map(),labels=[],focalId=s.brief?.focal,tight=[];
     // Text keeps its role color where that is readable on the surface behind it; otherwise it takes the brand's on-color.
     // Plain ink also gives way to the on-color wherever the on-color reads better, so a mid-dark fill gets light text.
     const onColor=colors.onAccent??colors.canvasPrimary,inks=[colors.inkDeep,colors.inkPrimary,colors.inkSecondary].filter(Boolean);
@@ -262,7 +283,19 @@ export async function compileComposition(comp,contract,{fonts}={}) {
     const put=(element,members)=>{elements.push(element);members?.push(element.id);return element;};
     // A column's shortfall is the sum of its parts, so the message lists them: the part to change is rarely the column itself.
     const parts=(n,width)=>{const kids=n.type==='box'?n.children:n.type==='stack'&&n.direction==='column'?n.children:null;if(!kids||kids.length<2)return '';const g=gapOf(n),w=n.type==='box'?Math.max(1,width-inset*2):width;return ` (${kids.map(k=>`${k.id??k.type} ${round(need(k,w))}`).join(' + ')}${g?`, plus ${kids.length-1} gap${kids.length>2?'s':''} of ${g}`:''}${n.type==='box'?`, plus padding of ${inset*2}`:''})`;};
-    const short=(n,rect,required)=>!Number.isFinite(required)?fail(`${s.id}/${n.id??n.name??n.type}`,'has no usable room; use fewer siblings, less nesting or larger weights'):fail(`${s.id}/${n.id??n.name??n.type}`,`needs ${round(required)}pt of height but has ${round(rect.height)}pt at ${round(rect.width)}pt wide${parts(n,rect.width)}; shorten the text, split the slide or restructure`);
+    // Text shortfalls are also given in lines, which is the unit an author can act on.
+    const inLines=(n,rect,required)=>{
+      const plain=n.type==='text',boxed=n.type==='box'&&n.text!==undefined&&shapeKinds[n.shape??'rect'][3]===1&&shapeKinds[n.shape??'rect'][4]===1;
+      if(!plain&&!boxed)return '';
+      const st=style(n),one=measure.height('Ag',st,1e4),line=measure.height('Ag\nAg',st,1e4)-one,pad=one-line+(boxed?inset*2:0);
+      if(!(line>0))return '';
+      const runs=Math.max(1,Math.round((required-pad)/line)),fit=Math.max(0,Math.floor((rect.height-pad+.5)/line));
+      return `: the text runs to ${runs} line${runs===1?'':'s'} of ${st.size}pt and ${fit===0?'none fit':fit===1?'1 fits':`${fit} fit`}`;
+    };
+    const short=(n,rect,required)=>{
+      if(!Number.isFinite(required))fail(`${s.id}/${n.id??n.name??n.type}`,'has no usable room; use fewer siblings, less nesting or larger weights');
+      tight.push(`${s.id}/${n.id??n.name??n.type}: needs ${round(required)}pt of height but has ${round(rect.height)}pt at ${round(rect.width)}pt wide${parts(n,rect.width)}${inLines(n,rect,required)}; shorten the text, split the slide or restructure`);
+    };
     const textProps=(n,surface)=>{const st=style(n);return {fontSize:st.size,bold:st.bold,color:n.color?colors[n.color]:dir&&n.id===focalId&&n.type==='text'?colors[dir.focal]:ink(colors[st.colorRole],surface,st),...(n.align&&n.align!=='stretch'?{align:{start:'left',center:'center',end:'right'}[n.align]}:{})};};
     const box=r=>({x:round(r.x),y:round(r.y),width:round(r.width),height:round(r.height)});
 
@@ -270,7 +303,7 @@ export async function compileComposition(comp,contract,{fonts}={}) {
       if(!(rect.width>inset)||!(rect.height>0))fail(`${s.id}/${n.id??n.name??n.type}`,'has no usable room; use fewer siblings, less nesting or larger weights');
       // Leaves and column stacks own the fit check, so the error names the node to fix.
       const checks=!n.children||n.type==='stack'&&n.direction==='column';
-      if(checks){const required=need(n,rect.width);if(required>rect.height+.5)short(n,rect,required);}
+      if(checks){const required=need(n,rect.width);if(required>rect.height+.5){short(n,rect,required);return;}}
       if(n.id)rects.set(n.id,rect);
       const own=n.group?[]:members;
       if(n.type==='spacer')return;
@@ -307,7 +340,7 @@ export async function compileComposition(comp,contract,{fonts}={}) {
         n.children.forEach((k,i)=>{
           if(!(widths[i]>inset))fail(`${s.id}/${k.id??k.type}`,'has no usable room; use fewer siblings, less nesting or larger weights');
           const min=need(k,widths[i]);
-          if(min>rect.height+.5)short(k,{width:widths[i],height:rect.height},min);
+          if(min>rect.height+.5){short(k,{width:widths[i],height:rect.height},min);x+=widths[i]+g;return;}
           // Stretch fills the row. Any other alignment gives a child the height its content needs; a child with nothing to measure still fills.
           const hug=(n.align??'stretch')!=='stretch'&&(!flexible(k)||['box','stack','grid'].includes(k.type)&&min>0);
           const h=hug?min:rect.height;
@@ -331,8 +364,7 @@ export async function compileComposition(comp,contract,{fonts}={}) {
       if(n.group){if(own.length>1)structure.groups.push({slide:s.id,id:n.id,members:own});members?.push(...own);}
     };
 
-    const title=roles.title,titleNeed=measure.height(s.title,title,sl.titleBox.width);
-    if(!s.layout&&titleNeed>sl.titleBox.height+.5)fail(`${s.id}/title`,`needs ${round(titleNeed)}pt of height but has ${round(sl.titleBox.height)}pt; shorten the title`);
+    const title=roles.title;if(!s.layout)titleFit(s,tight);
     put({id:`${s.id}_title`,type:'text',...sl.titleBox,text:s.title,role:'title',fontSize:title.size,bold:title.bold,color:colors[title.colorRole]});
     if(s.layout) {
       // The native emitter writes these into the layout's subtitle placeholders; the geometry here serves other emitters.
@@ -340,6 +372,8 @@ export async function compileComposition(comp,contract,{fonts}={}) {
       for(const key of ['subtitle','detail'])if(s[key]!==undefined){const height=measure.height(s[key],body,sl.contentBox.width);put({id:`${s.id}_${key}`,type:'text',x:sl.contentBox.x,y:round(y),width:sl.contentBox.width,height:round(height),text:s[key],fontSize:body.size,bold:body.bold,color:colors[body.colorRole]});placeholders.push(`${s.id}_${key}`);y+=height+inset;}
       structure.layouts.push({slide:s.id,layout:s.layout,placeholders});
     } else place(s.canvas,sl.contentBox,null);
+    if(tight.length){problems.push(...tight);continue;}
+    if(!s.layout){const used=need(s.canvas,sl.contentBox.width);if(Number.isFinite(used))room.push({slide:s.id,needs:round(used),has:round(sl.contentBox.height)});}
     if(s.brief?.relation==='overlap') {
       // Overlap is geometric: two shapes must intersect without one simply sitting inside the other.
       const shapes=elements.filter(e=>e.type==='shape'),inside=(a,b)=>a.x>=b.x&&a.y>=b.y&&a.x+a.width<=b.x+b.width&&a.y+a.height<=b.y+b.height;
@@ -386,5 +420,5 @@ export async function compileComposition(comp,contract,{fonts}={}) {
   // Report every slide that does not fit in one pass, so the author fixes them together.
   if(problems.length)throw new Error(problems.length===1?problems[0]:`${problems.length} problems to fix:\n${problems.join('\n')}`);
   validateScene(scene);
-  return {scene,structure,report:{schema:1,brandRevision:contract.revision,measurement:measure.exact?'exact brand font':'estimated; brand font unavailable',slides:summary.slides}};
+  return {scene,structure,report:{schema:1,brandRevision:contract.revision,measurement:measure.exact?'exact brand font':'estimated; brand font unavailable',slides:summary.slides,room}};
 }

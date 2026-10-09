@@ -254,17 +254,19 @@ representative guidance-start response. Bootstrap activation is shown separately
 | --- | ---: |
 | Discovery metadata | 39 |
 | Installed bootstrap | 412 |
-| Bootstrap + current guidance entry | 1,386 |
-| Scoped PPTX edit + final review | 3,144 |
-| Scoped Google edit + final review | 3,731 |
-| New PPTX deck from native template + review | 7,080 |
-| New Google deck from native template + review | 8,107 |
-| New composed deck + contract | 6,995 |
-| New PPTX scene + contract + review | 6,339 |
-| New Google scene + contract + review | 7,478 |
-| Content-led PPTX + selected component + review | 8,363 |
-| Font screening + structured critique + review | 3,576 |
-| Optional image guidance + download result | 2,528 |
+| Bootstrap + current guidance entry | 1,419 |
+| Scoped PPTX edit + final review | 3,177 |
+| Scoped Google edit + final review | 3,764 |
+| New PPTX deck from native template + review | 7,113 |
+| New Google deck from native template + review | 8,140 |
+| New composed deck + contract | 7,154 |
+| Parallel build, lead | 7,967 |
+| Parallel build, each worker | 4,927 |
+| New PPTX scene + contract + review | 6,372 |
+| New Google scene + contract + review | 7,511 |
+| Content-led PPTX + selected component + review | 8,396 |
+| Font screening + structured critique + review | 3,609 |
+| Optional image guidance + download result | 2,561 |
 
 Intake, workspace, brand integration and image guidance load only when needed. Native-template
 authoring skips the scene contract; scene routes include its actual helper output.

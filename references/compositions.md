@@ -142,13 +142,18 @@ brand's own icon rules where it has them. Shapes: `rect`, `roundRect`, `ellipse`
 ## Build, look, fix
 
 ```sh
+node scripts/harness-slides.mjs compose compile --file composition.json --brand brand-contract.json
 node scripts/harness-slides.mjs compose compile --file composition.json --brand brand-contract.json --output NEW_DIR
 node scripts/harness-slides.mjs compose preview --file NEW_DIR --output NEW_PREVIEW_DIR --slide SLIDE_ID
 ```
 
-`compile` checks the whole file: structure first, then fit. At each stage it
-reports every slide's problems together. A fit failure names the node and the
-shortfall. Shorten the wording, split the slide or restructure. Text is never
+Without `--output`, `compile` only checks and writes nothing. One run lists every
+problem it can find on every slide: broken rules, parts that do not fit, unknown
+icons and layouts. A fit failure names the node and says how many lines the
+text runs to and how many fit; for a column it lists what each part needs. Fix
+each one by editing the node it names; do not rewrite the file. When it fits,
+the result shows how much of each slide's height the content needs. Then add
+`--output`. Shorten the wording, split the slide or restructure. Text is never
 shrunk to fit.
 
 `preview` builds the deck, renders it and returns the slide image with findings.
@@ -160,6 +165,9 @@ Record the user's actual approval of the per-slide design in
 `presentation-brief.md`, in their words. A composition without `intent` blocks needs no separate
 proposal file. Add `--design-project CONTENT` to `compile` only when slides carry
 `intent` blocks approved through `design propose`.
+
+A deck of more than about ten content slides can be
+[built in parallel](parallel-build.md) where the harness runs subagents.
 
 Open every image. Because `compile` checks every slide in the file, either add
 slides one at a time or draft them all and then take them in turn with
