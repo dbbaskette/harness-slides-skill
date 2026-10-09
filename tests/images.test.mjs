@@ -14,10 +14,10 @@ test('image worker generation, recovery, validation and privacy fixtures', async
   assert.match(r.stderr, /OK/);
 });
 
-test('image status is offline; setup signs in once and generation stays in a short-lived worker', async t => {
+test('the cookie route is an explicit provider: offline status, one sign-in, a short-lived worker', async t => {
   const base = await realpath(await mkdtemp(join(tmpdir(), 'slides-images-'))); t.after(() => rm(base, { recursive: true, force: true }));
-  const state = join(base, 'private');
-  assert.equal((await images('status', { state })).status, 'setup_required');
+  const state = join(base, 'private'), provider = 'gemini-web';
+  assert.equal((await images('status', { state, provider })).status, 'setup_required');
   await assert.rejects(access(state));
   await privateDirectory(state);
   const runtime = await runtimePath(state);
@@ -25,18 +25,25 @@ test('image status is offline; setup signs in once and generation stays in a sho
   const calls = [];
   const deps = { run: async (cmd, args, options) => { calls.push({ cmd, args, options }); return { status: 'ready' }; },
     install: async () => runtime, signIn: async () => ({ '__Secure-1PSID': 'private-cookie' }) };
-  await images('setup', { state }, deps);
+  await images('setup', { state, provider }, deps);
   assert.equal(calls[0].options.input.action, 'runtime');
   calls.shift();
   assert.equal(calls[0].options.input.action, 'auth');
-  await images('generate', { state, project: base, id: 'slide-04', promptFile: 'brief.txt', output: 'assets/image.png', references: ['reference.png'] }, deps);
+  const request = { state, provider, project: base, id: 'slide-04', promptFile: 'brief.txt', output: 'assets/image.png', references: ['reference.png'] };
+  await images('generate', request, deps);
   assert.equal(calls[1].options.input.action, 'generate');
   assert.equal(calls[1].options.input.references.length, 1);
   assert.deepEqual(calls[1].args.slice(0, 2), ['-I','-B']);
   assert.equal(calls[1].options.input.cookies, undefined);
-  await images('download', { state, project: base, id: 'slide-04' }, deps);
+  await images('download', { state, provider, project: base, id: 'slide-04' }, deps);
   assert.equal(calls[2].options.input.action, 'download');
-  await assert.rejects(images('generate', { state }, deps), /project_and_id_required/);
+  await assert.rejects(images('generate', { state, provider }, deps), /project_and_id_required/);
+  // The worker cannot apply a deck art style, so it refuses rather than break the deck's shared style.
+  await assert.rejects(images('generate', { ...request, aspect: '1:1' }, deps), e => e.code === 'requires_api_provider');
+  await writeFile(join(base, 'art-style.txt'), 'Medium: ink wash.');
+  await assert.rejects(images('generate', request, deps), e => e.code === 'requires_api_provider');
+  await assert.rejects(images('status', { state, provider: 'other' }), e => e.code === 'unknown_provider');
+  assert.equal(calls.length, 3);
 });
 
 test('Chrome setup exports only required cookies and closes its context', async t => {

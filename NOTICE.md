@@ -24,7 +24,12 @@ copied. Source-reviewed ideas informed our original implementation:
 The nexu-io/codex-slides image-generation fork is not part of this implementation.
 Anthropic's service-licensed PPTX skill is not incorporated.
 
-## Optional Gemini Web images
+## Optional Gemini images
+
+The default image route calls Google's Gemini API directly with Node's built-in
+`fetch` (`scripts/lib/gemini-api.mjs`, MIT like the rest of this repository) and
+adds no dependency. The earlier Gemini Web route below remains as an explicit
+alternative, selected with `--provider gemini-web`.
 
 The on-demand image worker in `scripts/images/worker.py` is licensed under
 AGPL-3.0-only; see `scripts/images/LICENSE`. It installs
@@ -35,7 +40,8 @@ installation; no upstream library source is vendored here. The rest of this
 repository retains its stated MIT license. The worker's cookie export and
 single-attempt strategy adapt the owner's Gemini Web Bridge implementation.
 Pillow (MIT-CMU) and Playwright (Apache-2.0) are optional installed dependencies
-with their own notices. These dependencies are installed only for image setup.
+with their own notices. These dependencies are installed only by
+`setup images --provider gemini-web`.
 
 The neutral conceptual-greenhouse fixture is authorized Gemini-generated art,
 not a copied product screenshot or customer evidence. Its sanitized sidecar
