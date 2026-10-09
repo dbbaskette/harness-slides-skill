@@ -1,5 +1,12 @@
 # Render, inspect, repair
 
+| Built with | While building | Before delivery |
+| --- | --- | --- |
+| [Compositions](compositions.md) | `compose preview` after each slide | `compose preview` of the whole build, every image opened. Nothing below is required unless a PDF export or an editability check was asked for |
+| Typed components or scenes | Render each changed slide | This page, plus [font screening and critique](quality.md) |
+| Native template tools | Render each changed slide | This page, plus [native critique](native-critique.md) |
+| Scoped edits to an existing deck | Render each changed slide | This page; compare with the source |
+
 Inspect each built/changed slide while its design context is fresh. A reviewer
 must actually view the rendered pixels; rendering alone is not an inspection.
 Fix clipping, overlaps, wrapping, awkward spacing, contrast and missing artwork.
@@ -63,12 +70,9 @@ Use `workspace repair --project DIR --slide ID` for a compact repair packet,
 including only the selected slide, findings and expected scene digest. After a
 repair, build/render affected slides and complete final coverage of the deck.
 
-For new native-template decks/redesigns, use [structured native critique](native-critique.md).
 Complete pixel inspection and creative assessment separately, then show the rendered
 deck and wait at [the user-review checkpoint](design-walkthrough.md#show-rendered-output-and-pause-again).
 A bulk inspection note alone does not certify creative quality or user acceptance.
-
-Compiled decks also require [font screening and structured critique](quality.md).
 Use technical findings to target repairs, then judge the title against actual
 evidence and the composition against the slide’s intended relationship.
 

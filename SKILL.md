@@ -42,12 +42,12 @@ this engine. Apply its selected contract and assets; do not mix identities.
 
 | Task | Read |
 | --- | --- |
-| New deck, redesign or full rework | [Design](references/design.md) and [walkthrough](references/design-walkthrough.md), then [choose a method](references/authoring.md); load only that method/format |
+| New deck, redesign or full rework | [Design](references/design.md) and [walkthrough](references/design-walkthrough.md), then [compositions](references/compositions.md) |
+| A table, a chart, or a slide compositions cannot express | [Other methods](references/authoring.md); load only the one chosen |
 | Polish, content-preserving patch or selected-slide edit | [PPTX editing](references/editing.md) or [Google operations](references/google-slides.md), matching the destination |
 | Native Google access/operations | [Google Slides](references/google-slides.md) |
-| Content-led compiler | [Components](references/content-components.md); query the selected component only |
 | Template or brand extension | [Brand add-ons](references/brand-addons.md); [template reuse](references/templates.md) only for inspection/composition |
-| Final rendering and verification | [Review](references/review.md) |
+| Final rendering and verification | [Review](references/review.md); its first table says which checks apply to the method used |
 | Workspace browser and version controls | [Workspace](references/workspace.md) |
 | Custom image generation or image setup | [Images](references/images.md) |
 
@@ -58,8 +58,8 @@ commands from the task's returned installed **runtime**, never this snapshot. Wr
 node scripts/harness-slides.mjs --help
 ```
 
-Use compact inspections and selected records. Read the scene contract only when
-using the compiler. Load one brand and one delivery format. Assets and script
+Use compact inspections and selected records. Read a method's contract only when
+using that method. Load one brand and one delivery format. Assets and script
 implementations need not enter context to execute helpers.
 
 ## Delivery contract
@@ -70,8 +70,7 @@ implementations need not enter context to execute helpers.
   agreed editing scope. Use revision/hash preconditions; stop on stale state.
 - Render and inspect each built or changed slide while its design context is
   fresh. Fix defects, then inspect every slide in the final deck and its rhythm.
-  Record actual findings against the exact rendered revision. New native-template
-  work requires [structured critique](references/native-critique.md), not just a bulk note.
+  Record actual findings against the exact rendered revision.
 - HTML is a composition preview, not proof of native layout fidelity. Structural
   checks do not prove visual quality. Unrendered output is an unreviewed draft.
 - Report what was verified and any remaining limitations. Offline Google status

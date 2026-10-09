@@ -3,7 +3,9 @@
 For new slides in a brand template. You describe each slide's structure; the
 compiler places it, fits the text and builds editable native objects. Approve
 [the per-slide proposal](design-walkthrough.md) first, and decide what each slide
-must make the audience understand before choosing its structure.
+must make the audience understand before choosing its structure. The `direction`
+and each slide's `brief` are where those [design](design.md) decisions are
+written down; keep no other record of them.
 
 ```sh
 node scripts/harness-slides.mjs compose contract
@@ -88,8 +90,9 @@ Show a sequence, a dependency or a
 hand-off with nodes and edges, not with a sentence that describes it. Show
 ownership with regions. Use plain text when reading the wording is the point.
 
-Vary structure with the content. Repeat a layout only when two slides are meant
-to be compared.
+Let the content choose the structure. Repeat a layout when two slides hold the
+same kind of content or are meant to be compared, not because the last slide
+used it.
 
 ## Cover, section and closing slides
 
@@ -149,10 +152,17 @@ node scripts/harness-slides.mjs compose render --file NEW_DIR --output deck.pptx
 node scripts/harness-slides.mjs drive import --file deck.pptx --name TITLE
 ```
 
+Before delivering, run `compose preview` on the finished build without `--slide`
+and open every image, in order: each slide, then the run of slides as a deck.
+That is the final review for a composed deck. Show the user those images and
+wait, as [the walkthrough](design-walkthrough.md#show-rendered-output-and-pause-again)
+describes. The preview file and the delivered file are imports of the same
+build.
+
 The deck is built inside the brand template: the title is the layout's
 placeholder, labels sit inside their shapes, arrows are attached, and each card
-is one group. All of that survives the import into Google Slides. Then follow
-[review](review.md) on the delivered deck.
+is one group. All of that survives the import into Google Slides. Read
+[review](review.md) only for a requested PDF export or an editability check.
 
 Tables, charts and hyperlinks are not available in compositions yet. Use
 [typed components](content-components.md) or a native template slide for those.

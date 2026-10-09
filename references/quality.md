@@ -1,6 +1,7 @@
 # Font screening and structured critique
 
-Use this path for compiled decks or content/design review. Run commands from the
+Use this path for typed-component and scene workspaces (`deck compile`,
+`workspace build`). Composed decks do not use it. Run commands from the
 returned runtime; the agent owns the reports and judgments. Users supply briefs
 and feedback, not JSON.
 
