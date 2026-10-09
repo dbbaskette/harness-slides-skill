@@ -128,7 +128,8 @@ export async function compileComposition(comp,contract,{fonts}={}) {
   const scene={version:2,title:comp.title,mode:'new',canvas:sl.canvas,theme:brandTheme(contract),slides:[]},structure={groups:[],connectors:[],icons:[]};
 
   const style=n=>roles[n.textRole??bodyRole];
-  const flexible=n=>n.type!=='text';
+  // Text and icons keep their own size; everything else shares the space that is left.
+  const flexible=n=>n.type!=='text'&&n.type!=='icon';
   const gapOf=n=>gapSize[n.gap??'normal'];
   const rowWidths=(n,width)=>{const kids=n.children,total=kids.reduce((a,k)=>a+(k.weight??1),0),usable=width-gapOf(n)*(kids.length-1);return kids.map(k=>usable*(k.weight??1)/total);};
   const need=(n,width)=>{
@@ -171,8 +172,10 @@ export async function compileComposition(comp,contract,{fonts}={}) {
       if(n.type==='icon') {
         // Icons are copied from the brand library as native geometry at render time, so the scene only reserves a centred square.
         if(rect.width<iconSize-.5)fail(`${s.id}/${n.id}`,`needs ${round(iconSize)}pt of width for an icon but has ${round(rect.width)}pt`);
+        if(!sl.icon?.library)fail(`${s.id}/${n.id}`,'uses an icon, but the brand contract names no icon library');
         const side=Math.min(rect.width,rect.height,iconSize*2),slot={x:rect.x+(rect.width-side)/2,y:rect.y+(rect.height-side)/2,width:side,height:side};
-        rects.set(n.id,slot);structure.icons.push({slide:s.id,id:n.id,icon:n.icon,...box(slot)});return;
+        // order is the icon's place in the slide's drawing order, so the emitter can draw and group it with its neighbours.
+        rects.set(n.id,slot);structure.icons.push({slide:s.id,id:n.id,icon:n.icon,order:elements.length,...box(slot)});own?.push(n.id);return;
       }
       if(n.type==='image'){put({id:n.id,type:'image',...box(rect),src:n.src,alt:n.alt,fit:n.fit??'contain'},own);return;}
       if(n.type==='box') {
