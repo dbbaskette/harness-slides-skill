@@ -131,7 +131,7 @@ test('generated IDs are reserved and reported with their node',()=>{
 test('validation counts default fills and rejects malformed structure with a located message',()=>{
   const c=brand(),bad=canvas=>()=>validateComposition(deck(canvas),c);
   assert.throws(bad({type:'grid',columns:2,children:[{type:'box',id:'plain_box',text:'x'},...['canvasPrimary','headingPrimary','accentAqua'].map((fill,i)=>({type:'box',id:`fill_box${i}`,text:'x',fill}))]}),/uses 4 fill colors/);
-  assert.throws(bad({type:'box',id:'card_align',align:'center',children:[{type:'text',id:'card_text',text:'x'}]}),/align applies to box text/);
+  assert.throws(bad({type:'box',id:'card_align',align:'stretch',children:[{type:'text',id:'card_text',text:'x'}]}),/aligns its content start\|center\|end/);
   assert.throws(bad({type:'stack',direction:'row',id:'group_flag',group:'yes',children:[{type:'spacer'}]}),/group must be boolean/);
   const shaped=deck({type:'box',id:'only_box',text:'x'});shaped.slides[0].connect={};assert.throws(()=>validateComposition(shaped,c),/connect must be a list/);
   assert.throws(()=>validateComposition({version:1,title:'t',slides:[null]},c),/each slide must be an object/);
@@ -176,4 +176,40 @@ test('non-rectangular shapes measure text against their smaller inner text area'
   const tall=(await compileComposition(cell('diamond','A diamond holds only a few short words of text'),brand()).catch(e=>e));
   assert.match(String(tall.message??''),/slide_one\/shape_box: needs [\d.]+pt of height but has 360pt/);
   await assert.rejects(()=>compileComposition(deck({type:'grid',columns:6,gap:'wide',children:Array.from({length:6},(_,i)=>({type:'box',id:`tiny_box${i}`,shape:'diamond',text:'Observability and tracing for every service in the fleet'}))}),brand()),/needs [\d.]+pt of height/);
+});
+
+test('a card places its content at the top, middle or bottom',async()=>{
+  const card=align=>deck({type:'box',id:'card_main',...(align?{align}:{}),children:[{type:'text',id:'card_text',text:'One line'}]});
+  const at=async align=>byId((await compileComposition(card(align),brand())).scene,'card_text');
+  const [top,middle,bottom]=[await at(),await at('center'),await at('end')];
+  // The card fills the 126–486pt content box with an 18pt inset.
+  assert.equal(top.y,144);assert.ok(middle.y>top.y+100&&bottom.y>middle.y+100);assert.equal(Math.round(bottom.y+bottom.height+18),486);
+});
+
+test('every slide that does not fit is reported in one pass',async()=>{
+  const long='This sentence repeats to overflow its box. '.repeat(40),comp={version:1,title:'Deck',slides:['slide_aa','slide_bb','slide_cc'].map((id,i)=>({id,title:'T',sources:['brief:test'],canvas:{type:'box',id:`box_${id}`,text:i===1?'fits':long}}))};
+  const error=await compileComposition(comp,brand()).catch(e=>e);
+  assert.match(error.message,/^2 slides need changes:/);assert.match(error.message,/slide_aa\/box_slide_aa: needs/);assert.match(error.message,/slide_cc\/box_slide_cc: needs/);assert.doesNotMatch(error.message,/slide_bb/);
+});
+
+test('a label on a slanted arrow sits clear of the line and of every node',async()=>{
+  const comp=deck({type:'free',children:[{type:'box',id:'node_low',text:'A',at:{x:0,y:.6,width:.25,height:.4}},{type:'box',id:'node_high',text:'B',at:{x:.6,y:0,width:.4,height:.3}}]});
+  comp.slides[0].connect=[{id:'edge_up',from:'node_low',to:'node_high',label:'promotes'}];
+  const {scene}=await compileComposition(comp,brand()),line=byId(scene,'edge_up'),label=byId(scene,'edge_up_label'),a=byId(scene,'node_low'),b=byId(scene,'node_high');
+  const p1={x:line.x,y:line.y+line.height},p2={x:line.x+line.width,y:line.y};assert.equal(line.flipV,true);
+  // Distance from each label corner to the line must be positive on one side: all four corners on the same side.
+  const side=p=>Math.sign((p2.x-p1.x)*(p.y-p1.y)-(p2.y-p1.y)*(p.x-p1.x)),corners=[[0,0],[1,0],[0,1],[1,1]].map(([u,v])=>side({x:label.x+u*label.width,y:label.y+v*label.height}));
+  assert.equal(new Set(corners).size,1);
+  for(const n of [a,b])assert.ok(label.x>=n.x+n.width||label.x+label.width<=n.x||label.y>=n.y+n.height||label.y+label.height<=n.y);
+});
+
+test('a template layout slide carries a title and subtitle lines and no canvas',async()=>{
+  const comp={version:1,title:'Deck',slides:[{id:'cover_slide',title:'A long opening title that would not fit one content title line at all',layout:'Title 1 - dark',subtitle:'For solutions architects',detail:'October 2026',sources:['brief:test']},
+    {id:'body_slide',title:'Body',sources:['brief:test'],canvas:{type:'box',id:'body_box',text:'x'}}]};
+  const {scene,structure}=await compileComposition(comp,brand());
+  assert.deepEqual(structure.layouts,[{slide:'cover_slide',layout:'Title 1 - dark',placeholders:['cover_slide_subtitle','cover_slide_detail']}]);
+  assert.deepEqual(scene.slides[0].elements.map(e=>e.id),['cover_slide_title','cover_slide_subtitle','cover_slide_detail']);
+  const bad=extra=>()=>validateComposition({version:1,title:'D',slides:[{id:'cover_slide',title:'T',sources:['brief:test'],...extra}]},brand());
+  assert.throws(bad({layout:'Cover',canvas:{type:'spacer'}}),/has no canvas or edges/);assert.throws(bad({layout:'Cover',detail:'x'}),/detail needs a subtitle/);
+  assert.throws(bad({canvas:{type:'box',id:'only_box',text:'x'},subtitle:'x'}),/belong to a slide with a template layout/);
 });

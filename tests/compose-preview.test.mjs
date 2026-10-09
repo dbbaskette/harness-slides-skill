@@ -84,3 +84,13 @@ test('Drive update and PDF export call the documented endpoints and check what c
   await exportPdf({fileId:'file_1',output:join(dir,'a.pdf')},deps('%PDF-1.7 content'));assert.match(seen.at(-1)[1],/files\/file_1\/export\?mimeType=application%2Fpdf/);
   await assert.rejects(()=>exportPdf({fileId:'file_1',output:join(dir,'b.pdf')},deps('<html>sign in</html>')),/did not return a PDF/);
 });
+
+test('text on a filled card is judged against the card, and an icon the color of its card is flagged',async t=>{
+  const {contractRevision}=await import('../scripts/lib/brand-contract.mjs'),c=await brand(await temporary(t));c.design.slides.icon={size:54,library:{path:'/x',index:'/y'}};c.revision=contractRevision(c);
+  const comp={version:1,title:'Deck',slides:[slide('card_slide','Cards',{type:'grid',columns:2,children:[
+    {type:'box',id:'dark_card',fill:'headingPrimary',children:[{type:'icon',id:'dark_icon',icon:'fi-test'},{type:'text',id:'dark_text',text:'White on blue',color:'canvasPrimary'}]},
+    {type:'box',id:'pale_card',fill:'canvasSecondary',children:[{type:'text',id:'pale_text',text:'White on grey',color:'canvasPrimary'}]}]})]};
+  const {scene,structure}=await compileComposition(comp,c);
+  const findings=await screenComposition({scene,structure,native:[{id:'card_slide',unattached:[],icons:[{id:'dark_icon',colors:['2867B2','FFFFFF']}]}]}),codes=id=>findings.filter(f=>f.object===id).map(f=>f.code);
+  assert.deepEqual(codes('dark_text'),[]);assert.deepEqual(codes('pale_text'),['contrast']);assert.deepEqual(codes('dark_icon'),['icon-blends-into-fill']);
+});

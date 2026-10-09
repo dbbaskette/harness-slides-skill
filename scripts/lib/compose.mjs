@@ -21,11 +21,12 @@ const fail=(where,message)=>{throw new Error(`${where}: ${message}`);};
 const str=v=>typeof v==='string'&&v.trim()&&v.length<=20000;
 
 export const composeContract=`Composition v1 (AI-owned; describe structure, never coordinates).
-{version:1,title,slides:[{id,title,sources:[evidence IDs],canvas:NODE,connect?:[EDGE],notes?,intent?,layoutId?}]}
+{version:1,title,slides:[{id,title,sources:[evidence IDs],canvas:NODE,connect?:[EDGE],notes?,intent?,layoutId?} | {id,title,sources,layout:TEMPLATE LAYOUT NAME,subtitle?,detail?,notes?}]}
+A slide with layout uses that template layout's own placeholders (cover, section break, closing) and has no canvas; run compose layouts for the names.
 NODE containers: {type:stack,direction:row|column,gap?,align?,children:[NODE]} | {type:grid,columns:1-6,gap?,children:[NODE]} | {type:free,children:[NODE with at:{x,y,width,height} as 0-1 fractions]}.
 NODE leaves: {type:icon,id,icon:STABLE ICON ID from the brand's icon search} | {type:box,id,text?|children?,shape?:rect|ellipse|roundRect|diamond|hexagon|chevron|can,fill?,color?,textRole?,align?} | {type:text,id,text,textRole?,color?,align?} | {type:image,id,src,alt,fit?} | {type:spacer}.
 Any node may set weight (relative share, default 1). Containers may set group:true and an id.
-gap: none|tight|normal|wide. align: start|center|end|stretch. fill/color: a brand color role name. textRole: a brand typography role name.
+gap: none|tight|normal|wide. align: start|center|end|stretch. On a box with children, align (start|center|end) places its content vertically. fill/color: a brand color role name. textRole: a brand typography role name.
 EDGE: {id,from:NODE id,to:NODE id,label?,arrow?:boolean,color?}.
 A labelled edge needs room: its label must fit the gap between the two nodes, so put a spacer between them.
 Generated IDs are reserved: <slide>_title, <box with children>_group, <labelled edge>_label.
@@ -43,7 +44,7 @@ export function validateComposition(comp,contract) {
   const summary=[];
   for(const s of comp.slides) {
     if(!s||typeof s!=='object'||Array.isArray(s))throw new Error('each slide must be an object');
-    if(Object.keys(s).some(k=>!['id','title','sources','canvas','connect','notes','intent','layoutId'].includes(k)))fail(s.id,'unsupported slide field');
+    if(Object.keys(s).some(k=>!['id','title','sources','canvas','connect','notes','intent','layoutId','layout','subtitle','detail'].includes(k)))fail(s.id,'unsupported slide field');
     claim(s.id,'slide');claim(`${s.id}_title`,s.id);
     if(!str(s.title))fail(s.id,'provide a slide title');
     if(!Array.isArray(s.sources)||!s.sources.length||s.sources.some(x=>!str(x)))fail(s.id,'provide source references');
@@ -71,7 +72,7 @@ export function validateComposition(comp,contract) {
         if(n.text!==undefined&&n.children!==undefined)fail(where,'a box holds text or children, not both');
         if(n.text!==undefined&&!str(n.text))fail(where,'provide box text');
         if(!Object.hasOwn(shapeKinds,n.shape??'rect'))fail(where,`shape must be one of ${Object.keys(shapeKinds).join('|')}`);
-        if(n.children!==undefined){if(n.align!==undefined)fail(where,'align applies to box text, not to a box with children');claim(`${n.id}_group`,where);}
+        if(n.children!==undefined){if(n.align==='stretch')fail(where,'a box with children aligns its content start|center|end');claim(`${n.id}_group`,where);}
         fills.add(n.fill??'canvasSecondary');
       }
       if(n.type==='icon'&&(!str(n.icon)||n.icon.length>80||!/^[\w.-]+$/.test(n.icon)))fail(where,'icon needs a stable icon ID from the brand icon search');
@@ -82,6 +83,15 @@ export function validateComposition(comp,contract) {
         for(const k of kids)walk(k,depth+1,n.type==='free');
       }
     };
+    if(s.layout!==undefined) {
+      // A template layout slide (cover, section break, closing) fills that layout's placeholders and draws nothing else.
+      if(!str(s.layout)||s.layout.length>80)fail(s.id,'layout must be a template layout name');
+      if(s.canvas!==undefined||s.connect!==undefined)fail(s.id,'a slide with a template layout has no canvas or edges; put content on a standard slide');
+      for(const key of ['subtitle','detail'])if(s[key]!==undefined){if(!str(s[key]))fail(s.id,`provide ${key} text or omit it`);claim(`${s.id}_${key}`,s.id);}
+      if(s.detail!==undefined&&s.subtitle===undefined)fail(s.id,'detail needs a subtitle before it');
+      summary.push({id:s.id,nodes:0,fills:[],edges:0,layout:s.layout});continue;
+    }
+    if(s.subtitle!==undefined||s.detail!==undefined)fail(s.id,'subtitle and detail belong to a slide with a template layout');
     walk(s.canvas,1,false);
     if(fills.size>maxFills)fail(s.id,`uses ${fills.size} fill colors; the brand allows ${maxFills} per slide`);
     if(s.connect!==undefined&&(!Array.isArray(s.connect)||s.connect.length>40))fail(s.id,'connect must be a list of at most 40 edges');
@@ -125,7 +135,7 @@ export async function compileComposition(comp,contract,{fonts}={}) {
   const gapSize={none:0,tight:inset/2,normal:inset,wide:sp.column??28};
   const bodyRole=contract.medium.delivery==='live'?'body':'bodyReference',measure=await measurer(contract,fonts);
   const iconSize=sl.icon?.size??48;
-  const scene={version:2,title:comp.title,mode:'new',canvas:sl.canvas,theme:brandTheme(contract),slides:[]},structure={groups:[],connectors:[],icons:[]};
+  const scene={version:2,title:comp.title,mode:'new',canvas:sl.canvas,theme:brandTheme(contract),slides:[]},structure={groups:[],connectors:[],icons:[],layouts:[]},problems=[];
 
   const style=n=>roles[n.textRole??bodyRole];
   // Text and icons keep their own size; everything else shares the space that is left.
@@ -153,7 +163,7 @@ export async function compileComposition(comp,contract,{fonts}={}) {
     return n.children.reduce((a,k)=>a+need(k,width),0)+gapOf(n)*(n.children.length-1);
   };
 
-  for(const s of comp.slides) {
+  for(const s of comp.slides) try {
     const elements=[],rects=new Map();
     const put=(element,members)=>{elements.push(element);members?.push(element.id);return element;};
     const short=(n,rect,required)=>!Number.isFinite(required)?fail(`${s.id}/${n.id??n.name??n.type}`,'has no usable room; use fewer siblings, less nesting or larger weights'):fail(`${s.id}/${n.id??n.name??n.type}`,`needs ${round(required)}pt of height but has ${round(rect.height)}pt at ${round(rect.width)}pt wide; shorten the text, split the slide or restructure`);
@@ -182,7 +192,7 @@ export async function compileComposition(comp,contract,{fonts}={}) {
         const base={id:n.id,type:'shape',...box(rect),shape:n.shape??'rect',fill:colors[n.fill??'canvasSecondary']};
         if(n.text!==undefined){put({...base,text:n.text,...textProps(n)},own);return;}
         const inner=[];put(base,inner);
-        if(n.children)place({type:'stack',direction:'column',gap:n.gap,children:n.children,name:n.id},{x:rect.x+inset,y:rect.y+inset,width:rect.width-inset*2,height:rect.height-inset*2},inner);
+        if(n.children)place({type:'stack',direction:'column',gap:n.gap,align:n.align,children:n.children,name:n.id},{x:rect.x+inset,y:rect.y+inset,width:rect.width-inset*2,height:rect.height-inset*2},inner);
         if(inner.length>1)structure.groups.push({slide:s.id,id:`${n.id}_group`,members:inner});
         own?.push(...inner);return;
       }
@@ -216,9 +226,14 @@ export async function compileComposition(comp,contract,{fonts}={}) {
     };
 
     const title=roles.title,titleNeed=measure.height(s.title,title,sl.titleBox.width);
-    if(titleNeed>sl.titleBox.height+.5)fail(`${s.id}/title`,`needs ${round(titleNeed)}pt of height but has ${round(sl.titleBox.height)}pt; shorten the title`);
+    if(!s.layout&&titleNeed>sl.titleBox.height+.5)fail(`${s.id}/title`,`needs ${round(titleNeed)}pt of height but has ${round(sl.titleBox.height)}pt; shorten the title`);
     put({id:`${s.id}_title`,type:'text',...sl.titleBox,text:s.title,role:'title',fontSize:title.size,bold:title.bold,color:colors[title.colorRole]});
-    place(s.canvas,sl.contentBox,null);
+    if(s.layout) {
+      // The native emitter writes these into the layout's subtitle placeholders; the geometry here serves other emitters.
+      const placeholders=[],body=roles[bodyRole];let y=sl.contentBox.y;
+      for(const key of ['subtitle','detail'])if(s[key]!==undefined){const height=measure.height(s[key],body,sl.contentBox.width);put({id:`${s.id}_${key}`,type:'text',x:sl.contentBox.x,y:round(y),width:sl.contentBox.width,height:round(height),text:s[key],fontSize:body.size,bold:body.bold,color:colors[body.colorRole]});placeholders.push(`${s.id}_${key}`);y+=height+inset;}
+      structure.layouts.push({slide:s.id,layout:s.layout,placeholders});
+    } else place(s.canvas,sl.contentBox,null);
 
     for(const c of s.connect??[]) {
       const a=rects.get(c.from),b=rects.get(c.to),ac={x:a.x+a.width/2,y:a.y+a.height/2},bc={x:b.x+b.width/2,y:b.y+b.height/2};
@@ -228,19 +243,31 @@ export async function compileComposition(comp,contract,{fonts}={}) {
       put({id:c.id,type:'line',x:round(Math.min(p1.x,p2.x)),y:round(Math.min(p1.y,p2.y)),width:round(Math.max(1,Math.abs(p2.x-p1.x))),height:round(Math.max(1,Math.abs(p2.y-p1.y))),color:colors[c.color??'headingPrimary'],weight:2,arrow:c.arrow??true,flipH:p2.x<p1.x,flipV:p2.y<p1.y});
       const record={slide:s.id,id:c.id,from:c.from,to:c.to};
       if(c.label) {
-        // The label lives in the gap the line crosses: above a horizontal line, beside a vertical one.
-        const st=roles.caption,width=measure.width(c.label,st),height=measure.height(c.label,st,width+1),mid={x:(p1.x+p2.x)/2,y:(p1.y+p2.y)/2};
-        const gap=horizontal?Math.abs(p2.x-p1.x):Math.abs(p2.y-p1.y),required=horizontal?width:height,cb=sl.contentBox;
-        if(required>gap+.5)fail(`${s.id}/${c.id}`,`label needs ${round(required)}pt but the gap between ${c.from} and ${c.to} is ${round(gap)}pt; put a spacer between them, shorten the label or remove it`);
-        const x=horizontal?mid.x-width/2:Math.min(mid.x+4,cb.x+cb.width-width),y=horizontal?Math.max(cb.y,mid.y-height-2):mid.y-height/2;
-        put({id:`${c.id}_label`,type:'text',x:round(x),y:round(y),width:round(width),height:round(height),text:c.label,fontSize:st.size,bold:st.bold,color:colors[st.colorRole],align:horizontal?'center':'left'});
+        const st=roles.caption,width=measure.width(c.label,st)+1,height=measure.height(c.label,st,width),mid={x:(p1.x+p2.x)/2,y:(p1.y+p2.y)/2},cb=sl.contentBox;
+        const dx=p2.x-p1.x,dy=p2.y-p1.y,diagonal=Math.abs(dx)>1&&Math.abs(dy)>1;let x,y,align='center';
+        if(!diagonal) {
+          // Straight edge: the label lives in the gap the line crosses, above a horizontal line or beside a vertical one.
+          const gap=horizontal?Math.abs(dx):Math.abs(dy),required=horizontal?width:height;
+          if(required>gap+.5)fail(`${s.id}/${c.id}`,`label needs ${round(required)}pt but the gap between ${c.from} and ${c.to} is ${round(gap)}pt; put a spacer between them, shorten the label or remove it`);
+          x=horizontal?mid.x-width/2:Math.min(mid.x+4,cb.x+cb.width-width);y=horizontal?Math.max(cb.y,mid.y-height-2):mid.y-height/2;if(!horizontal)align='left';
+        } else {
+          // Slanted edge: push the label off the line along its normal, far enough that no corner touches it, on a side clear of every node.
+          const length=Math.hypot(dx,dy),nx=-dy/length,ny=dx/length,reach=(width*Math.abs(nx)+height*Math.abs(ny))/2+4;
+          const clear=box=>box.x>=cb.x-.5&&box.y>=cb.y-.5&&box.x+box.width<=cb.x+cb.width+.5&&box.y+box.height<=cb.y+cb.height+.5&&![...rects.values()].some(r=>box.x<r.x+r.width&&r.x<box.x+box.width&&box.y<r.y+r.height&&r.y<box.y+box.height);
+          const spot=[1,-1].map(side=>({x:mid.x+side*nx*reach-width/2,y:mid.y+side*ny*reach-height/2,width,height})).sort((a,b)=>a.y-b.y).find(clear);
+          if(!spot)fail(`${s.id}/${c.id}`,'no clear space beside this slanted arrow for its label; shorten the label, move the nodes apart or put the words in a node');
+          ({x,y}=spot);
+        }
+        put({id:`${c.id}_label`,type:'text',x:round(x),y:round(y),width:round(width),height:round(height),text:c.label,fontSize:st.size,bold:st.bold,color:colors[st.colorRole],align});
         record.label=`${c.id}_label`;
       }
       structure.connectors.push(record);
     }
 
     scene.slides.push({id:s.id,title:s.title,sources:s.sources,elements,...(s.notes!==undefined?{notes:s.notes}:{}),...(s.intent?{intent:s.intent}:{}),...(s.layoutId?{layoutId:s.layoutId}:{})});
-  }
+  } catch(error){problems.push(error.message);}
+  // Report every slide that does not fit in one pass, so the author fixes them together.
+  if(problems.length)throw new Error(problems.length===1?problems[0]:`${problems.length} slides need changes:\n${problems.join('\n')}`);
   validateScene(scene);
   return {scene,structure,report:{schema:1,brandRevision:contract.revision,measurement:measure.exact?'exact brand font':'estimated; brand font unavailable',slides:summary.slides}};
 }

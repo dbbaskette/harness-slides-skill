@@ -2,6 +2,7 @@
 """Write composed slides directly into a copy of a native template.
 
 Usage: pptx-native.py emit TEMPLATE.pptx PLAN.json OUTPUT.pptx
+       pptx-native.py layouts TEMPLATE.pptx DEFAULT_LAYOUT_PART
 
 Each slide becomes an instance of one template layout. The title goes into the
 layout's title placeholder, shape text lives inside its shape, edges become
@@ -17,7 +18,7 @@ import re
 import sys
 import zipfile
 import os
-from xml.sax.saxutils import escape, quoteattr as _quoteattr
+from xml.sax.saxutils import escape, unescape, quoteattr as _quoteattr
 
 EMU = 12700
 NS = ('xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
@@ -127,8 +128,10 @@ class IconLibrary:
 
 
 class Slide:
-    def __init__(self, spec, plan, title_type, library=None):
+    def __init__(self, spec, plan, title_type, library=None, subtitles=()):
         self.spec, self.plan, self.title_type, self.library = spec, plan, title_type, library
+        # Element IDs that fill the layout's subtitle placeholders, paired with each placeholder's idx.
+        self.placeholders = dict(zip(spec.get('placeholders', []), subtitles))
         self.numbers, self.next = {}, 2
         self.rels, self.media = [], {}
         self.report = {'id': spec['id'], 'titlePlaceholder': False, 'attached': [], 'unattached': [], 'groups': [], 'icons': []}
@@ -153,6 +156,12 @@ class Slide:
         lines = ''.join(f'<a:p><a:r><a:rPr lang="en-US" dirty="0"/><a:t>{text(line)}</a:t></a:r></a:p>' for line in e['text'].split('\n'))
         return (f'<p:sp><p:nvSpPr><p:cNvPr id="{self.numbers[e["id"]]}" name={quoteattr(e["id"])}/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr>'
                 f'<p:nvPr><p:ph type="{self.title_type}"/></p:nvPr></p:nvSpPr><p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/>{lines}</p:txBody></p:sp>')
+
+    def placeholder(self, e):
+        """Text written into one of the layout's own subtitle placeholders, inheriting its position and style."""
+        lines = ''.join(f'<a:p><a:r><a:rPr lang="en-US" dirty="0"/><a:t>{text(line)}</a:t></a:r></a:p>' for line in e['text'].split('\n'))
+        return (f'<p:sp><p:nvSpPr><p:cNvPr id="{self.numbers[e["id"]]}" name={quoteattr(e["id"])}/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr>'
+                f'<p:nvPr><p:ph type="subTitle" idx="{self.placeholders[e["id"]]}"/></p:nvPr></p:nvSpPr><p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/>{lines}</p:txBody></p:sp>')
 
     def textbox(self, e):
         names = non_visual('Sp', self.numbers[e['id']], e['id'], ' txBox="1"')
@@ -264,11 +273,14 @@ class Slide:
                 if node.get('id') not in remap:
                     raise ValueError(f'{e["id"]}: icon connector points outside the icon')
                 node.set('id', remap[node.get('id')])
-        self.report['icons'].append({'id': e['id'], 'icon': e['icon'], 'label': entry['label']})
+        fills = sorted({node.get('val').upper() for node in group.iter('{' + tools.NS['a'] + '}srgbClr') if node.get('val')})
+        self.report['icons'].append({'id': e['id'], 'icon': e['icon'], 'label': entry['label'], 'colors': fills})
         return tools.E.tostring(group, encoding='unicode')
 
     def element(self, e):
         if e['type'] == 'text':
+            if e['id'] in self.placeholders:
+                return self.placeholder(e)
             return self.title(e) if e.get('role') == 'title' else self.textbox(e)
         if e['type'] == 'shape':
             return self.shape(e)
@@ -378,9 +390,13 @@ def reachable(parts):
     return seen
 
 
-def emit(template, plan_path, output):
-    with open(plan_path, encoding='utf-8') as stream:
-        plan = json.load(stream)
+def emit(template, plan_path, output, layout_part=None):
+    """Write the deck, or with no plan list the template's layouts."""
+    if plan_path is None:
+        plan = {'layoutPart': layout_part}
+    else:
+        with open(plan_path, encoding='utf-8') as stream:
+            plan = json.load(stream)
     with zipfile.ZipFile(template) as source:
         parts = {i.filename: source.read(i) for i in source.infolist() if not i.is_dir()}
     layout = plan['layoutPart']
@@ -395,14 +411,32 @@ def emit(template, plan_path, output):
     for name in [n for n in parts if re.match(r'ppt/slides/(_rels/)?slide\d+\.xml', n)]:
         del parts[name]
 
-    found = re.search(r'<p:ph\b[^>]*type="(title|ctrTitle)"', parts[layout].decode('utf-8'))
-    title_type = found.group(1) if found else None
+    def describe(part):
+        """A layout's name, its title placeholder type and the idx of each subtitle placeholder, in order."""
+        xml = parts[part].decode('utf-8')
+        name = re.search(r'<p:cSld\b[^>]*name="([^"]*)"', xml)
+        title = re.search(r'<p:ph\b[^>]*type="(title|ctrTitle)"', xml)
+        subtitles = sorted(int(re.search(r'idx="(\d+)"', tag).group(1)) for tag in re.findall(r'<p:ph\b[^>]*>', xml) if 'type="subTitle"' in tag and 'idx=' in tag)
+        pictures = len([tag for tag in re.findall(r'<p:ph\b[^>]*>', xml) if 'type="pic"' in tag])
+        return {'part': part, 'name': unescape(name.group(1)) if name else part, 'title': title.group(1) if title else None, 'subtitles': subtitles, 'pictures': pictures}
+
+    layouts = [describe(n) for n in sorted(parts, key=lambda n: (len(n), n)) if re.fullmatch(r'ppt/slideLayouts/slideLayout\d+\.xml', n)]
+    if plan_path is None:
+        return {'layouts': [{k: v for k, v in item.items() if k != 'part'} for item in layouts], 'default': next(i['name'] for i in layouts if i['part'] == layout)}
+    by_name = {item['name']: item for item in layouts}
+    title_type = next(i['title'] for i in layouts if i['part'] == layout)
     notes_master = next((n for n in sorted(parts) if re.fullmatch(r'ppt/notesMasters/notesMaster\d+\.xml', n)), None)
     ids, new_rels, overrides, report = [], [], [], []
     library = IconLibrary(plan['iconLibrary']['path'], plan['iconLibrary']['index']) if plan.get('iconLibrary') else None
     for index, spec in enumerate(plan['slides'], 1):
-        slide = Slide(spec, plan, title_type, library)
-        slide.relate(f'{REL}/slideLayout', posixpath.relpath(layout, 'ppt/slides'))
+        chosen = by_name.get(spec['layout']) if spec.get('layout') else next(i for i in layouts if i['part'] == layout)
+        if chosen is None:
+            raise ValueError(f'{spec["id"]}: the template has no layout named {spec["layout"]}. Available: {", ".join(sorted(by_name))}')
+        if len(spec.get('placeholders', [])) > len(chosen['subtitles']):
+            raise ValueError(f'{spec["id"]}: layout {chosen["name"]} has {len(chosen["subtitles"])} subtitle placeholders; remove the extra text')
+        slide = Slide(spec, plan, chosen['title'], library, chosen['subtitles'])
+        slide.relate(f'{REL}/slideLayout', posixpath.relpath(chosen['part'], 'ppt/slides'))
+        slide.report['layout'] = chosen['name']
         xml = slide.xml()
         # A name no template uses, so nothing left in the template can point at a new slide by accident.
         part = f'ppt/slides/harnessSlide{index}.xml'
@@ -479,9 +513,10 @@ def emit(template, plan_path, output):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 5 or sys.argv[1] != 'emit':
+    listing = len(sys.argv) == 4 and sys.argv[1] == 'layouts'
+    if not listing and (len(sys.argv) != 5 or sys.argv[1] != 'emit'):
         raise SystemExit(__doc__)
     try:
-        print(json.dumps(emit(*sys.argv[2:])))
+        print(json.dumps(emit(sys.argv[2], None, None, sys.argv[3]) if listing else emit(*sys.argv[2:])))
     except (ValueError, KeyError, OSError, zipfile.BadZipFile) as error:
         raise SystemExit(f'{type(error).__name__}: {error}')
