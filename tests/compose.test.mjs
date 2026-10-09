@@ -72,3 +72,12 @@ test('content that cannot fit fails with the shortfall instead of shrinking',asy
   const long='This sentence repeats to overflow its box. '.repeat(40);
   await assert.rejects(()=>compileComposition(deck({type:'stack',direction:'row',children:[{type:'box',id:'long_box',text:long},{type:'box',id:'tiny_box',text:'ok'}]}),brand()),/slide_one\/long_box: needs [\d.]+pt of height but has 360pt/);
 });
+
+test('edges become arrow lines between facing sides, with an optional label',async()=>{
+  const comp=deck({type:'stack',direction:'row',gap:'wide',children:[{type:'box',id:'node_from',text:'A'},{type:'box',id:'node_to',text:'B'}]});
+  comp.slides[0].connect=[{id:'edge_ab',from:'node_from',to:'node_to',label:'sends'}];
+  const {scene,structure}=await compileComposition(comp,brand()),line=byId(scene,'edge_ab'),a=byId(scene,'node_from'),b=byId(scene,'node_to');
+  assert.equal(line.type,'line');assert.equal(line.x,round(a.x+a.width));assert.equal(round(line.x+line.width),b.x);assert.equal(line.arrow,true);assert.equal(line.flipH,false);
+  assert.equal(byId(scene,'edge_ab_label').text,'sends');
+  assert.deepEqual(structure.connectors,[{slide:'slide_one',id:'edge_ab',from:'node_from',to:'node_to',label:'edge_ab_label'}]);
+});

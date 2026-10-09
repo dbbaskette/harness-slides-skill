@@ -181,6 +181,22 @@ export async function compileComposition(comp,contract,{fonts}={}) {
     put({id:`${s.id}_title`,type:'text',...sl.titleBox,text:s.title,role:'title',fontSize:title.size,bold:title.bold,color:colors[title.colorRole]});
     place(s.canvas,sl.contentBox,null);
 
+    for(const c of s.connect??[]) {
+      const a=rects.get(c.from),b=rects.get(c.to),ac={x:a.x+a.width/2,y:a.y+a.height/2},bc={x:b.x+b.width/2,y:b.y+b.height/2};
+      const horizontal=Math.abs(bc.x-ac.x)>=Math.abs(bc.y-ac.y);
+      const p1=horizontal?{x:bc.x>ac.x?a.x+a.width:a.x,y:ac.y}:{x:ac.x,y:bc.y>ac.y?a.y+a.height:a.y};
+      const p2=horizontal?{x:bc.x>ac.x?b.x:b.x+b.width,y:bc.y}:{x:bc.x,y:bc.y>ac.y?b.y:b.y+b.height};
+      put({id:c.id,type:'line',x:round(Math.min(p1.x,p2.x)),y:round(Math.min(p1.y,p2.y)),width:round(Math.max(1,Math.abs(p2.x-p1.x))),height:round(Math.max(1,Math.abs(p2.y-p1.y))),color:colors[c.color??'headingPrimary'],weight:2,arrow:c.arrow??true,flipH:p2.x<p1.x,flipV:p2.y<p1.y});
+      const record={slide:s.id,id:c.id,from:c.from,to:c.to};
+      if(c.label) {
+        const st=roles.caption,width=Math.min(160,sl.canvas.width/4),height=measure.height(c.label,st,width),mid={x:(p1.x+p2.x)/2,y:(p1.y+p2.y)/2};
+        const x=Math.min(Math.max(0,mid.x-width/2),sl.canvas.width-width),y=Math.min(Math.max(0,mid.y-height-2),sl.canvas.height-height);
+        put({id:`${c.id}_label`,type:'text',x:round(x),y:round(y),width:round(width),height:round(height),text:c.label,fontSize:st.size,bold:st.bold,color:colors[st.colorRole],align:'center'});
+        record.label=`${c.id}_label`;
+      }
+      structure.connectors.push(record);
+    }
+
     scene.slides.push({id:s.id,title:s.title,sources:s.sources,elements,...(s.notes!==undefined?{notes:s.notes}:{}),...(s.intent?{intent:s.intent}:{}),...(s.layoutId?{layoutId:s.layoutId}:{})});
   }
   validateScene(scene);
