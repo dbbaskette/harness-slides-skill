@@ -63,6 +63,11 @@ Use `workspace repair --project DIR --slide ID` for a compact repair packet,
 including only the selected slide, findings and expected scene digest. After a
 repair, build/render affected slides and complete final coverage of the deck.
 
+For new native-template decks/redesigns, use [structured native critique](native-critique.md).
+Complete pixel inspection and creative assessment separately, then show the rendered
+deck and wait at [the user-review checkpoint](design-walkthrough.md#show-rendered-output-and-pause-again).
+A bulk inspection note alone does not certify creative quality or user acceptance.
+
 Compiled decks also require [font screening and structured critique](quality.md).
 Use technical findings to target repairs, then judge the title against actual
 evidence and the composition against the slide’s intended relationship.

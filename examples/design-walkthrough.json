@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "title": "Illustrative recovery and serving training",
+  "scope": "new",
+  "slides": [
+    {
+      "id": "recovery_slide",
+      "title": "Persistence protects recovery",
+      "sources": ["brief:illustrative-training"],
+      "visibleText": "Saved state → recovery. Replicas do not replace backups.",
+      "composition": "Two labeled native constructions: a disk/restore sequence and a primary/replica serving path. Put their distinct objectives beneath them.",
+      "intent": {
+        "takeaway": "Saved data and serving availability solve different failure problems.",
+        "audienceQuestion": "Which mechanism helps after each kind of failure?",
+        "relationship": "comparison",
+        "rationale": "Matched actors and labeled connections make the two mechanisms visible without conflating them.",
+        "evidence": ["brief:illustrative-training"],
+        "alternative": {"treatment": "Two columns of prose definitions", "reason": "Readers would have to infer the mechanisms and actors from sentences."},
+        "visual": {"family": "diagram", "purpose": "Distinguish restore from continued serving; keep the limit visible."}
+      },
+      "asset": {
+        "description": "Editable disk/recovery and primary/replica nodes; optional approved disk/database symbols after catalog inspection.",
+        "disposition": "selected",
+        "reason": "Native relationships carry the factual explanation; an illustrative photograph would obscure the mechanisms."
+      }
+    }
+  ]
+}

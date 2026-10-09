@@ -13,7 +13,11 @@ For new creative work, retain a concise content/asset decision per slide and
 review what the visual explains; generated art is one option, not a quota.
 Choose each slide's composition and visual assets from its own content. Carry
 the theme and narrative across the deck; do not carry a list or layout choice
-across slides by default. Follow [design](references/design.md) for creative work.
+across slides by default. Follow [design](references/design.md) for creative work. Before building,
+walk through concrete slide proposals and wait for actual user approval via the
+available question tool or chat; follow [design walkthrough](references/design-walkthrough.md).
+Honor explicitly requested autonomy. Show native output and pause again for
+revisions unless that checkpoint was explicitly waived.
 
 ## Agent entrypoint
 
@@ -38,7 +42,7 @@ this engine. Apply its selected contract and assets; do not mix identities.
 
 | Task | Read |
 | --- | --- |
-| New deck, redesign or full rework | [Design](references/design.md), then [choose a method](references/authoring.md); load only that method/format |
+| New deck, redesign or full rework | [Design](references/design.md) and [walkthrough](references/design-walkthrough.md), then [choose a method](references/authoring.md); load only that method/format |
 | Polish, content-preserving patch or selected-slide edit | [PPTX editing](references/editing.md) or [Google operations](references/google-slides.md), matching the destination |
 | Native Google access/operations | [Google Slides](references/google-slides.md) |
 | Content-led compiler | [Components](references/content-components.md); query the selected component only |
@@ -66,7 +70,8 @@ implementations need not enter context to execute helpers.
   agreed editing scope. Use revision/hash preconditions; stop on stale state.
 - Render and inspect each built or changed slide while its design context is
   fresh. Fix defects, then inspect every slide in the final deck and its rhythm.
-  Record actual findings against the exact rendered revision.
+  Record actual findings against the exact rendered revision. New native-template
+  work requires [structured critique](references/native-critique.md), not just a bulk note.
 - HTML is a composition preview, not proof of native layout fidelity. Structural
   checks do not prove visual quality. Unrendered output is an unreviewed draft.
 - Report what was verified and any remaining limitations. Offline Google status

@@ -1,0 +1,52 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile,writeFile} from 'node:fs/promises';
+import {join} from 'node:path';
+import {digest} from '../scripts/lib/common.mjs';
+import {temporary} from './fixtures.mjs';
+import {proposal,approveFixture} from './design-fixtures.mjs';
+import {neutralBrandContract} from '../scripts/lib/brand-contract.mjs';
+import {compileDeckPlan} from '../scripts/lib/deck-plan.mjs';
+import {initWorkspace,buildWorkspace,workspaceStatus} from '../scripts/lib/workspace.mjs';
+import {prepareReview,markReview,assessReview} from '../scripts/lib/slide-review.mjs';
+import {presentDesign,respondDesign} from '../scripts/lib/design-session.mjs';
+test('creative workspace binds user acceptance to its own built render; one critique owns the outcome',async t=>{
+ const project=await temporary(t),p=proposal(1);await approveFixture(project,p);
+ const deck={schema:2,title:p.title,slides:p.slides.map(s=>({id:s.id,title:s.title,sources:s.sources,intent:s.intent,component:{kind:'architecture',nodes:[{id:'saved_node',label:'Saved state',tier:0},{id:'restore_node',label:'Recovery',tier:1}],edges:[{from:'saved_node',to:'restore_node',label:'restore'}]}}))};
+ const {scene,report}=compileDeckPlan(deck,await neutralBrandContract()),root=join(project,'work');report.sceneDigest=digest(scene);await initWorkspace({root,scene,format:'pptx',designReport:report,designProject:project});const build=await buildWorkspace({root}),output=join(build.build,'review');
+ // Runtime integration uses synthetic pixels to test state, not layout quality.
+ const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a1ZkAAAAASUVORK5CYII=','base64');
+ const prepared=await prepareReview({file:join(build.build,'deck.pptx'),output,designProject:project,qualityReport:join(build.build,'quality-report.json'),signature:async()=> 'fixture',render:async({output})=>{await writeFile(join(output,'one.png'),png);return {count:1,image:()=>join(output,'one.png')};}});
+ await markReview({output,revision:prepared.revision,numbers:[1],note:'SCRIPTED fixture'});const record=JSON.parse(await readFile(join(output,'review.json'))),q=record.creativeQuality;assert.deepEqual(q.prompts[0].assetCandidate,p.slides[0].asset);
+ const assessment={schema:1,sceneDigest:q.sceneDigest,qualityRevision:q.revision,artifactDigest:q.artifactDigest,slides:q.prompts.map(s=>({id:s.slide,checks:s.criteria.map(c=>({criterion:c.id,status:'pass',reason:`SCRIPTED ${s.slide} fixture for ${c.id}`,objects:s.objects,sources:s.sources}))}))};
+ await assessReview({output,revision:prepared.revision,assessment});assert.equal((await workspaceStatus(root)).ready,false);
+ const shown=await presentDesign({project,review:output,revision:prepared.revision});await respondDesign({project,reply:{questionId:shown.question.id,planRevision:shown.revision,decision:'approve',feedback:'SCRIPTED fixture final acceptance'}});
+ const status=await workspaceStatus(root);assert.equal(status.ready,true);assert.equal(status.critiqueComplete,true);assert.equal(status.userAccepted,true);
+ await writeFile(join(build.build,'deck.pptx'),'changed artifact');assert.equal((await workspaceStatus(root)).ready,false);
+});
+test('a revised plan blocks the old build; approved revisions save and build as a new workspace version',async t=>{
+ const {proposeDesign,designStatus}=await import('../scripts/lib/design-session.mjs'),{saveScene}=await import('../scripts/lib/workspace.mjs');
+ const project=await temporary(t),p=proposal(1);await approveFixture(project,p);
+ const deck={schema:2,title:p.title,slides:p.slides.map(s=>({id:s.id,title:s.title,sources:s.sources,intent:s.intent,component:{kind:'architecture',nodes:[{id:'state_node',label:'State',tier:0},{id:'restore_node',label:'Restore',tier:1}],edges:[{from:'state_node',to:'restore_node'}]}}))};
+ const {scene:generated}=compileDeckPlan(deck,await neutralBrandContract()),scene=structuredClone(generated),root=join(project,'work');await initWorkspace({root,scene,format:'pptx',designProject:project});await buildWorkspace({root});
+ const old=await designStatus(project);p.slides[0].title='Recovery requires saved state';p.slides[0].intent.takeaway=p.slides[0].title;p.slides[0].visibleText='Saved state makes a recovery possible.';
+ const changed=await proposeDesign({project,plan:p,expected:old.revision});await assert.rejects(()=>buildWorkspace({root}),/design revision changed/);
+ const next=structuredClone(scene);next.slides[0].title=p.slides[0].title;next.slides[0].intent=p.slides[0].intent;next.slides[0].elements.find(e=>e.text===scene.slides[0].title).text=p.slides[0].title;
+ await assert.rejects(()=>saveScene({root,scene:next,expectedDigest:digest(scene)}),/awaiting design approval/i);
+ await respondDesign({project,reply:{questionId:changed.question.id,planRevision:changed.revision,decision:'approve',feedback:'SCRIPTED revised fixture design approval'}});
+ const saved=await saveScene({root,scene:next,expectedDigest:digest(scene)});assert.equal(saved.id,'v000002');assert.equal(JSON.parse(await readFile(join(root,'workspace.json'))).designRevision,changed.revision);
+ const build=await buildWorkspace({root});assert.equal(build.version,'v000002');assert.equal((await workspaceStatus(root)).ready,false);
+});
+test('new rendered bytes invalidate creative judgment and user acceptance even for unchanged PPTX bytes',async t=>{
+ const {designStatus}=await import('../scripts/lib/design-session.mjs');
+ const project=await temporary(t),p=proposal(1);await approveFixture(project,p);
+ const deck={schema:2,title:p.title,slides:p.slides.map(s=>({id:s.id,title:s.title,sources:s.sources,intent:s.intent,component:{kind:'architecture',nodes:[{id:'saved_state',label:'Saved',tier:0},{id:'restored_data',label:'Restore',tier:1}],edges:[{from:'saved_state',to:'restored_data'}]}}))};
+ const {scene}=compileDeckPlan(deck,await neutralBrandContract()),root=join(project,'work');await initWorkspace({root,scene,format:'pptx',designProject:project});const build=await buildWorkspace({root}),output=join(build.build,'review');
+ const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a1ZkAAAAASUVORK5CYII=','base64');let imageBytes=png;
+ const options={file:join(build.build,'deck.pptx'),output,designProject:project,qualityReport:join(build.build,'quality-report.json'),signature:async()=> 'fixture',render:async({output})=>{await writeFile(join(output,'render.png'),imageBytes);return {count:1,image:()=>join(output,'render.png')};}};
+ const old=await prepareReview(options);await markReview({output,revision:old.revision,numbers:[1],note:'SCRIPTED fixture first pixels'});let record=JSON.parse(await readFile(join(output,'review.json'))),q=record.creativeQuality;
+ const assessment={schema:1,sceneDigest:q.sceneDigest,qualityRevision:q.revision,artifactDigest:q.artifactDigest,slides:q.prompts.map(s=>({id:s.slide,checks:s.criteria.map(c=>({criterion:c.id,status:'pass',reason:`SCRIPTED ${s.slide} ${c.id}`,objects:s.objects,sources:s.sources}))}))};await assessReview({output,revision:old.revision,assessment});
+ const shown=await presentDesign({project,review:output,revision:old.revision});await respondDesign({project,reply:{questionId:shown.question.id,planRevision:shown.revision,decision:'approve',feedback:'SCRIPTED first render acceptance'}});
+ imageBytes=Buffer.concat([png,Buffer.from('new fixture export metadata')]);const changed=await prepareReview({...options,refresh:true});assert.equal(changed.revision,old.revision);assert.equal(changed.creativeReviewComplete,false);
+ await assert.rejects(()=>designStatus(project),/Rendered review changed/);await assert.rejects(()=>assessReview({output,revision:changed.revision,assessment}),/current quality/);
+});

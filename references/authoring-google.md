@@ -7,7 +7,7 @@ slides may select a verified `layoutId`; existing slides enumerate `replace` and
 `protect` top-level object IDs. Unlisted objects and slides remain untouched.
 
 ```sh
-node scripts/harness-slides.mjs workspace init --project ./deck-work --file scene.json --template snapshot.json
+node scripts/harness-slides.mjs workspace init --project ./deck-work --file scene.json --template snapshot.json --design-project CONTENT
 node scripts/harness-slides.mjs workspace build --project ./deck-work
 node scripts/harness-slides.mjs workspace apply --project ./deck-work --dry-run
 ```

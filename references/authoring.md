@@ -1,5 +1,6 @@
 # Choose the authoring method
 
+Approve [the creative proposal](design-walkthrough.md) first for new/redesigned decks.
 For a native template, copy it and reuse its real layouts, masters and elements.
 Read [template reuse](templates.md); no scene contract is needed. Keep complex
 or unsupported native content in native tools rather than flattening it.

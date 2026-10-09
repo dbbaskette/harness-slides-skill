@@ -27,6 +27,8 @@ The unofficial transport can change; report a live check failure accurately.
 
 ## Generate, place and review
 
+For new decks/redesigns, approve the specific art concept in [the walkthrough](design-walkthrough.md)
+before generating; include an explicit fallback if the approved route is unavailable.
 Write a brief file specifying subject, intended slide role, aspect ratio,
 composition, negative space, visual treatment and brand constraints. Ask for one
 original image, avoiding slide text baked into pixels. Reference images must be
@@ -35,7 +37,7 @@ authorized local PNG/JPEG/WebP files (maximum five).
 ```sh
 node scripts/harness-slides.mjs images generate --project ./deck-work \
   --id deck-slide-04-v1 --prompt-file ./deck-work/image-brief.txt \
-  --output assets/slide-04.png
+  --output assets/slide-04.png --design-project CONTENT --slide APPROVED_SLIDE_ID
 ```
 
 Optional: repeat `--reference PATH` for references; `--model NAME` selects an
