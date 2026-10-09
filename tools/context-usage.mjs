@@ -47,7 +47,7 @@ export async function measureContext() {
     newPptxScene: path([...design, 'references/authoring-pptx.md', review], ['sceneContract']),
     newGoogleScene: path([...design, 'references/authoring-google.md', google, review], ['sceneContract']),
     composedDeck: path([...creative,'references/draft.md','references/compositions.md'],['outlineContract','composeContract']),
-    draftOnly: path([...creative,'references/draft.md'],['outlineContract']),
+    draftOnly: path([...entry,'references/design-walkthrough.md','references/draft.md'],['outlineContract']),
     parallelLead: path([...creative,'references/compositions.md','references/parallel-build.md'],['composeContract']),
     parallelWorker: path(['references/design.md','references/compositions.md','references/parallel-build.md'],['composeContract']),
     contentLedPptx: path([...design,'references/content-components.md','references/brand-addons.md','references/quality.md',review],['comparisonContract']),

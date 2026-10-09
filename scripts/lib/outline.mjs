@@ -16,19 +16,26 @@ const budgets={live:60,reading:90};
 const marker='<!-- harness-slides draft -->';
 
 export const outlineContract=`Outline v1 (AI-owned; words and decisions, no layout).
-{version:1,title,audience?,delivery?:live|reading,direction?:DIRECTION,layouts?:{cover?,section?,closing?},material?:[paths or notes],house?:[lines],slides:[SLIDE]}
+{version:1,title,audience?,delivery?:live|reading,minutes?,direction?:DIRECTION,layouts?:{cover?,section?,closing?},material?:[paths or notes],house?:[lines],slides:[SLIDE]}
 SLIDE cover: {id,kind:cover,title,subtitle?,detail?,notes?}. section: {id,kind:section,title,subtitle?,notes?}. closing: {id,kind:closing,title,notes?}.
 SLIDE content: {id,kind:content,title,understand,relation,focal?,rhythm?,points:[{label?,text?}],caveat?,notes?,sources:[one or more IDs]}.
 title is the claim, short enough for the brand's title lines. understand is one sentence: what the audience must leave the slide knowing.
 relation: ${relationNames.join('|')}. It says how the points relate; a relation other than quantity or none needs two or more points.
-focal names the point of the slide in words. Give the label of one of the points, or a short statement of its own. rhythm: ${rhythmNames.join('|')}.
+focal names the point of the slide in words. Give the label of one of the points, or a short statement of its own, which is then shown on the slide too. Leave it out when the slide lists or compares equals.
+rhythm: anchor for structure, dense for information (the default), breathing for a pause. Four dense slides in a row is a finding; lighten one and mark it breathing, or put a section slide between.
 points are the real units, counted from the content: a label, a line of text, or both. For quantity the first point's label is the figure.
-caveat is one line. sources name what the slide rests on, as in a composition.
+caveat is one line. notes are for the speaker and are shown under the slide in the draft. sources are one or more IDs naming what the slide rests on: a section of the source material, or one ID such as request or author_knowledge.
+minutes is the length of the talk; the draft shows what that leaves for each content slide.
 DIRECTION is the composition's: {focal,neutral,meanings?,motif?}, in brand color roles. A draft is drawn without it; the build uses it.
 layouts name the brand template layouts for cover, section and closing slides (run compose layouts); the build needs them.
 material lists the sources a builder may draw on. house lists what must match across sections: color meanings, icon style, where caveats go.
 IDs match [a-zA-Z_][a-zA-Z0-9_-]{4,40} and are unique.`;
 
+// What a brand allows a draft: how long a title may be and how many words a slide carries.
+export async function outlineSizes(contract,{fonts}={}) {
+  const {fit}=await titleLines(contract,[],{fonts}),sl=contract.design.slides,size=sl.typography.title.size,delivery=contract.medium.delivery??'reading';
+  return `For ${contract.identity.id}: a title holds ${fit} line${fit===1?'':'s'} at ${size}pt, about ${Math.floor(sl.titleBox.width/(size*.52))*fit} characters. A slide delivered ${delivery==='live'?'live':'for reading'} carries about ${budgets[delivery]} body words.`;
+}
 const words=text=>String(text??'').split(/\s+/).filter(Boolean).length;
 const bodyWords=s=>(s.points??[]).reduce((n,p)=>n+words(p.label)+words(p.text),0)+(typeof s.focal==='string'&&!(s.points??[]).some(p=>p.label===s.focal)?words(s.focal):0);
 
@@ -37,10 +44,11 @@ export async function checkOutline(outline,contract,{fonts}={}) {
   validateBrandContract(contract,{medium:'slides'});
   const problems=[],fail=(where,message)=>problems.push(`${where}: ${message}`);
   if(outline?.version!==1)throw new Error('Use outline version 1 (run outline contract)');
-  const top=['version','title','audience','delivery','direction','layouts','material','house','slides'];
+  const top=['version','title','audience','delivery','minutes','direction','layouts','material','house','slides'];
   for(const key of Object.keys(outline))if(!top.includes(key))fail('outline',`unsupported field ${key}`);
   if(!str(outline.title))fail('outline','provide the deck title');
   if(outline.audience!==undefined&&!str(outline.audience))fail('outline','audience is a short description, or omitted');
+  if(outline.minutes!==undefined&&!(Number.isFinite(outline.minutes)&&outline.minutes>0&&outline.minutes<=600))fail('outline','minutes is the length of the talk, as a number');
   const delivery=outline.delivery??contract.medium.delivery??'reading';
   if(!['live','reading'].includes(delivery))fail('outline','delivery is live or reading');
   else if(outline.delivery&&contract.medium.delivery&&outline.delivery!==contract.medium.delivery)fail('outline',`delivery is ${outline.delivery}, but the brand contract was exported for ${contract.medium.delivery}; export it for ${outline.delivery}`);
@@ -83,12 +91,10 @@ export async function checkOutline(outline,contract,{fonts}={}) {
   let run=[];
   for(const s of outline.slides) {
     if(s.kind==='content'&&(s.rhythm??'dense')==='dense')run.push(s.id);
-    else{if(run.length>=4)findings.push({slide:run[3],code:'dense-run',detail:`${run.length} dense slides in a row from ${run[0]}. Add a pause, or make one of them one.`});run=[];}
+    else{if(run.length>=4)findings.push({slide:run[3],code:'dense-run',detail:`${run.length} dense slides in a row from ${run[0]}. Lighten one and mark it breathing, or put a section slide between.`});run=[];}
   }
-  if(run.length>=4)findings.push({slide:run[3],code:'dense-run',detail:`${run.length} dense slides in a row from ${run[0]}. Add a pause, or make one of them one.`});
+  if(run.length>=4)findings.push({slide:run[3],code:'dense-run',detail:`${run.length} dense slides in a row from ${run[0]}. Lighten one and mark it breathing, or put a section slide between.`});
   for(const s of content)if(s.focal===undefined&&!['contrast','parallel','none'].includes(s.relation))findings.push({slide:s.id,code:'no-focal',detail:'Nothing is named as the point of this slide. Name it, unless the slide compares equals.'});
-  const needs=new Set(outline.slides.filter(s=>s.kind!=='content').map(s=>s.kind));
-  for(const kind of needs)if(!outline.layouts?.[kind])findings.push({slide:outline.slides.find(s=>s.kind===kind).id,code:'no-layout',detail:`Name the template layout for ${kind} slides in layouts.${kind} before the build (run compose layouts).`});
   return {delivery,budget,counts,findings};
 }
 
@@ -99,14 +105,14 @@ function arrange(s,area) {
   const box=(p,x,y,w,h,extra={})=>shapes.push({x,y,w,h,label:p.label,text:p.text,focal:isFocal(p),...extra});
   let {x,y,width:w,height:h}=area;
   if(s.caveat){h-=30;shapes.push({x,y:y+h+4,w,h:26,text:s.caveat,kind:'caveat'});}
-  const hub=own&&['order','dependency'].includes(s.relation);
+  const hub=own&&s.relation==='dependency';
   if(own&&!hub){shapes.push({x,y,w,h:58,label:own,focal:true});y+=58+gap;h-=58+gap;}
   const cells=(n,cols,ax=x,ay=y,aw=w,ah=h)=>{const rows=Math.ceil(n/cols),cw=(aw-gap*(cols-1))/cols,ch=(ah-gap*(rows-1))/rows;return Array.from({length:n},(_,i)=>({x:ax+(i%cols)*(cw+gap),y:ay+Math.floor(i/cols)*(ch+gap),w:cw,h:ch}));};
   const n=points.length;
   if(!n&&!hub)return {shapes,arrows};
   if(s.relation==='order') {
-    const all=hub?[{label:own,hub:true},...points]:points,span=34,cw=(w-span*(all.length-1))/all.length,ch=Math.min(h,200),top=y+(h-ch)/2;
-    all.forEach((p,i)=>{const bx=x+i*(cw+span);shapes.push({x:bx,y:top,w:cw,h:ch,label:p.label,text:p.text,focal:p.hub||isFocal(p)});if(i)arrows.push({x1:bx-span,y1:top+ch/2,x2:bx,y2:top+ch/2});});
+    const all=points,span=34,cw=(w-span*(all.length-1))/all.length,ch=Math.min(h,200),top=y+(h-ch)/2;
+    all.forEach((p,i)=>{const bx=x+i*(cw+span);shapes.push({x:bx,y:top,w:cw,h:ch,label:p.label,text:p.text,focal:isFocal(p)});if(i)arrows.push({x1:bx-span,y1:top+ch/2,x2:bx,y2:top+ch/2});});
   } else if(s.relation==='dependency') {
     const source=hub?{label:own}:points.find(isFocal)??points[0],rest=points.filter(p=>p!==source),hw=w*.3,hh=Math.min(h*.5,180),hy=y+(h-hh)/2,rx=x+w*.5,rw=w*.5;
     shapes.push({x,y:hy,w:hw,h:hh,label:source.label,text:source.text,focal:hub||isFocal(source)});
@@ -136,7 +142,7 @@ export async function draftOutline(outline,contract,{fonts}={}) {
         (arrows.length?`<svg class="arrows" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}"><defs><marker id="tip${index}" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#555"/></marker></defs>${arrows.map(a=>`<line x1="${round(a.x1)}" y1="${round(a.y1)}" x2="${round(a.x2)}" y2="${round(a.y2)}" stroke="#555" stroke-width="2" marker-end="url(#tip${index})"/>`).join('')}</svg>`:'');
     } else inner=`<div class="plate"><small>${s.kind}</small><b style="font-size:${t.section?.size??40}px">${escape(s.title)}</b>${s.subtitle?`<span style="font-size:${body}px">${escape(s.subtitle)}</span>`:''}${s.detail?`<span style="font-size:${body}px">${escape(s.detail)}</span>`:''}</div>`;
     const notes=flagged(s.id),count=checked.counts[s.id];
-    return `<figure id="${escape(s.id)}"><figcaption><b>${index+1}</b> ${escape(s.id)} · ${s.kind==='content'?`${s.relation}${s.rhythm?` · ${s.rhythm}`:''} · ${count} words`:s.kind}${notes.map(f=>` <mark>${escape(f.code)}</mark>`).join('')}</figcaption><div class="frame" style="width:${px(W*scale)};height:${px(H*scale)}"><section style="width:${px(W)};height:${px(H)};transform:scale(${scale})">${inner}</section></div>${s.kind==='content'?`<p class="understand">${escape(s.understand)}</p>`:''}${notes.map(f=>`<p class="finding">${escape(f.detail)}</p>`).join('')}</figure>`;
+    return `<figure id="${escape(s.id)}"><figcaption><b>${index+1}</b> ${escape(s.id)} · ${s.kind==='content'?`${s.relation}${s.rhythm?` · ${s.rhythm}`:''} · ${count} words`:s.kind}${notes.map(f=>` <mark>${escape(f.code)}</mark>`).join('')}</figcaption><div class="frame" style="width:${px(W*scale)};height:${px(H*scale)}"><section style="width:${px(W)};height:${px(H)};transform:scale(${scale})">${inner}</section></div>${s.kind==='content'?`<p class="understand">${escape(s.understand)}</p>`:''}${s.notes?`<p class="notes">Notes: ${escape(s.notes)}</p>`:''}${notes.map(f=>`<p class="finding">${escape(f.detail)}</p>`).join('')}</figure>`;
   };
   const total=Object.values(checked.counts).reduce((a,b)=>a+b,0);
   const html=`<!doctype html>${marker}<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Draft: ${escape(outline.title)}</title><style>
@@ -150,9 +156,9 @@ figure{margin:0}figcaption{font-size:12px;color:#555;margin-bottom:6px}mark{back
 .shape.focal{border:5px solid #222}.shape.round{border-radius:50%;align-items:center;text-align:center;padding:24px 90px}.shape.group{border-style:dashed}.shape.plain,.shape.caveat{border:0;padding:4px}.shape.caveat{color:#555}.shape.figure{align-items:flex-start}
 .arrows{position:absolute;left:0;top:0;pointer-events:none}
 .plate{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;gap:14px;padding:0 70px;border:14px solid #ddd;box-sizing:border-box}.plate small{text-transform:uppercase;letter-spacing:.12em;color:#777;font-size:16px}
-.understand{font-size:13px;margin:8px 0 0;max-width:${px(W*scale)}}.finding{font-size:12px;margin:4px 0 0;color:#222;max-width:${px(W*scale)}}.finding::before{content:"▲ "}
+.notes{font-size:12px;color:#555;margin:6px 0 0;max-width:${px(W*scale)}}.understand{font-size:13px;margin:8px 0 0;max-width:${px(W*scale)}}.finding{font-size:12px;margin:4px 0 0;color:#222;max-width:${px(W*scale)}}.finding::before{content:"▲ "}
 footer{max-width:1180px;margin:28px auto 0;color:#777;font-size:12px}
-</style><header><h1>${escape(outline.title)}</h1><p>${[outline.audience?`For ${escape(outline.audience)}`:'',`delivered ${checked.delivery==='live'?'live':'for reading'}`,`${outline.slides.length} slides`,`${total} body words`,`${checked.findings.length} finding${checked.findings.length===1?'':'s'}`].filter(Boolean).join(' · ')}</p><p>Draft: wording and structure only. The heavy outline marks the point of each slide. Nothing here is a design; every slide is redrawn in the build.</p></header><main>${outline.slides.map(slide).join('')}</main><footer>Draft: wording and structure only · outline ${hash(JSON.stringify(outline)).slice(0,12)}</footer><script>
+</style><header><h1>${escape(outline.title)}</h1><p>${[outline.audience?`For ${escape(outline.audience)}`:'',`delivered ${checked.delivery==='live'?'live':'for reading'}`,`${outline.slides.length} slides`,outline.minutes?`${outline.minutes} minutes, about ${round(outline.minutes/Math.max(1,Object.keys(checked.counts).length)).toFixed(1)} a content slide`:'',`${total} body words`,`${checked.findings.length} finding${checked.findings.length===1?'':'s'}`].filter(Boolean).join(' · ')}</p><p>Draft: wording and structure only. The heavy outline marks the point of each slide. Nothing here is a design; every slide is redrawn in the build.</p>${outline.direction?`<p>For the build: ${escape(outline.direction.focal)} marks the point of a slide, on ${escape(outline.direction.neutral)} panels${Object.entries(outline.direction.meanings??{}).map(([role,meaning])=>`; ${escape(role)} means ${escape(meaning)}`).join('')}.</p>`:''}</header><main>${outline.slides.map(slide).join('')}</main><footer>Draft: wording and structure only · outline ${hash(JSON.stringify(outline)).slice(0,12)}</footer><script>
 for(const el of document.querySelectorAll('.fit')){let n=0;while(el.scrollHeight>el.clientHeight+1&&n++<40)for(const c of el.children)c.style.fontSize=Math.max(8,parseFloat(c.style.fontSize)*.94)+'px';if(n)el.title='Text shrunk to fit';}
 </script></html>`;
   return {html,...checked,slides:outline.slides.length,words:total};
@@ -189,9 +195,11 @@ export async function startOutlineFile({file,brand,output,fonts}) {
   if(!output)throw new Error('Provide a new --output directory for the build');
   if(!brand)throw new Error('Provide --brand brand-contract.json; the build needs the brand');
   const {bytes,outline,contract}=await load(file,brand),checked=await checkOutline(outline,contract,{fonts:await fontsOf(fonts)});
-  const blocking=checked.findings.filter(f=>['title-too-long','no-layout'].includes(f.code));
-  if(blocking.length)throw new Error(`${blocking.length===1?'':`${blocking.length} problems to fix:\n`}${blocking.map(f=>`${f.slide}: ${f.detail}`).join('\n')}`);
-  if(!outline.direction)throw new Error('The build needs a direction; add one to the outline');
+  // What a draft may leave open, a build may not.
+  const blocking=checked.findings.filter(f=>f.code==='title-too-long').map(f=>`${f.slide}: ${f.detail}`);
+  for(const kind of new Set(outline.slides.filter(s=>s.kind!=='content').map(s=>s.kind)))if(!outline.layouts?.[kind])blocking.push(`outline: name the template layout for ${kind} slides in layouts.${kind} (run compose layouts)`);
+  if(!outline.direction)blocking.push('outline: the build needs a direction; add one');
+  if(blocking.length)throw new Error(blocking.length===1?blocking[0]:`${blocking.length} problems to fix:\n${blocking.join('\n')}`);
   output=resolve(output);await mkdir(output,{mode:0o700});await mkdir(join(output,'briefs'),{mode:0o700});
   const save=(name,text)=>writeFile(join(output,name),text,{flag:'wx',mode:0o600}),parts=[],table=[];
   const composition=slides=>JSON.stringify({version:1,title:outline.title,direction:outline.direction,slides},null,2)+'\n';
