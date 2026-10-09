@@ -12,6 +12,8 @@ export async function compileCompositionFile({file,brand,output,fonts,'design-pr
   const contract=brandBytes?JSON.parse(brandBytes):await neutralBrandContract();
   await checkBrandSources(contract);
   const {scene,structure,report}=await compileComposition(JSON.parse(bytes),contract,{fonts:fonts?JSON.parse(await readFile(fonts)):undefined});
+  // Unknown or picture-only icons are caught now, not when the deck is rendered.
+  await (await import('./pptx-native.mjs')).checkIcons(structure,contract);
   const approved=await requireSceneDesign(scene,designProject);
   if(approved)report.designRevision=approved.revision;
   const assets=[];
@@ -20,13 +22,13 @@ export async function compileCompositionFile({file,brand,output,fonts,'design-pr
     e.src=path;assets.push({object:e.id,path,sha256:hash(await readFile(path))});
   }
   report.inputs={composition:{path:resolve(file),sha256:hash(bytes)},brand:brand?{path:resolve(brand),sha256:hash(brandBytes)}:{kind:'neutral defaults',revision:contract.revision},assets};
-  report.sceneDigest=digest(scene);
+  report.sceneDigest=digest(scene);report.structureDigest=digest(structure);
   output=resolve(output);await mkdir(output,{mode:0o700});
   try {
     for(const [name,value] of [['scene.json',scene],['structure.json',structure],['compose-report.json',report],['brand-contract.json',contract]])
       await writeFile(join(output,name),JSON.stringify(value,null,2)+'\n',{flag:'wx',mode:0o600});
   } catch(error){await rm(output,{recursive:true,force:true});throw error;}
-  return {output,slides:scene.slides.length,brandRevision:contract.revision,sceneDigest:report.sceneDigest,measurement:report.measurement,groups:structure.groups.length,connectors:structure.connectors.length};
+  return {output,slides:scene.slides.length,brandRevision:contract.revision,sceneDigest:report.sceneDigest,measurement:report.measurement,groups:structure.groups.length,connectors:structure.connectors.length,icons:structure.icons.length};
 }
 
 // Render a folder written by compileCompositionFile. A brand with a native template gets the native emitter.
@@ -34,6 +36,7 @@ export async function renderCompositionDir({file,output}) {
   if(!file||!output)throw new Error('Provide --file COMPILED_DIR and a new --output deck.pptx');
   const dir=resolve(file),load=async name=>JSON.parse(await readFile(join(dir,name),'utf8'));
   const scene=await load('scene.json'),structure=await load('structure.json'),brand=await load('brand-contract.json');
+  if(structure.icons?.length&&!brand.design.nativeTemplate)throw new Error('This composition uses icons, which need a brand with a native template');
   if(brand.design.nativeTemplate)return (await import('./pptx-native.mjs')).emitNativePptx({scene,structure,brand,output,base:dir});
   const {inventory,...result}=await (await import('./pptx-render.mjs')).renderPptxScene(scene,resolve(output),{base:dir});
   return {...result,emitter:'generated deck; the brand contract has no native template'};

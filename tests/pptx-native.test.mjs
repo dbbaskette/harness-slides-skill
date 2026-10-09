@@ -220,3 +220,80 @@ test('image type comes from the file contents and alt text cannot break the slid
   assert.equal((await names(output)).filter(n=>/^ppt\/media\/harness-[0-9a-f]{16}\.png$/.test(n)).length,1);
   assert.match(await part(output,'ppt/slides/harnessSlide1.xml'),/descr="Control  character"/);
 });
+
+// A one-slide "library" whose two shapes form one icon, with the index the brand would ship.
+async function iconLibrary(dir) {
+  const path=join(dir,'icons.pptx'),index=join(dir,'icon-index.json');
+  await renderPptxScene({version:2,title:'Icons',mode:'new',canvas:{width:960,height:540},slides:[{id:'icon_page',title:'Icons',sources:['brief:test'],elements:[
+    {id:'icon_ring',type:'shape',shape:'ellipse',x:100,y:100,width:80,height:40,fill:'#2867B2'},{id:'icon_core',type:'shape',shape:'rect',x:130,y:110,width:20,height:20,fill:'#FFFFFF'}]}]},path);
+  const objects=(await pptxTool('inspect',[path])).slides[0].objects,ids=['icon_ring','icon_core'].map(name=>objects.find(o=>o.name===name).id);
+  await writeFile(index,JSON.stringify({schemaVersion:1,sourceSha256:hash(await readFile(path)),entries:[
+    {id:'fi-test-s001-l001',slide:1,labelIndex:1,label:'Test ring',shapeIds:ids,bounds:[100*12700,100*12700,80*12700,40*12700],native:true},
+    {id:'fi-test-s001-l002',slide:1,labelIndex:2,label:'A picture',shapeIds:ids,bounds:[0,0,12700,12700],native:false}]}));
+  return {path,index};
+}
+async function withIcons(dir,c) {
+  const library=await iconLibrary(dir),next=structuredClone(c);
+  next.design.slides.icon={size:54,library};
+  for(const path of [library.path,library.index])next.sources.push({path,kind:'icon library',sha256:hash(await readFile(path))});
+  next.revision=contractRevision(next);return next;
+}
+const iconDeck=icon=>({version:1,title:'Icons',slides:[{id:'icon_slide',title:'An icon',sources:['brief:test'],canvas:{type:'stack',direction:'row',children:[{type:'icon',id:'lead_icon',icon},{type:'box',id:'side_box',text:'Beside it',weight:3}]}}]});
+
+test('icons are copied from the brand library as grouped native geometry, fitted and centred in their slot',async t=>{
+  const dir=await temporary(t),c=await withIcons(dir,await brand(dir)),compiled=await compileComposition(iconDeck('fi-test-s001-l001'),c),output=join(dir,'icons-deck.pptx');
+  assert.deepEqual(compiled.structure.icons.map(i=>[i.slide,i.id,i.icon,i.width,i.height,i.order]),[['icon_slide','lead_icon','fi-test-s001-l001',108,108,1]]);
+  assert.ok(!compiled.scene.slides[0].elements.some(e=>e.id==='lead_icon'));
+  const result=await emitNativePptx({...compiled,brand:c,output,base:dir}),xml=await part(output,'ppt/slides/harnessSlide1.xml');
+  assert.deepEqual(result.icons,[{id:'lead_icon',icon:'fi-test-s001-l001',label:'Test ring'}]);assert.deepEqual(await audit(output),[]);
+  const group=xml.match(/<p:grpSp(?: [^>]*)?>(?:(?!<\/p:grpSp>).)*name="lead_icon".*?<\/p:grpSp>/s)[0],slot=compiled.structure.icons[0];
+  assert.match(group,/descr="Test ring"/);assert.match(group,/prst="ellipse"/);assert.doesNotMatch(group,/<p:pic>/);
+  const [,x,y]=group.match(/<a:off x="(\d+)" y="(\d+)"/),[,cx,cy]=group.match(/<a:ext cx="(\d+)" cy="(\d+)"/);
+  // The 2:1 icon fills the slot's width and is centred vertically in it.
+  assert.equal(Math.round(cx/12700),108);assert.equal(Math.round(cy/12700),54);assert.equal(Math.round(x/12700),Math.round(slot.x));assert.equal(Math.round(y/12700),Math.round(slot.y+27));
+  const ids=[...xml.matchAll(/<p:cNvPr id="(\d+)"/g)].map(m=>m[1]);assert.equal(new Set(ids).size,ids.length);
+});
+
+test('icon problems are reported against the composition node and leave no output',async t=>{
+  const dir=await temporary(t),plain=await brand(dir),c=await withIcons(dir,plain),{readdir}=await import('node:fs/promises');
+  const emit=async(icon,contract,name)=>emitNativePptx({...await compileComposition(iconDeck(icon),contract),brand:contract,output:join(dir,name),base:dir});
+  await assert.rejects(()=>emit('fi-test-s001-l001',plain,'a.pptx'),/names no icon library/);
+  await assert.rejects(()=>emit('fi-missing',c,'b.pptx'),/lead_icon: unknown icon fi-missing/);
+  await assert.rejects(()=>emit('fi-test-s001-l002',c,'c.pptx'),/lead_icon: icon fi-test-s001-l002 is a picture/);
+  assert.deepEqual((await readdir(dir)).filter(n=>/^[abc]\.pptx$/.test(n)),[]);
+  await assert.rejects(()=>compileComposition(iconDeck('not an id!'),c),/stable icon ID/);
+  const narrow={version:1,title:'Icons',slides:[{id:'icon_slide',title:'t',sources:['brief:test'],canvas:{type:'grid',columns:6,gap:'wide',children:Array.from({length:6},(_,i)=>({type:'stack',direction:'row',gap:'wide',children:[{type:'icon',id:`tiny_icon${i}`,icon:'fi-test-s001-l001'},{type:'spacer'},{type:'spacer'}]}))}}]};
+  await assert.rejects(()=>compileComposition(narrow,c),/needs 54pt of width for an icon/);
+});
+
+test('an icon inside a card joins the card group, keeps its own size in a column and is named after its node',async t=>{
+  const dir=await temporary(t),c=await withIcons(dir,await brand(dir)),output=join(dir,'card.pptx');
+  const comp={version:1,title:'Card',slides:[{id:'card_slide',title:'A card',sources:['brief:test'],notes:'Notes stay.',canvas:{type:'stack',direction:'row',gap:'none',children:[
+    {type:'box',id:'node_from',text:'Start'},{type:'spacer',weight:.4},{type:'box',id:'icon_card',children:[{type:'icon',id:'card_icon',icon:'fi-test-s001-l001'},{type:'text',id:'card_text',text:'Caption'}]}]},connect:[{id:'edge_one',from:'node_from',to:'icon_card'}]}]};
+  const compiled=await compileComposition(comp,c),icon=compiled.structure.icons[0],caption=compiled.scene.slides[0].elements.find(e=>e.id==='card_text');
+  assert.equal(icon.height,54);assert.equal(Math.round(caption.y-(icon.y+icon.height)),18);
+  assert.deepEqual(compiled.structure.groups,[{slide:'card_slide',id:'icon_card_group',members:['icon_card','card_icon','card_text']}]);
+  const result=await emitNativePptx({...compiled,brand:c,output,base:dir}),xml=await part(output,'ppt/slides/harnessSlide1.xml');
+  assert.deepEqual(await audit(output),[]);assert.deepEqual(result.native[0].attached,['edge_one']);
+  const card=xml.match(/<p:grpSp><p:nvGrpSpPr><p:cNvPr id="\d+" name="icon_card_group"\/>.*<\/p:grpSp>/s)[0];
+  assert.match(card,/name="card_icon"/);assert.match(card,/name="card_icon_part1"/);assert.match(card,/name="card_text"/);
+  assert.ok(card.indexOf('name="icon_card"')<card.indexOf('name="card_icon"')&&card.indexOf('name="card_icon"')<card.indexOf('name="card_text"'));
+  const ids=[...xml.matchAll(/<p:cNvPr id="(\d+)"/g)].map(m=>m[1]);assert.equal(new Set(ids).size,ids.length);
+});
+
+test('icons are refused rather than dropped when the brand has no native template',async t=>{
+  const dir=await temporary(t),c=await withIcons(dir,await brand(dir)),{mkdir}=await import('node:fs/promises'),compiled=await compileComposition(iconDeck('fi-test-s001-l001'),c);
+  const plain=structuredClone(c);delete plain.design.nativeTemplate;plain.revision=contractRevision(plain);
+  const folder=join(dir,'compiled');await mkdir(folder);for(const [name,value] of [['scene.json',compiled.scene],['structure.json',compiled.structure],['brand-contract.json',plain]])await writeFile(join(folder,name),JSON.stringify(value));
+  const {renderCompositionDir}=await import('../scripts/lib/compose-file.mjs');
+  await assert.rejects(()=>renderCompositionDir({file:folder,output:join(dir,'dropped.pptx')}),/uses icons, which need a brand with a native template/);
+});
+
+test('several icon cards on one slide each keep their icon inside their own group',async t=>{
+  const dir=await temporary(t),c=await withIcons(dir,await brand(dir)),output=join(dir,'cards.pptx');
+  const card=n=>({type:'box',id:`card_${n}`,children:[{type:'icon',id:`icon_${n}`,icon:'fi-test-s001-l001'},{type:'text',id:`text_${n}`,text:`Card ${n}`}]});
+  const compiled=await compileComposition({version:1,title:'Cards',slides:[{id:'cards_slide',title:'Cards',sources:['brief:test'],canvas:{type:'grid',columns:3,children:['one','two','three'].map(card)}}]},c);
+  const result=await emitNativePptx({...compiled,brand:c,output,base:dir}),xml=await part(output,'ppt/slides/harnessSlide1.xml');
+  assert.deepEqual(result.native[0].groups,['card_one_group','card_two_group','card_three_group']);assert.equal(result.icons.length,3);assert.deepEqual(await audit(output),[]);
+  for(const n of ['one','two','three']){const group=xml.match(new RegExp(`<p:grpSp><p:nvGrpSpPr><p:cNvPr id="\\d+" name="card_${n}_group"/>.*?name="text_${n}"`,'s'))[0];assert.match(group,new RegExp(`name="icon_${n}"`));}
+});

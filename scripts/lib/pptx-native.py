@@ -10,6 +10,7 @@ The template's own sample slides are removed; its masters, layouts, theme and
 media are copied byte for byte.
 """
 import hashlib
+import importlib.util
 import json
 import posixpath
 import re
@@ -103,12 +104,34 @@ def non_visual(tag, number, name, extra='', inner='', descr=''):
             f'<p:cNv{tag}Pr{extra}>{inner}</p:cNv{tag}Pr><p:nvPr/></p:nv{tag}Pr>')
 
 
+class IconLibrary:
+    """The brand's icon deck and index, opened once per emit and checked against its recorded hash."""
+
+    def __init__(self, path, index):
+        location = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pptx_tools.py')
+        spec = importlib.util.spec_from_file_location('harness_pptx_tools', location)
+        self.tools = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.tools)
+        with open(index, encoding='utf-8') as stream:
+            listing = json.load(stream)
+        self.package, data = self.tools.load(path)
+        if hashlib.sha256(data).hexdigest() != listing['sourceSha256']:
+            raise ValueError('Icon source changed; rebuild the index')
+        self.entries = {entry['id']: entry for entry in listing['entries']}
+
+    def group(self, ident):
+        entry = self.entries.get(ident)
+        if entry is None:
+            raise ValueError(f'unknown icon {ident}')
+        return entry, self.tools.native_group(self.package, entry)
+
+
 class Slide:
-    def __init__(self, spec, plan, title_type):
-        self.spec, self.plan, self.title_type = spec, plan, title_type
+    def __init__(self, spec, plan, title_type, library=None):
+        self.spec, self.plan, self.title_type, self.library = spec, plan, title_type, library
         self.numbers, self.next = {}, 2
         self.rels, self.media = [], {}
-        self.report = {'id': spec['id'], 'titlePlaceholder': False, 'attached': [], 'unattached': [], 'groups': []}
+        self.report = {'id': spec['id'], 'titlePlaceholder': False, 'attached': [], 'unattached': [], 'groups': [], 'icons': []}
         self.elements = {e['id']: e for e in spec['elements']}
         for e in spec['elements']:
             self.number(e['id'])
@@ -216,6 +239,34 @@ class Slide:
                 f'<p:blipFill><a:blip r:embed="{rel}"/>{crop}<a:stretch><a:fillRect/></a:stretch></p:blipFill>'
                 f'<p:spPr>{xfrm(box)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>')
 
+    def icon(self, e):
+        """Native library geometry as one group, fitted inside its slot without changing its proportions."""
+        if self.library is None:
+            raise ValueError(f'{e["id"]}: the plan names no icon library')
+        entry, group = self.library.group(e['icon'])
+        tools, ratio = self.library.tools, entry['bounds'][2] / entry['bounds'][3]
+        width = e['width'] if ratio >= 1 else e['height'] * ratio
+        height = width / ratio
+        frame = group.find('p:grpSpPr/a:xfrm', tools.NS)
+        frame.find('a:off', tools.NS).attrib.update(x=str(emu(e['x'] + (e['width'] - width) / 2)), y=str(emu(e['y'] + (e['height'] - height) / 2)))
+        frame.find('a:ext', tools.NS).attrib.update(cx=str(emu(width)), cy=str(emu(height)))
+        remap = {}
+        for index, node in enumerate(group.iter('{' + tools.NS['p'] + '}cNvPr')):
+            fresh = self.numbers[e['id']] if index == 0 else self.number(f'{e["id"]}#{index}')
+            remap[node.get('id')] = str(fresh)
+            node.set('id', str(fresh))
+            if index == 0:
+                node.set('name', e['id'])
+            else:
+                node.set('name', f'{e["id"]}_part{index}')
+        for node in group.iter():
+            if node.tag in ('{' + tools.NS['a'] + '}stCxn', '{' + tools.NS['a'] + '}endCxn'):
+                if node.get('id') not in remap:
+                    raise ValueError(f'{e["id"]}: icon connector points outside the icon')
+                node.set('id', remap[node.get('id')])
+        self.report['icons'].append({'id': e['id'], 'icon': e['icon'], 'label': entry['label']})
+        return tools.E.tostring(group, encoding='unicode')
+
     def element(self, e):
         if e['type'] == 'text':
             return self.title(e) if e.get('role') == 'title' else self.textbox(e)
@@ -225,6 +276,8 @@ class Slide:
             return self.line(e)
         if e['type'] == 'image':
             return self.picture(e)
+        if e['type'] == 'icon':
+            return self.icon(e)
         raise ValueError(f'{e["id"]}: the native emitter does not write {e["type"]} objects yet; use pptx render')
 
     def grouped(self):
@@ -346,8 +399,9 @@ def emit(template, plan_path, output):
     title_type = found.group(1) if found else None
     notes_master = next((n for n in sorted(parts) if re.fullmatch(r'ppt/notesMasters/notesMaster\d+\.xml', n)), None)
     ids, new_rels, overrides, report = [], [], [], []
+    library = IconLibrary(plan['iconLibrary']['path'], plan['iconLibrary']['index']) if plan.get('iconLibrary') else None
     for index, spec in enumerate(plan['slides'], 1):
-        slide = Slide(spec, plan, title_type)
+        slide = Slide(spec, plan, title_type, library)
         slide.relate(f'{REL}/slideLayout', posixpath.relpath(layout, 'ppt/slides'))
         xml = slide.xml()
         # A name no template uses, so nothing left in the template can point at a new slide by accident.

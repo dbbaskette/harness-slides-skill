@@ -19,7 +19,7 @@ export async function screenComposition({scene,structure={groups:[],connectors:[
   const audit=await auditSceneQuality(scene,{fonts}),findings=[...audit.findings];
   scene.slides.forEach((slide,index)=>{
     const body=slide.elements.filter(e=>e.role!=='title'),words=body.map(e=>e.text??'').join(' '),edges=structure.connectors.filter(c=>c.slide===slide.id).length;
-    const drawn=body.filter(e=>['shape','image','table','chart'].includes(e.type)).length,ordered=body.filter(e=>e.type==='shape'&&numbered.test(e.text??'')).length;
+    const drawn=body.filter(e=>['shape','image','table','chart'].includes(e.type)).length+(structure.icons??[]).filter(i=>i.slide===slide.id).length,ordered=body.filter(e=>e.type==='shape'&&numbered.test(e.text??'')).length;
     if(ordered>=2&&!edges)findings.push({slide:slide.id,severity:'info',code:'sequence-without-edges',detail:'Numbered boxes with nothing joining them. Add edges if the order matters, or drop the numbers if it does not.'});
     if(relational.test(words)&&!edges&&drawn<=1)findings.push({slide:slide.id,severity:'warn',code:'relational-text-only',detail:'The wording describes a sequence or relationship, but nothing on the slide shows it. Consider nodes joined by edges, or regions that show ownership.'});
     if(index>0&&body.length>1&&signature(slide)===signature(scene.slides[index-1])&&!findings.some(f=>f.slide===slide.id&&f.code==='similar-geometry'))findings.push({slide:slide.id,severity:'info',code:'repeats-previous-layout',relatedSlides:[scene.slides[index-1].id],detail:'Same geometry as the previous slide. Keep it only when the two slides are meant to be compared.'});

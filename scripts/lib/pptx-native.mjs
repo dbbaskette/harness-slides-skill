@@ -11,6 +11,20 @@ import {pptxTool} from './presentation-tools.mjs';
 
 const exec=promisify(execFile);
 
+// Check every requested icon against the brand's hashed library index before anything is built.
+export async function checkIcons(structure,brand) {
+  const icons=structure.icons??[];if(!icons.length)return null;
+  const library=brand.design.slides.icon?.library;
+  if(!library?.path||!library?.index||![library.path,library.index].every(path=>brand.sources.some(s=>s.path===path)))throw new Error('This composition uses icons, but the brand contract names no hashed icon library and index');
+  const index=JSON.parse(await readFile(library.index,'utf8'));
+  for(const i of icons) {
+    const entry=index.entries.find(e=>e.id===i.icon);
+    if(!entry)throw new Error(`${i.id}: unknown icon ${i.icon}; search the brand icon library for a current ID`);
+    if(!entry.native||!(entry.bounds?.[2]>0)||!(entry.bounds?.[3]>0))throw new Error(`${i.id}: icon ${i.icon} is a picture, not native geometry; choose another`);
+  }
+  return library;
+}
+
 export async function emitNativePptx({scene,structure={groups:[],connectors:[]},brand,output,base=process.cwd()}) {
   validateScene(scene);validateBrandContract(brand,{medium:'slides'});await checkBrandSources(brand);
   const native=brand.design.nativeTemplate,sl=brand.design.slides;
@@ -36,9 +50,13 @@ export async function emitNativePptx({scene,structure={groups:[],connectors:[]},
       }
       elements.push(out);
     }
+    // Icons take their recorded place in the drawing order, so they sit and group with their neighbours.
+    // Each order was recorded against the scene's own elements, so earlier insertions shift later ones by one.
+    for(const [n,icon] of (structure.icons??[]).filter(i=>i.slide===s.id).sort((a,b)=>a.order-b.order).entries()){const {slide:_,order,...rest}=icon;elements.splice(Math.min(order+n,elements.length),0,{type:'icon',...rest});}
     slides.push({id:s.id,elements,...(s.notes?{notes:s.notes}:{}),groups:structure.groups.filter(g=>g.slide===s.id).map(({id,members})=>({id,members})),connectors:structure.connectors.filter(c=>c.slide===s.id).map(({id,from,to})=>({id,from,to}))});
   }
-  const plan={layoutPart:native.layoutPart,font:brand.design.fontFamily,shapeInset:sl.spacing?.inset??16,slides};
+  const iconLibrary=await checkIcons(structure,brand);
+  const plan={layoutPart:native.layoutPart,...(iconLibrary?{iconLibrary}:{}),font:brand.design.fontFamily,shapeInset:sl.spacing?.inset??16,slides};
   const dir=await mkdtemp(join(tmpdir(),'harness-native-'));
   try {
     const planFile=join(dir,'plan.json');await writeFile(planFile,JSON.stringify(plan),{flag:'wx',mode:0o600});
@@ -46,6 +64,6 @@ export async function emitNativePptx({scene,structure={groups:[],connectors:[]},
     try{({stdout}=await exec('python3',['-B',fileURLToPath(new URL('./pptx-native.py',import.meta.url)),'emit',resolve(native.path),planFile,resolve(output)],{timeout:120000,maxBuffer:16*1024*1024}));}
     catch(error){throw new Error(error.code==='ENOENT'?'Python 3.9+ is required. Run harness-slides doctor.':error.stderr?.trim()||error.message);}
     const emitted=JSON.parse(stdout),inventory=await pptxTool('inspect',[resolve(output)]);
-    return {output:resolve(output),slides:emitted.slides,sha256:inventory.sha256,editable:true,status:'unreviewed draft',emitter:'native template',layoutPart:emitted.layoutPart,titlePlaceholder:emitted.titlePlaceholder,removedTemplateParts:emitted.removedTemplateParts,native:emitted.report};
+    return {output:resolve(output),slides:emitted.slides,sha256:inventory.sha256,editable:true,status:'unreviewed draft',emitter:'native template',layoutPart:emitted.layoutPart,titlePlaceholder:emitted.titlePlaceholder,removedTemplateParts:emitted.removedTemplateParts,icons:emitted.report.flatMap(r=>r.icons),native:emitted.report};
   } finally{await rm(dir,{recursive:true,force:true});}
 }
