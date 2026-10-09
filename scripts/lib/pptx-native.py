@@ -18,7 +18,8 @@ import re
 import sys
 import zipfile
 import os
-from xml.sax.saxutils import escape, unescape, quoteattr as _quoteattr
+import html
+from xml.sax.saxutils import escape, quoteattr as _quoteattr
 
 EMU = 12700
 NS = ('xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
@@ -151,7 +152,8 @@ class Slide:
 
     def title(self, e):
         if not self.title_type:
-            return self.textbox(e)
+            # A chosen layout without a title placeholder (a closing or logo slide) shows no title; the slide keeps its name in notes and outline tools.
+            return '' if self.spec.get('layout') else self.textbox(e)
         self.report['titlePlaceholder'] = True
         lines = ''.join(f'<a:p><a:r><a:rPr lang="en-US" dirty="0"/><a:t>{text(line)}</a:t></a:r></a:p>' for line in e['text'].split('\n'))
         return (f'<p:sp><p:nvSpPr><p:cNvPr id="{self.numbers[e["id"]]}" name={quoteattr(e["id"])}/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr>'
@@ -411,6 +413,9 @@ def emit(template, plan_path, output, layout_part=None):
     for name in [n for n in parts if re.match(r'ppt/slides/(_rels/)?slide\d+\.xml', n)]:
         del parts[name]
 
+    def tidy(name):
+        return re.sub(r'\s+', ' ', name).strip()
+
     def describe(part):
         """A layout's name, its title placeholder type and the idx of each subtitle placeholder, in order."""
         xml = parts[part].decode('utf-8')
@@ -418,20 +423,43 @@ def emit(template, plan_path, output, layout_part=None):
         title = re.search(r'<p:ph\b[^>]*type="(title|ctrTitle)"', xml)
         subtitles = sorted(int(re.search(r'idx="(\d+)"', tag).group(1)) for tag in re.findall(r'<p:ph\b[^>]*>', xml) if 'type="subTitle"' in tag and 'idx=' in tag)
         pictures = len([tag for tag in re.findall(r'<p:ph\b[^>]*>', xml) if 'type="pic"' in tag])
-        return {'part': part, 'name': unescape(name.group(1)) if name else part, 'title': title.group(1) if title else None, 'subtitles': subtitles, 'pictures': pictures}
+        return {'part': part, 'name': tidy(html.unescape(name.group(1))) if name else part, 'title': title.group(1) if title else None, 'subtitles': subtitles, 'pictures': pictures}
 
-    layouts = [describe(n) for n in sorted(parts, key=lambda n: (len(n), n)) if re.fullmatch(r'ppt/slideLayouts/slideLayout\d+\.xml', n)]
+    # A template can carry several masters that reuse layout names. Only the default layout's master is offered,
+    # so a cover cannot land on a different master's artwork.
+    def master_of(part):
+        rels = parts.get(rels_path(part), b'').decode('utf-8')
+        for tag in re.findall(TAG('Relationship'), rels):
+            if '/slideMaster"' in tag:
+                return posixpath.normpath(posixpath.join(posixpath.dirname(part), re.search(r'Target="([^"]*)"', tag).group(1)))
+        return None
+
+    family = master_of(layout)
+    candidates = [n for n in sorted(parts, key=lambda n: (len(n), n)) if re.fullmatch(r'ppt/slideLayouts/slideLayout\d+\.xml', n) and master_of(n) == family]
+    layouts = [describe(n) for n in candidates]
+    for item in layouts:
+        item['default'] = item['part'] == layout
+    if not any(item['default'] for item in layouts):
+        raise ValueError(f'{layout} is not one of the template\'s slide layouts')
+    by_name = {}
+    for item in layouts:
+        by_name.setdefault(item['name'], []).append(item)
     if plan_path is None:
-        return {'layouts': [{k: v for k, v in item.items() if k != 'part'} for item in layouts], 'default': next(i['name'] for i in layouts if i['part'] == layout)}
-    by_name = {item['name']: item for item in layouts}
-    title_type = next(i['title'] for i in layouts if i['part'] == layout)
+        unique = [items[0] for items in by_name.values() if len(items) == 1 or any(i['default'] for i in items)]
+        return {'layouts': [{k: v for k, v in item.items() if k != 'part'} for item in unique], 'default': next(i['name'] for i in layouts if i['default'])}
     notes_master = next((n for n in sorted(parts) if re.fullmatch(r'ppt/notesMasters/notesMaster\d+\.xml', n)), None)
     ids, new_rels, overrides, report = [], [], [], []
     library = IconLibrary(plan['iconLibrary']['path'], plan['iconLibrary']['index']) if plan.get('iconLibrary') else None
     for index, spec in enumerate(plan['slides'], 1):
-        chosen = by_name.get(spec['layout']) if spec.get('layout') else next(i for i in layouts if i['part'] == layout)
-        if chosen is None:
-            raise ValueError(f'{spec["id"]}: the template has no layout named {spec["layout"]}. Available: {", ".join(sorted(by_name))}')
+        if spec.get('layout'):
+            named = by_name.get(tidy(spec['layout']))
+            if not named:
+                raise ValueError(f'{spec["id"]}: the template has no layout named {spec["layout"]}. Available: {", ".join(sorted(by_name))}')
+            if len(named) > 1:
+                raise ValueError(f'{spec["id"]}: the template has {len(named)} layouts named {spec["layout"]}; choose one with a unique name')
+            chosen = named[0]
+        else:
+            chosen = next(i for i in layouts if i['default'])
         if len(spec.get('placeholders', [])) > len(chosen['subtitles']):
             raise ValueError(f'{spec["id"]}: layout {chosen["name"]} has {len(chosen["subtitles"])} subtitle placeholders; remove the extra text')
         slide = Slide(spec, plan, chosen['title'], library, chosen['subtitles'])
@@ -508,7 +536,7 @@ def emit(template, plan_path, output, layout_part=None):
         except BaseException:
             os.unlink(output)
             raise
-    return {'output': output, 'slides': len(report), 'layoutPart': layout, 'titlePlaceholder': title_type,
+    return {'output': output, 'slides': len(report), 'layoutPart': layout, 'titlePlaceholder': next(i['title'] for i in layouts if i['default']),
             'removedTemplateParts': len(removed), 'report': report}
 
 

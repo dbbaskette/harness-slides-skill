@@ -213,3 +213,12 @@ test('a template layout slide carries a title and subtitle lines and no canvas',
   assert.throws(bad({layout:'Cover',canvas:{type:'spacer'}}),/has no canvas or edges/);assert.throws(bad({layout:'Cover',detail:'x'}),/detail needs a subtitle/);
   assert.throws(bad({canvas:{type:'box',id:'only_box',text:'x'},subtitle:'x'}),/belong to a slide with a template layout/);
 });
+
+test('a slanted label is placed when its nodes sit inside a named or grouped container, and two labels do not share a spot',async()=>{
+  const nodes=[{type:'box',id:'node_low',text:'A',at:{x:0,y:.6,width:.25,height:.4}},{type:'box',id:'node_high',text:'B',at:{x:.6,y:0,width:.4,height:.3}}];
+  for(const extra of [{id:'named_area'},{id:'group_area',group:true}]) {
+    const comp=deck({type:'free',...extra,children:structuredClone(nodes)});comp.slides[0].connect=[{id:'edge_up',from:'node_low',to:'node_high',label:'promotes'},{id:'edge_back',from:'node_high',to:'node_low',label:'reports'}];
+    const {scene}=await compileComposition(comp,brand()),one=byId(scene,'edge_up_label'),two=byId(scene,'edge_back_label');
+    assert.ok(one&&two);assert.ok(one.x>=two.x+two.width||two.x>=one.x+one.width||one.y>=two.y+two.height||two.y>=one.y+one.height,'labels overlap');
+  }
+});

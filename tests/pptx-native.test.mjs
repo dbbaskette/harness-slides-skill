@@ -318,6 +318,11 @@ test('a slide can use another template layout, filling its title and subtitle pl
   assert.match(first,/<p:ph type="ctrTitle"\/>/);assert.match(first,/<p:ph type="subTitle" idx="1"\/>.*For architects.*<p:ph type="subTitle" idx="2"\/>.*October 2026/s);assert.doesNotMatch(first.split('</p:grpSpPr>')[1],/a:xfrm/);
   const unknown=structuredClone(comp);unknown.slides[0].layout='Missing layout';
   await assert.rejects(async()=>emitNativePptx({...await compileComposition(unknown,b),brand:b,output:join(dir,'no.pptx'),base:dir}),/the template has no layout named Missing layout\. Available: /);
+  // Names match after tidying whitespace, and a layout without a title placeholder shows no title box.
+  const spaced=structuredClone(comp);spaced.slides[0].layout='  Cover  &   open ';
+  await emitNativePptx({...await compileComposition(spaced,b),brand:b,output:join(dir,'spaced.pptx'),base:dir});
+  const {checkLayouts}=await import('../scripts/lib/pptx-native.mjs');
+  await assert.rejects(async()=>checkLayouts((await compileComposition(unknown,b)).structure,b),/cover_slide: the template has no layout named Missing layout/);
   const crowded=structuredClone(comp);crowded.slides[0].layout=(await templateLayouts(b)).default;
   await assert.rejects(async()=>emitNativePptx({...await compileComposition(crowded,b),brand:b,output:join(dir,'many.pptx'),base:dir}),/has 0 subtitle placeholders/);
 });

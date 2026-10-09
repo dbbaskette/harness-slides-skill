@@ -26,14 +26,17 @@ export async function screenComposition({scene,structure={groups:[],connectors:[
   // The audit judges text against the slide background. Text on a filled card is judged against that card instead.
   const findings=audit.findings.filter(f=>{
     if(f.code!=='contrast'||!f.object)return true;
-    const slide=scene.slides.find(x=>x.id===f.slide),index=slide?.elements.findIndex(e=>e.id===f.object)??-1,e=slide?.elements[index],card=e&&backdrop(slide,e,index);
+    const slide=scene.slides.find(x=>x.id===f.slide),index=slide?.elements.findIndex(e=>e.id===f.object)??-1,e=slide?.elements[index];
+    // A shape's own text is already judged against that shape's fill.
+    if(!e||e.type==='shape'&&e.fill)return true;
+    const card=backdrop(slide,e,index);
     if(!card)return true;
-    const size=e.fontSize??theme.bodySize,large=size>=24||e.bold&&size>=18.66;
+    const size=e.fontSize??theme.bodySize,large=size>=18||e.bold&&size>=14;
     return contrast(color(e.color??'text',theme),color(card.fill,theme))<(large?3:4.5);
   });
   // Cover, section and closing slides are text by design and repeat on purpose.
   const templated=new Set((structure.layouts??[]).map(l=>l.slide));
-  for(let i=findings.length-1;i>=0;i--)if(templated.has(findings[i].slide)&&['text-only','similar-geometry','density'].includes(findings[i].code))findings.splice(i,1);
+  for(let i=findings.length-1;i>=0;i--)if(templated.has(findings[i].slide)&&['text-only','similar-geometry','density','measured-text-overflow'].includes(findings[i].code))findings.splice(i,1);
   scene.slides.forEach((slide,index)=>{
     if(templated.has(slide.id))return;
     const body=slide.elements.filter(e=>e.role!=='title'),words=body.map(e=>e.text??'').join(' '),edges=structure.connectors.filter(c=>c.slide===slide.id).length;

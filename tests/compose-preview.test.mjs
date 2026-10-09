@@ -94,3 +94,9 @@ test('text on a filled card is judged against the card, and an icon the color of
   const findings=await screenComposition({scene,structure,native:[{id:'card_slide',unattached:[],icons:[{id:'dark_icon',colors:['2867B2','FFFFFF']}]}]}),codes=id=>findings.filter(f=>f.object===id).map(f=>f.code);
   assert.deepEqual(codes('dark_text'),[]);assert.deepEqual(codes('pale_text'),['contrast']);assert.deepEqual(codes('dark_icon'),['icon-blends-into-fill']);
 });
+
+test('a filled box inside a card keeps its own contrast finding',async t=>{
+  const c=await brand(await temporary(t)),comp={version:1,title:'Deck',slides:[slide('nest_slide','Nested',{type:'box',id:'outer_card',fill:'canvasSecondary',children:[{type:'box',id:'inner_box',fill:'headingPrimary',color:'inkDeep',text:'Dark on blue'}]})]};
+  const {scene,structure}=await compileComposition(comp,c),findings=await screenComposition({scene,structure});
+  assert.ok(findings.some(f=>f.object==='inner_box'&&f.code==='contrast'));
+});

@@ -29,7 +29,8 @@ Any node may set weight (relative share, default 1). Containers may set group:tr
 gap: none|tight|normal|wide. align: start|center|end|stretch. On a box with children, align (start|center|end) places its content vertically. fill/color: a brand color role name. textRole: a brand typography role name.
 EDGE: {id,from:NODE id,to:NODE id,label?,arrow?:boolean,color?}.
 A labelled edge needs room: its label must fit the gap between the two nodes, so put a spacer between them.
-Generated IDs are reserved: <slide>_title, <box with children>_group, <labelled edge>_label.
+Generated IDs are reserved: <slide>_title, <slide>_subtitle, <slide>_detail, <box with children>_group, <labelled edge>_label.
+A card's align has no effect when it holds a box, grid or image, because those fill the spare space.
 IDs match [a-zA-Z_][a-zA-Z0-9_-]{4,40} and are unique across the deck.
 Text is measured with the brand font. Content that cannot fit at its role's size fails with the shortfall; rewrite, split or restructure.`;
 
@@ -164,7 +165,7 @@ export async function compileComposition(comp,contract,{fonts}={}) {
   };
 
   for(const s of comp.slides) try {
-    const elements=[],rects=new Map();
+    const elements=[],rects=new Map(),labels=[];
     const put=(element,members)=>{elements.push(element);members?.push(element.id);return element;};
     const short=(n,rect,required)=>!Number.isFinite(required)?fail(`${s.id}/${n.id??n.name??n.type}`,'has no usable room; use fewer siblings, less nesting or larger weights'):fail(`${s.id}/${n.id??n.name??n.type}`,`needs ${round(required)}pt of height but has ${round(rect.height)}pt at ${round(rect.width)}pt wide; shorten the text, split the slide or restructure`);
     const textProps=n=>{const st=style(n);return {fontSize:st.size,bold:st.bold,color:colors[n.color??st.colorRole],...(n.align&&n.align!=='stretch'?{align:{start:'left',center:'center',end:'right'}[n.align]}:{})};};
@@ -253,11 +254,15 @@ export async function compileComposition(comp,contract,{fonts}={}) {
         } else {
           // Slanted edge: push the label off the line along its normal, far enough that no corner touches it, on a side clear of every node.
           const length=Math.hypot(dx,dy),nx=-dy/length,ny=dx/length,reach=(width*Math.abs(nx)+height*Math.abs(ny))/2+4;
-          const clear=box=>box.x>=cb.x-.5&&box.y>=cb.y-.5&&box.x+box.width<=cb.x+cb.width+.5&&box.y+box.height<=cb.y+cb.height+.5&&![...rects.values()].some(r=>box.x<r.x+r.width&&r.x<box.x+box.width&&box.y<r.y+r.height&&r.y<box.y+box.height);
+          // A container that holds both ends of the arrow is the surface the label sits on, not an obstacle.
+          const holds=(r,n)=>r.x<=n.x+.5&&r.y<=n.y+.5&&r.x+r.width>=n.x+n.width-.5&&r.y+r.height>=n.y+n.height-.5;
+          const obstacles=[...[...rects.values()].filter(r=>!(holds(r,a)&&holds(r,b)&&r!==a&&r!==b)),...labels];
+          const clear=box=>box.x>=cb.x-.5&&box.y>=cb.y-.5&&box.x+box.width<=cb.x+cb.width+.5&&box.y+box.height<=cb.y+cb.height+.5&&!obstacles.some(r=>box.x<r.x+r.width&&r.x<box.x+box.width&&box.y<r.y+r.height&&r.y<box.y+box.height);
           const spot=[1,-1].map(side=>({x:mid.x+side*nx*reach-width/2,y:mid.y+side*ny*reach-height/2,width,height})).sort((a,b)=>a.y-b.y).find(clear);
           if(!spot)fail(`${s.id}/${c.id}`,'no clear space beside this slanted arrow for its label; shorten the label, move the nodes apart or put the words in a node');
           ({x,y}=spot);
         }
+        labels.push({x,y,width,height});
         put({id:`${c.id}_label`,type:'text',x:round(x),y:round(y),width:round(width),height:round(height),text:c.label,fontSize:st.size,bold:st.bold,color:colors[st.colorRole],align});
         record.label=`${c.id}_label`;
       }
@@ -265,7 +270,7 @@ export async function compileComposition(comp,contract,{fonts}={}) {
     }
 
     scene.slides.push({id:s.id,title:s.title,sources:s.sources,elements,...(s.notes!==undefined?{notes:s.notes}:{}),...(s.intent?{intent:s.intent}:{}),...(s.layoutId?{layoutId:s.layoutId}:{})});
-  } catch(error){problems.push(error.message);}
+  } catch(error){problems.push(error.message.startsWith(`${s.id}`)?error.message:`${s.id}: ${error.message}`);}
   // Report every slide that does not fit in one pass, so the author fixes them together.
   if(problems.length)throw new Error(problems.length===1?problems[0]:`${problems.length} slides need changes:\n${problems.join('\n')}`);
   validateScene(scene);
