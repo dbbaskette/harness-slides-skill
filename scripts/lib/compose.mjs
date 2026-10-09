@@ -60,7 +60,7 @@ const luminance=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255).map(v=>v<
 export const contrastRatio=(a,b)=>{const [hi,lo]=[luminance(a),luminance(b)].sort((x,y)=>y-x);return (hi+.05)/(lo+.05);};
 
 export const composeContract=`Composition v1 (AI-owned; describe structure, never coordinates).
-{version:1,title,direction?:DIRECTION,slides:[{id,title,sources:[one or more IDs],canvas:NODE,connect?:[EDGE],brief?:BRIEF,subtitle?,caveat?:text|{label,text},source?,notes?:speaker notes,intent?,layoutId?} | {id,title,sources,layout:TEMPLATE LAYOUT NAME,subtitle?,detail?,notes?}]}
+{version:1,title,direction?:DIRECTION,slides:[{id,title,sources:[one or more IDs],canvas:NODE,connect?:[EDGE],brief?:BRIEF,subtitle?,caveat?:text|{label,text},source?,notes?:speaker notes,intent?,layoutId?} | {id,title,sources,layout:TEMPLATE LAYOUT NAME,subtitle?,detail?,picture?:{src,alt},notes?}]}
 A slide with layout uses that template layout's own placeholders (cover, section break, closing) and has no canvas; run compose layouts for the names.
 A content slide's furniture is set on the slide, not drawn in the canvas: subtitle is one line under the title, in the template's own subtitle line; caveat is a ruled strip at the foot, with an optional one-word label such as Limit or Verify; source is a line beneath it. The canvas gets the room that is left.
 NODE containers: {type:stack,direction:row|column,gap?,align?,children:[NODE]} | {type:grid,columns:1-6,gap?,children:[NODE]} | {type:free,children:[NODE with at:{x,y,width,height} as 0-1 fractions]} | {type:ring,children:[3-8 NODE],hub?:NODE}.
@@ -74,6 +74,7 @@ A card's content sits inside its shape's text area, so a diamond, ellipse or hex
 gap: none|tight|normal|wide. align: start|center|end|stretch. In a row, stretch (the default) makes every child fill the row's height; start, center or end gives each child the height its content needs. On a text, or a box with text, align sets the text left, centered or right. In a row an icon takes its own width unless you give it a weight. On a box with children, align (start|center|end) places its content vertically. fill/color: a brand color role name. textRole: a brand typography role name.
 EDGE: {id,from:NODE id,to:NODE id,label?,arrow?:boolean,color?,route?:straight|elbow|curve}. An edge attaches to a box of any shape and to an icon with a disc or a ring; an edge to a text or a plain icon is drawn but cannot stay attached when a node moves.
 A straight edge between nodes that are not level runs at a slant. route elbow turns it into right angles, which reads better for a fan-out or a tree; route curve bends it. ring places its children around a circle in order, the first at the top, going clockwise; an elbow or curve edge between two of them turns once around the outside, which draws a cycle. Use hub for what sits at the center.
+Text may sit over an image only inside a filled box, which keeps it readable whatever the picture shows; place the image and the box in a free container. A template layout with a picture slot takes picture:{src,alt}, cropped to fill the slot.
 table is a native, editable table in the brand's table style: the first row is the header, and each row is as tall as its tallest cell. Keep cells short; a table is for comparing values, not for holding sentences.
 DIRECTION, decided once for the deck: {focal:color role that means "look here",neutral:panel color role,meanings?:{color role:what it stands for in this deck},motif?:text}.
 With a direction, fills come only from the neutral, the meanings and white; boxes default to the neutral. Text, icon and edge colors may be any role except the focal.
@@ -118,7 +119,8 @@ export function validateComposition(comp,contract,{collect}={}) {
     // Every problem on a slide is gathered, so one compile shows all of them.
     const found=[],attempt=check=>{try{check();}catch(error){found.push(error.message);}};
     if(!s||typeof s!=='object'||Array.isArray(s))throw new Error('each slide must be an object');
-    if(Object.keys(s).some(k=>!['id','title','sources','canvas','connect','notes','intent','layoutId','layout','subtitle','detail','brief','caveat','source'].includes(k)))fail(s.id,'unsupported slide field');
+    if(Object.keys(s).some(k=>!['id','title','sources','canvas','connect','notes','intent','layoutId','layout','subtitle','detail','picture','brief','caveat','source'].includes(k)))fail(s.id,'unsupported slide field');
+    if(s.picture!==undefined&&s.layout===undefined)fail(s.id,'picture fills a template layout\'s picture slot; on a content slide use an image node in the canvas');
     claim(s.id,'slide');claim(`${s.id}_title`,s.id);
     attempt(()=>{if(!str(s.title))fail(s.id,'provide a slide title');});
     attempt(()=>{if(!Array.isArray(s.sources)||!s.sources.length||s.sources.some(x=>!str(x)))fail(s.id,'provide source references: one or more IDs naming what the slide rests on, such as request or author_knowledge');});
@@ -201,6 +203,7 @@ export function validateComposition(comp,contract,{collect}={}) {
       if(s.canvas!==undefined||s.connect!==undefined||s.caveat!==undefined||s.source!==undefined)fail(s.id,'a slide with a template layout has no canvas, edges, caveat or source; put content on a standard slide');
       for(const key of ['subtitle','detail'])if(s[key]!==undefined){if(!str(s[key]))fail(s.id,`provide ${key} text or omit it`);claim(`${s.id}_${key}`,s.id);}
       if(s.detail!==undefined&&s.subtitle===undefined)fail(s.id,'detail needs a subtitle before it');
+      if(s.picture!==undefined){if(!s.picture||typeof s.picture!=='object'||Array.isArray(s.picture)||!str(s.picture.src)||!str(s.picture.alt)||Object.keys(s.picture).some(k=>!['src','alt'].includes(k)))fail(s.id,'picture is {src,alt}: the image for the layout\'s picture slot and what it shows');claim(`${s.id}_picture`,s.id);}
       if(brief!==undefined&&(!brief||typeof brief!=='object'||Object.keys(brief).some(k=>k!=='rhythm')||!rhythms.includes(brief.rhythm)))fail(s.id,'a template layout slide takes only brief.rhythm (anchor|dense|breathing)');
       summary.push({id:s.id,nodes:0,fills:[],edges:0,layout:s.layout});continue;
     }
@@ -520,8 +523,20 @@ export async function compileComposition(comp,contract,{fonts}={}) {
       // The native emitter writes these into the layout's subtitle placeholders; the geometry here serves other emitters.
       const placeholders=[],body=roles[bodyRole];let y=sl.contentBox.y;
       for(const key of ['subtitle','detail'])if(s[key]!==undefined){const height=measure.height(s[key],body,sl.contentBox.width);put({id:`${s.id}_${key}`,type:'text',x:sl.contentBox.x,y:round(y),width:sl.contentBox.width,height:round(height),text:s[key],fontSize:body.size,bold:body.bold,color:colors[body.colorRole]});placeholders.push(`${s.id}_${key}`);y+=height+inset;}
-      structure.layouts.push({slide:s.id,layout:s.layout,placeholders});
+      // A picture goes into the layout's own picture slot, which gives it its place, shape and crop.
+      const pictures=[];if(s.picture){put({id:`${s.id}_picture`,type:'image',x:0,y:0,width:sl.canvas.width,height:sl.canvas.height,src:s.picture.src,alt:s.picture.alt,fit:'cover'});pictures.push(`${s.id}_picture`);}
+      structure.layouts.push({slide:s.id,layout:s.layout,placeholders,...(pictures.length?{pictures}:{})});
     } else if(area.height>inset*2)place(s.canvas,area,null);
+    if(!s.layout) {
+      // Words over a picture need something solid behind them: contrast against a photograph cannot be checked, and
+      // a see-through scrim changes a brand color. A filled box painted between the picture and the words does it.
+      const hits=(a,b)=>a.x<b.x+b.width-.5&&b.x<a.x+a.width-.5&&a.y<b.y+b.height-.5&&b.y<a.y+a.height-.5,inside=(a,b)=>a.x>=b.x-.5&&a.y>=b.y-.5&&a.x+a.width<=b.x+b.width+.5&&a.y+a.height<=b.y+b.height+.5;
+      elements.forEach((e,i)=>{
+        if(!(e.type==='text'&&e.role!=='title'||e.type==='shape'&&e.text&&!e.fill))return;
+        const bare=elements.slice(0,i).some((p,at)=>p.type==='image'&&hits(e,p)&&!elements.slice(at+1,i).some(b=>b.type==='shape'&&b.fill&&inside(e,b)));
+        if(bare)tight.push(`${s.id}/${e.id}: sits over an image with nothing solid behind it. Put the words in a filled box, so they stay readable whatever the picture shows`);
+      });
+    }
     if(tight.length){problems.push(...tight);continue;}
     // A slide presented live needs something for the presenter to say.
     if(bodyRole==='body'&&!s.layout&&!(typeof s.notes==='string'&&s.notes.trim()))structure.unspoken.push(s.id);

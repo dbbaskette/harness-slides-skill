@@ -526,3 +526,14 @@ test('edges can bend, a ring places its children around a circle, and a table is
   const bad=rows=>()=>validateComposition(deck({type:'table',id:'bad_table',rows}),c);
   assert.throws(bad([['a','b']]),/a table has 2–12 rows of 2–6 text cells/);assert.throws(bad([['a','b'],['c']]),/a table has 2–12 rows/);
 });
+
+test('words over an image need a filled box behind them',async()=>{
+  const c=brand(),over=children=>deck({type:'free',children:[{type:'image',id:'back_image',src:'photo.png',alt:'A ridge at dawn',fit:'cover',at:{x:0,y:0,width:1,height:1}},...children]});
+  const at={x:.05,y:.55,width:.5,height:.4};
+  await assert.rejects(()=>compileComposition(over([{type:'text',id:'bare_text',text:'Words on the photo',at}]),c),/bare_text: sits over an image with nothing solid behind it/);
+  await assert.rejects(()=>compileComposition(over([{type:'box',id:'line_box',style:'outline',text:'Words in an outline',at}]),c),/line_box: sits over an image with nothing solid behind it/);
+  // A filled box, or a card holding the text, is enough; so is text beside the image rather than on it.
+  const panel=(await compileComposition(over([{type:'box',id:'panel_box',text:'Words on a panel',at}]),c)).scene;assert.ok(byId(panel,'panel_box').fill);
+  await compileComposition(over([{type:'box',id:'card_box',children:[{type:'text',id:'card_text',text:'Words in a card'}],at}]),c);
+  await compileComposition(deck({type:'stack',direction:'row',children:[{type:'image',id:'side_image',src:'photo.png',alt:'A ridge'},{type:'text',id:'side_text',text:'Words beside it'}]}),c);
+});

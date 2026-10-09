@@ -67,6 +67,13 @@ export function tile(images,{columns,gap=12,numbers}={}) {
   return sheet;
 }
 
+// Several renders of one slide on one sheet, numbered in the order given, so looks can be compared side by side.
+export async function sheetFiles({image=[],output}) {
+  if(image.length<2||image.length>12)throw new Error('Give 2–12 images, each with its own --image');
+  if(!output)throw new Error('Provide --output for the new sheet');
+  return writeContactSheet(image,output,{columns:Math.min(image.length,3)});
+}
+
 export async function writeContactSheet(files,output,options) {
   const sheet=tile(await Promise.all(files.map(async file=>decodePng(await readFile(file)))),options);
   await writeFile(output,encodePng(sheet),{flag:'wx',mode:0o600});

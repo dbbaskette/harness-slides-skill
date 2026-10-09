@@ -132,8 +132,8 @@ test('a critique is recorded against the render it judged, and a critical findin
   const record=JSON.parse(await readFile(blocked.critique,'utf8'));assert.equal(record.deckSha256,result.deckSha256);assert.equal(record.findings.length,2);
   // One critique per render: the next one needs a new render.
   await assert.rejects(()=>recordCritique({file:preview,assessment:join(dir,'one.json')}),/already has a critique; fix the slides, preview again/);
-  const again=join(dir,'preview-2');await previewComposition({file:output,output:again,'file-id':'drive_file_1'},fakes().deps);
-  const clear=await recordCritique({file:again,assessment:await save('two.json',{deckSha256:result.deckSha256,reviewer:'author',findings:[]})});
+  const again=join(dir,'preview-2'),second=await previewComposition({file:output,output:again,'file-id':'drive_file_1'},fakes().deps);
+  const clear=await recordCritique({file:again,assessment:await save('two.json',{deckSha256:second.deckSha256,reviewer:'author',findings:[]})});
   assert.deepEqual([clear.status,clear.reviewer],['clear','author']);assert.match(clear.next,/Clear to show the user/);
   // A single-slide preview has no packet to critique.
   const single=join(dir,'single');await previewComposition({file:output,output:single,slide:'cards_one','file-id':'drive_file_1'},fakes().deps);
@@ -155,4 +155,11 @@ test('icon screens flag an icon repeated, an icon with no words, and one icon gi
   assert.ok(codes('lone_slide').includes('icon-alone'));assert.ok(!codes('mean_slide').includes('icon-alone'));
   assert.ok(codes('again_slide').includes('icon-two-meanings'));assert.match(findings.find(f=>f.code==='icon-two-meanings').detail,/"storage" here and "compliance" on mean_slide/);
   assert.ok(!codes('mean_slide').includes('icon-two-meanings'));
+});
+
+test('a panel of words over a picture is not reported as a collision',async t=>{
+  const dir=await temporary(t),c=await brand(dir);
+  const comp={version:1,title:'Photo',slides:[slide('photo_slide','Words on a picture',{type:'free',children:[{type:'image',id:'back_photo',src:'photo.png',alt:'A ridge',fit:'cover',at:{x:0,y:0,width:1,height:1}},{type:'box',id:'panel_card',at:{x:.05,y:.5,width:.5,height:.45},children:[{type:'text',id:'panel_text',text:'Readable on the panel'}]}]})]};
+  const {scene,structure}=await compileComposition(comp,c),findings=await screenComposition({scene,structure});
+  assert.ok(!findings.some(f=>f.code==='content-collision'),JSON.stringify(findings.filter(f=>f.code==='content-collision')));
 });

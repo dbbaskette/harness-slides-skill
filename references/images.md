@@ -7,7 +7,24 @@ and claims editable.
 Images come from the Gemini API, model `gemini-nano-banana-2.1`. **This provider
 is unverified:** built from Google's documentation and tested against stubs, never
 the live API. Treat the first `check` and `generate` with a real key as a trial and
-report exactly what they return.
+report exactly what they return. If Google refuses the model or the request,
+nothing was charged: rerun the same ID with `--api generate-content --model
+gemini-3.1-flash-image`, the earlier request shape, and report which one worked.
+
+## Where an image belongs
+
+- **Use one for:** a cover or a section break (the layout's picture slot), one
+  concept image on a slide about an idea, or a background behind a filled
+  panel of words.
+- **Never for:** data, a technical diagram, a logo, anything shown as a real
+  screenshot, or a named real product, place or person. Draw those or use the
+  real thing.
+- Before generating, write one line on what the image makes easier to
+  understand or feel. If there is nothing to write, the slide does not need it.
+- No text in the image. Words stay native, in a filled box when they sit over
+  the picture.
+- A missing key does not change whether an image is planned, only how it is
+  sourced: ask the user for a supplied image, or leave the slot for them.
 
 ## Key and cost
 

@@ -16,7 +16,7 @@ const budgets={live:60,reading:90};
 const marker='<!-- harness-slides draft -->';
 
 export const outlineContract=`Outline v1 (AI-owned; words and decisions, no layout).
-{version:1,title,audience?,delivery?:live|reading,minutes?,direction?:DIRECTION,layouts?:{cover?,section?,closing?},material?:[paths or notes],house?:[lines],slides:[SLIDE]}
+{version:1,title,audience?,delivery?:live|reading,minutes?,direction?:DIRECTION,layouts?:{cover?,section?,closing?},material?:[paths or notes],house?:[lines],approval?:[lines],slides:[SLIDE]}
 SLIDE cover: {id,kind:cover,title,subtitle?,detail?,notes?}. section: {id,kind:section,title,subtitle?,notes?}. closing: {id,kind:closing,title,notes?}.
 SLIDE content: {id,kind:content,title,understand,relation,focal?,rhythm?,points:[{label?,text?}],caveat?,source?,notes?,sources:[one or more IDs]}.
 title is the claim, short enough for the brand's title lines. understand is one sentence: what the audience must leave the slide knowing.
@@ -29,6 +29,7 @@ minutes is the length of the talk; the draft shows what that leaves for each con
 DIRECTION is the composition's: {focal,neutral,meanings?,motif?}, in brand color roles. A draft is drawn without it; the build uses it.
 layouts name the brand template layouts for cover, section and closing slides (run compose layouts); the build needs them.
 material lists the sources a builder may draw on. house lists what must match across sections: color meanings, icon style, where caveats go.
+approval records what the user said when they approved the draft and when they chose the look, in their words; start copies it into the build's brief.
 IDs match [a-zA-Z_][a-zA-Z0-9_-]{4,40} and are unique.`;
 
 // What a brand allows a draft: how long a title may be and how many words a slide carries.
@@ -44,7 +45,7 @@ export async function checkOutline(outline,contract,{fonts}={}) {
   validateBrandContract(contract,{medium:'slides'});
   const problems=[],fail=(where,message)=>problems.push(`${where}: ${message}`);
   if(outline?.version!==1)throw new Error('Use outline version 1 (run outline contract)');
-  const top=['version','title','audience','delivery','minutes','direction','layouts','material','house','slides'];
+  const top=['version','title','audience','delivery','minutes','direction','layouts','material','house','approval','slides'];
   for(const key of Object.keys(outline))if(!top.includes(key))fail('outline',`unsupported field ${key}`);
   if(!str(outline.title))fail('outline','provide the deck title');
   if(outline.audience!==undefined&&!str(outline.audience))fail('outline','audience is a short description, or omitted');
@@ -52,7 +53,7 @@ export async function checkOutline(outline,contract,{fonts}={}) {
   const delivery=outline.delivery??contract.medium.delivery??'reading';
   if(!['live','reading'].includes(delivery))fail('outline','delivery is live or reading');
   else if(outline.delivery&&contract.medium.delivery&&outline.delivery!==contract.medium.delivery)fail('outline',`delivery is ${outline.delivery}, but the brand contract was exported for ${contract.medium.delivery}; export it for ${outline.delivery}`);
-  for(const key of ['material','house'])if(outline[key]!==undefined&&(!Array.isArray(outline[key])||outline[key].some(x=>!str(x))))fail('outline',`${key} is a list of lines`);
+  for(const key of ['material','house','approval'])if(outline[key]!==undefined&&(!Array.isArray(outline[key])||outline[key].some(x=>!str(x))))fail('outline',`${key} is a list of lines`);
   if(outline.layouts!==undefined&&(!outline.layouts||typeof outline.layouts!=='object'||Array.isArray(outline.layouts)||Object.entries(outline.layouts).some(([k,v])=>!['cover','section','closing'].includes(k)||!str(v))))fail('outline','layouts names template layouts for cover, section and closing');
   if(outline.direction!==undefined) {
     // The composition's own rules decide whether a direction is sound.
@@ -279,7 +280,7 @@ Outline: \`outline.json\`, SHA-256 \`${hash(bytes)}\`.
 
 ## Approval
 
-Record here what the user said when they approved the draft, in their words.
+${outline.approval?.length?outline.approval.map(line=>`> ${line}`).join('\n>\n'):'Record here what the user said when they approved the draft, in their words.'}
 
 ## Direction
 

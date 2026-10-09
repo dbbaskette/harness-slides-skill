@@ -4,7 +4,7 @@ import { homedir, platform } from 'node:os';
 import { join, resolve, dirname, extname, isAbsolute } from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { apiKey, defaultModel, aspectRatios, imageSizes, checkModel, generateImage } from './gemini-api.mjs';
+import { apiKey, defaultModel, aspectRatios, imageSizes, apis, checkModel, generateImage } from './gemini-api.mjs';
 
 const helper = fileURLToPath(new URL('../images/worker.py', import.meta.url));
 const requirements = fileURLToPath(new URL('../images/requirements.txt', import.meta.url));
@@ -32,7 +32,8 @@ const messages = {
   api_refused: 'The Gemini API refused the request. Nothing was generated; the same ID can be retried once the cause is fixed.',
   network_unavailable: 'The Gemini API could not be reached and nothing was sent. Retry with the same ID.',
   no_image_returned: 'The Gemini API answered without a usable image. It will not be resent. Revise the brief and explicitly request a new image with a new ID.',
-  requires_api_provider: 'The art style block, --aspect and --size apply only to the default Gemini API provider.',
+  requires_api_provider: 'The art style block, --aspect, --size and --api apply only to the default Gemini API provider.',
+  unsupported_api: 'Use --api interactions or --api generate-content.',
 };
 export class ImagesError extends Error {
   constructor(code, detail) { super((messages[code] ?? `Image operation failed (${code}).`) + (detail ? ` (${detail})` : '')); this.code = code; }
@@ -184,7 +185,7 @@ function refusal({ http, code, message }) {
   return new ImagesError([401, 403].includes(http) || /api.?key/i.test(message ?? '') ? 'key_rejected' : http === 402 || code === 'failed_precondition' ? 'billing_required'
     : http === 404 ? 'model_unavailable' : http === 429 ? 'rate_limited' : 'api_refused', detail);
 }
-const metadata = job => ({ provider: 'gemini-api', api: 'interactions', requestId: job.id, generated: true, model: job.model, created: job.created,
+const metadata = job => ({ provider: 'gemini-api', api: job.api ?? 'interactions', requestId: job.id, generated: true, model: job.model, created: job.created,
   promptSha256: job.promptSha256, styleSha256: job.styleSha256, referenceSha256: job.referenceSha256, aspectRatio: job.aspectRatio, imageSize: job.imageSize,
   format: job.image.type, width: job.image.width, height: job.image.height, sha256: job.image.sha256 });
 
@@ -236,6 +237,8 @@ async function apiImages(action, options, deps, state) {
   if (!options.promptFile || !options.output) throw new ImagesError('brief_and_output_required');
   const aspectRatio = options.aspect ?? '16:9', imageSize = options.size ?? '2K';
   if (!aspectRatios.includes(aspectRatio) || !imageSizes.includes(imageSize)) throw new ImagesError('unsupported_aspect_or_size');
+  const api = options.api ?? 'interactions';
+  if (!apis.includes(api)) throw new ImagesError('unsupported_api');
   const { project, stem } = await target(options.project, options.output), base = await jobBase(project);
   const brief = await block(resolve(options.promptFile), 64 * 1024, 'prompt');
   const stylePath = options.style ? resolve(options.style) : join(project, styleFile);
@@ -248,7 +251,8 @@ async function apiImages(action, options, deps, state) {
   }
   // Inline images count against the API's 20 MB request limit after base64 grows them by a third.
   if (references.reduce((n, r) => n + r.bytes.length, 0) > 14 * 1024 * 1024) throw new ImagesError('references_too_large');
-  const request = { project, output: options.output, model, aspectRatio, imageSize, promptSha256: sha(brief), styleSha256: style && sha(style), referenceSha256: references.map(r => r.sha256) };
+  // The default shape is left out of the request record, so receipts written before --api existed still match.
+  const request = { project, output: options.output, model, ...(api === 'interactions' ? {} : { api }), aspectRatio, imageSize, promptSha256: sha(brief), styleSha256: style && sha(style), referenceSha256: references.map(r => r.sha256) };
   const fingerprint = sha(JSON.stringify(request));
   let job = await readJob(base + '.json');
   if (job) {
@@ -260,7 +264,7 @@ async function apiImages(action, options, deps, state) {
   job = { id: options.id, fingerprint, ...request, created: new Date().toISOString().slice(0, 19) + 'Z', status: 'submitted' };
   // Reserve the ID on disk first. A second caller, or a rerun after a crash, finds it and does not send again.
   try { await durable(base + '.json', JSON.stringify(job), 'wx'); } catch (e) { throw e.code === 'EEXIST' ? new ImagesError('generation_uncertain') : e; }
-  const reply = await generateImage({ key: key.value, model, text: style ? `${style}\n\n${brief}` : brief, references, aspectRatio, imageSize, fetcher: deps.fetch });
+  const reply = await generateImage({ key: key.value, model, text: style ? `${style}\n\n${brief}` : brief, references, aspectRatio, imageSize, api, fetcher: deps.fetch });
   if (['unsent', 'refused'].includes(reply.outcome)) {
     // Google's answer was a definite no, or the request never left: nothing was generated or charged, so the ID is free again.
     await rm(base + '.json');
@@ -283,7 +287,7 @@ export async function images(action, options = {}, deps = {}) {
   const provider = options.provider ?? 'gemini-api', state = resolve(options.state ?? defaultState());
   if (provider === 'gemini-api') return apiImages(action, options, deps, state);
   if (provider !== 'gemini-web') throw new ImagesError('unknown_provider');
-  if (action === 'generate' && options.project && (options.style || options.aspect || options.size || await exists(join(resolve(options.project), styleFile)))) throw new ImagesError('requires_api_provider');
+  if (action === 'generate' && options.project && (options.style || options.aspect || options.size || options.api || await exists(join(resolve(options.project), styleFile)))) throw new ImagesError('requires_api_provider');
   const runtime = await runtimePath(state);
   const run = deps.run ?? runProcess;
   if (action === 'status' && !await exists(state)) return { status: 'setup_required', provider: 'gemini-web', liveChecked: false };

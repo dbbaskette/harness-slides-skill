@@ -164,6 +164,12 @@ draws a cycle. A label on an arrow needs room: on a straight arrow it must fit
 the gap between the two nodes, so leave a spacer; on a slanted arrow it is
 placed beside the line, clear of every node.
 
+Words may sit over an `image` only inside a filled box: put the image and
+the box in a `free` container, the image first. `compile` refuses bare text
+and outlined boxes over a picture, because no check can promise they stay
+readable. There is no see-through scrim; a brand may forbid changing a color's
+opacity.
+
 A `table` takes `rows`, the first being the header, and optional `widths` that
 share the width between columns. Each row is as tall as its tallest cell. Keep
 cells to a few words; a table compares values and is not a place for sentences.
@@ -189,8 +195,11 @@ node scripts/harness-slides.mjs compose layouts --brand brand-contract.json
 A slide that names a `layout` from that list fills the layout's own title and up
 to its number of subtitle lines (`subtitle`, then `detail`) and has no canvas:
 `{"id":"cover_slide","title":"…","layout":"Title 1 - dark","subtitle":"…","sources":[…]}`.
-Prefer layouts listed with `pictures: 0`; a picture slot cannot be filled yet and
-renders as an empty panel. Content slides stay on the default layout.
+A layout listed with `pictures: 1` has a slot for a photo: add
+`"picture":{"src":"assets/cover.png","alt":"…"}` and the image is cropped to
+fill it. Left unfilled the slot renders as an empty panel, so without a
+picture choose a layout with `pictures: 0`. Content slides stay on the default
+layout.
 
 ## Brand roles, not values
 

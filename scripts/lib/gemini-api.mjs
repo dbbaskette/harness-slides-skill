@@ -5,6 +5,9 @@ export const endpoint = 'https://generativelanguage.googleapis.com/v1beta';
 export const defaultModel = 'gemini-nano-banana-2.1';
 export const aspectRatios = ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9', '1:4', '4:1', '1:8', '8:1'];
 export const imageSizes = ['1K', '2K', '4K'];
+// Two request shapes. Interactions is what Google documents now; generate-content is the earlier one, kept as a
+// one-flag alternative because it is the shape known to have worked for this model family.
+export const apis = ['interactions', 'generate-content'];
 const neverConnected = ['ENOTFOUND', 'EAI_AGAIN', 'ECONNREFUSED', 'ENETUNREACH', 'EHOSTUNREACH', 'UND_ERR_CONNECT_TIMEOUT'];
 
 // GOOGLE_API_KEY wins when both are set, as in Google's own libraries.
@@ -37,7 +40,15 @@ async function call(path, { key, body, timeout, fetcher = fetch }) {
 // The cheapest authenticated request: unbilled model metadata. It confirms the key and the model name, not billing.
 export const checkModel = ({ key, model, fetcher }) => call('/models/' + model, { key, timeout: 30000, fetcher });
 
-export async function generateImage({ key, model, text, references = [], aspectRatio, imageSize, fetcher }) {
+export async function generateImage({ key, model, text, references = [], aspectRatio, imageSize, api = 'interactions', fetcher }) {
+  if (api === 'generate-content') {
+    const reply = await call(`/models/${model}:generateContent`, { key, timeout: 300000, fetcher, body: {
+      contents: [{ parts: [{ text }, ...references.map(r => ({ inline_data: { mime_type: r.mimeType, data: r.bytes.toString('base64') } }))] }],
+      generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio, imageSize } } } });
+    if (reply.outcome !== 'ok') return reply;
+    const found = (reply.data.candidates?.[0]?.content?.parts ?? []).map(p => p?.inlineData ?? p?.inline_data).find(b => typeof b?.data === 'string');
+    return found ? { outcome: 'image', bytes: Buffer.from(found.data, 'base64') } : { outcome: 'no_image' };
+  }
   const result = await call('/interactions', { key, timeout: 300000, fetcher, body: { model,
     input: [{ type: 'text', text }, ...references.map(r => ({ type: 'image', mime_type: r.mimeType, data: r.bytes.toString('base64') }))],
     response_format: { type: 'image', aspect_ratio: aspectRatio, image_size: imageSize } } });

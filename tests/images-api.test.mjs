@@ -269,3 +269,22 @@ test('an API-generated PNG and its sidecar satisfy the deck compiler\'s provenan
   await writeFile(art.metadata, (await readFile(art.metadata, 'utf8')).replace('gemini-api', 'elsewhere'));
   await assert.rejects(compileDeckFile({ file, output: join(f.project, 'unknown'), 'design-project': f.project }), /provenance/);
 });
+
+test('the earlier generateContent request shape is one flag away and is recorded in the sidecar', async t => {
+  const f = await fixture(t), reference = join(f.project, 'reference.png'); await writeFile(reference, png);
+  f.reply = json({ candidates: [{ content: { parts: [{ text: 'Here it is.' }, { inlineData: { mimeType: 'image/png', data: png.toString('base64') } }] } }] });
+  const result = await f.generate({ api: 'generate-content', model: 'gemini-3.1-flash-image', references: [reference] }), { url, init } = f.calls[0];
+  assert.equal(url, 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:generateContent');
+  assert.deepEqual(init.headers, { 'x-goog-api-key': key, 'content-type': 'application/json' }); assert.equal(init.redirect, 'error');
+  assert.deepEqual(f.sent(0), { contents: [{ parts: [{ text: brief }, { inline_data: { mime_type: 'image/png', data: png.toString('base64') } }] }],
+    generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: '16:9', imageSize: '2K' } } });
+  const sidecar = JSON.parse(await readFile(result.metadata, 'utf8'));
+  assert.deepEqual([sidecar.api, sidecar.model, sidecar.sha256], ['generate-content', 'gemini-3.1-flash-image', sha(png)]);
+  // The shape is part of the request: the same ID cannot quietly switch to the other one.
+  await assert.rejects(() => f.generate({ model: 'gemini-3.1-flash-image', references: [reference] }), code('request_id_conflict'));
+  await assert.rejects(() => f.generate({ ...f.slide(5), api: 'batch' }), code('unsupported_api'));
+  // An answer with words and no picture is not an image.
+  f.reply = json({ candidates: [{ content: { parts: [{ text: 'I cannot draw that.' }] } }] });
+  await assert.rejects(() => f.generate({ ...f.slide(6), api: 'generate-content' }), code('no_image_returned'));
+  assert.ok(!(await written(f.base)).includes(key));
+});
