@@ -2,6 +2,6 @@
   "schema": 1,
   "skill": "harness-slides",
   "entry": "SKILL.md",
-  "minimumRuntime": "0.10.2",
-  "version": "0.10.2"
+  "minimumRuntime": "0.11.0",
+  "version": "0.11.0"
 }

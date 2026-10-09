@@ -35,7 +35,7 @@ PowerPoint inspection also needs **Python 3.9 or newer**.
 Run these commands in your terminal:
 
 ```sh
-git clone --branch v0.10.2 --depth 1 https://github.com/dbbaskette/harness-slides-skill.git
+git clone --branch v0.11.0 --depth 1 https://github.com/dbbaskette/harness-slides-skill.git
 cd harness-slides-skill
 bash scripts/Install-Harness-Slides.sh
 ```
@@ -48,8 +48,8 @@ skills. To preview the changes first, add `--dry-run` to the installer command.
 
 ## Know which version you are using
 
-The current published release is [v0.10.2](https://github.com/dbbaskette/harness-slides-skill/releases/tag/v0.10.2).
-The skill reports “Using Harness Slides v0.10.2” when starting or resuming work.
+The current published release is [v0.11.0](https://github.com/dbbaskette/harness-slides-skill/releases/tag/v0.11.0).
+The skill reports “Using Harness Slides v0.11.0” when starting or resuming work.
 A resumed deck may use its older saved runtime and will report that version.
 Guidance can refresh independently; its revision does not replace the runtime version.
 
