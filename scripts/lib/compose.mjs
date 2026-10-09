@@ -1,6 +1,6 @@
 // Model-authored relative layout, compiled into absolute brand-constrained scene objects.
 // The model chooses structure; this module owns arithmetic, fit and brand roles.
-import {validateScene} from './scene.mjs';
+import {validateScene,shapeKinds} from './scene.mjs';
 import {brandTheme,validateBrandContract} from './brand-contract.mjs';
 import {resolveFont,measureText} from './text-metrics.mjs';
 
@@ -22,7 +22,7 @@ const str=v=>typeof v==='string'&&v.trim()&&v.length<=20000;
 export const composeContract=`Composition v1 (AI-owned; describe structure, never coordinates).
 {version:1,title,slides:[{id,title,sources:[evidence IDs],canvas:NODE,connect?:[EDGE],notes?,intent?,layoutId?}]}
 NODE containers: {type:stack,direction:row|column,gap?,align?,children:[NODE]} | {type:grid,columns:1-6,gap?,children:[NODE]} | {type:free,children:[NODE with at:{x,y,width,height} as 0-1 fractions]}.
-NODE leaves: {type:box,id,text?|children?,shape?:rect|ellipse,fill?,color?,textRole?,align?} | {type:text,id,text,textRole?,color?,align?} | {type:image,id,src,alt,fit?} | {type:spacer}.
+NODE leaves: {type:box,id,text?|children?,shape?:rect|ellipse|roundRect|diamond|hexagon|chevron|can,fill?,color?,textRole?,align?} | {type:text,id,text,textRole?,color?,align?} | {type:image,id,src,alt,fit?} | {type:spacer}.
 Any node may set weight (relative share, default 1). Containers may set group:true and an id.
 gap: none|tight|normal|wide. align: start|center|end|stretch. fill/color: a brand color role name. textRole: a brand typography role name.
 EDGE: {id,from:NODE id,to:NODE id,label?,arrow?:boolean,color?}.
@@ -69,7 +69,7 @@ export function validateComposition(comp,contract) {
       if(n.type==='box') {
         if(n.text!==undefined&&n.children!==undefined)fail(where,'a box holds text or children, not both');
         if(n.text!==undefined&&!str(n.text))fail(where,'provide box text');
-        if(!['rect','ellipse'].includes(n.shape??'rect'))fail(where,'shape must be rect|ellipse');
+        if(!Object.hasOwn(shapeKinds,n.shape??'rect'))fail(where,`shape must be one of ${Object.keys(shapeKinds).join('|')}`);
         if(n.children!==undefined){if(n.align!==undefined)fail(where,'align applies to box text, not to a box with children');claim(`${n.id}_group`,where);}
         fills.add(n.fill??'canvasSecondary');
       }
@@ -134,7 +134,12 @@ export async function compileComposition(comp,contract,{fonts}={}) {
     if(n.type==='spacer'||n.type==='free')return 0;
     if(n.type==='image')return inset*4;
     if(n.type==='box') {
-      if(n.text!==undefined)return measure.height(n.text,style(n),width-inset*2)+inset*2;
+      if(n.text!==undefined) {
+        // Rectangles pad their text by the brand inset; other presets already confine text to an inner area.
+        const [,,,fx,fy]=shapeKinds[n.shape??'rect'];
+        if(fx===1&&fy===1)return measure.height(n.text,style(n),width-inset*2)+inset*2;
+        return fx*width>7.2?measure.height(n.text,style(n),fx*width)/fy:Infinity;
+      }
       if(n.children)return need({type:'stack',direction:'column',gap:n.gap,children:n.children},Math.max(1,width-inset*2))+inset*2;
       return inset*2;
     }

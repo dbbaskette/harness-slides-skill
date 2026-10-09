@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { validateScene, themeFor, color } from './scene.mjs';
+import { validateScene, themeFor, color, shapeKinds } from './scene.mjs';
 import { pptxTool } from './presentation-tools.mjs';
 
 export async function renderPptxScene(scene,output,{base=process.cwd(),brand}={}) {
@@ -17,7 +17,7 @@ export async function renderPptxScene(scene,output,{base=process.cwd(),brand}={}
       const style={fontFace:t.font,fontSize:e.fontSize??(e.role==='title'?t.titleSize:t.bodySize),color:hex(e.color??'text'),bold:e.bold??false,align:e.align??'left',margin:3.6,lineSpacingMultiple:1.25,paraSpaceBefore:0,paraSpaceAfter:0,breakLine:false,...(e.href?{hyperlink:{url:e.href}}:{}),vertAnchor:'ctr',...(e.fill?{fill:{color:hex(e.fill)}}:{})};
       if(e.type==='text')slide.addText(e.text,{...box,...style});
       else if(e.type==='shape') {
-        slide.addShape(e.shape==='ellipse'?pptx.ShapeType.ellipse:pptx.ShapeType.rect,{...box,fill:e.fill?{color:hex(e.fill)}:{color:hex('background'),transparency:100},line:{transparency:100}});
+        slide.addShape(shapeKinds[e.shape??'rect'][0],{...box,fill:e.fill?{color:hex(e.fill)}:{color:hex('background'),transparency:100},line:{transparency:100}});
         if(e.text)slide.addText(e.text,{...box,...style,objectName:`${e.id}_text`});
       } else if(e.type==='line')slide.addShape(pptx.ShapeType.line,{...box,flipH:e.flipH??false,flipV:e.flipV??false,line:{color:hex(e.color??'accent'),width:e.weight??2,...(e.arrow?{endArrowType:'triangle'}:{})}});
       else if(e.type==='table')slide.addTable(e.rows.map((row,i)=>row.map(text=>({text,options:{bold:i===0,color:hex(i===0?(e.headerColor??e.color??'text'):(e.color??'text')),fill:hex(i===0?(e.headerFill??'muted'):(e.bodyFill??'background'))}}))),{...box,...style,margin:e.padding??3.6,valign:'middle',border:{pt:0.5,color:'CCCCCC'},fill:hex('background'),autoPage:false,rowH:e.height/e.rows.length/72,colW:(e.columnWidths??e.rows[0].map(()=>e.width/e.rows[0].length)).map(v=>v/72)});

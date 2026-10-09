@@ -28,3 +28,13 @@ export async function compileCompositionFile({file,brand,output,fonts,'design-pr
   } catch(error){await rm(output,{recursive:true,force:true});throw error;}
   return {output,slides:scene.slides.length,brandRevision:contract.revision,sceneDigest:report.sceneDigest,measurement:report.measurement,groups:structure.groups.length,connectors:structure.connectors.length};
 }
+
+// Render a folder written by compileCompositionFile. A brand with a native template gets the native emitter.
+export async function renderCompositionDir({file,output}) {
+  if(!file||!output)throw new Error('Provide --file COMPILED_DIR and a new --output deck.pptx');
+  const dir=resolve(file),load=async name=>JSON.parse(await readFile(join(dir,name),'utf8'));
+  const scene=await load('scene.json'),structure=await load('structure.json'),brand=await load('brand-contract.json');
+  if(brand.design.nativeTemplate)return (await import('./pptx-native.mjs')).emitNativePptx({scene,structure,brand,output,base:dir});
+  const {inventory,...result}=await (await import('./pptx-render.mjs')).renderPptxScene(scene,resolve(output),{base:dir});
+  return {...result,emitter:'generated deck; the brand contract has no native template'};
+}
