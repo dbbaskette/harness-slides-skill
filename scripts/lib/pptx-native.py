@@ -295,23 +295,13 @@ class Slide:
             line = tools.E.SubElement(properties, A + 'ln', w='25400')
             tools.E.SubElement(tools.E.SubElement(line, A + 'solidFill'), A + 'srgbClr', val=tint)
             return None
-        # Plain: drop the disc and let the geometry itself fill the slot.
+        # Plain: drop the disc and enlarge the geometry by the same factor for every icon, so a set of icons stays one size.
         group.remove(disc)
-        if group.find('p:grpSp', tools.NS) is not None:
-            return None  # nested groups keep their own coordinates; leave the bounds as they are
-        boxes = []
-        for shape in group.iter(P + 'sp'):
-            offset, size = shape.find('p:spPr/a:xfrm/a:off', tools.NS), shape.find('p:spPr/a:xfrm/a:ext', tools.NS)
-            if offset is not None and size is not None:
-                boxes.append((int(offset.get('x')), int(offset.get('y')), int(offset.get('x')) + int(size.get('cx')), int(offset.get('y')) + int(size.get('cy'))))
-        if not boxes:
-            return None
-        left, top, right, bottom = min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes)
-        if right <= left or bottom <= top:
-            return None
-        frame.find('a:chOff', tools.NS).attrib.update(x=str(left), y=str(top))
-        extent.attrib.update(cx=str(right - left), cy=str(bottom - top))
-        return (right - left) / (bottom - top)
+        offset, keep = frame.find('a:chOff', tools.NS), .7
+        width, height = int(extent.get('cx')), int(extent.get('cy'))
+        offset.attrib.update(x=str(round(int(offset.get('x')) + width * (1 - keep) / 2)), y=str(round(int(offset.get('y')) + height * (1 - keep) / 2)))
+        extent.attrib.update(cx=str(round(width * keep)), cy=str(round(height * keep)))
+        return None
 
     def icon(self, e):
         """Native library geometry as one group, fitted inside its slot without changing its proportions."""

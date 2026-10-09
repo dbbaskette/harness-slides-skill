@@ -41,7 +41,7 @@ NODE containers: {type:stack,direction:row|column,gap?,align?,children:[NODE]} |
 NODE leaves: {type:icon,id,icon:STABLE ICON ID from the brand's icon search,color?,style?:solid|outline|plain} | {type:box,id,text?|children?,shape?:rect|ellipse|roundRect|diamond|hexagon|chevron|can,fill?,color?,textRole?,align?,gap?} | {type:text,id,text,textRole?,color?,align?} | {type:image,id,src,alt,fit?} | {type:spacer}.
 sources name what a slide rests on: a document section, a finding, or one ID such as request or author_knowledge when it comes from the brief or general knowledge.
 Any node may set weight (relative share, above 0 up to 10, default 1). A node never goes below the size its content needs; when that overrides a weight you set, compile and preview report it as weight-overridden. An empty box has no minimum, so use empty boxes for bars drawn to scale.
-An icon keeps the library's own colors unless you set color (a brand color role) or style: solid is a light icon on a colored disc, outline a colored icon in a ring, plain a colored icon with no container. On a filled card use plain or outline with a color that reads on the fill.
+An icon keeps the library's own colors unless you set color (a brand color role) or style: solid is a light icon on a colored disc, outline a colored icon in a ring, plain a colored icon with no container, drawn a little larger. On a filled card use plain or outline with a color that reads on the fill.
 A card's content sits inside its shape's text area, so a diamond, ellipse or hexagon holds much less than a rectangle of the same size. Containers may set group:true and an id.
 gap: none|tight|normal|wide. align: start|center|end|stretch. In a row, stretch (the default) makes every child fill the row's height; start, center or end gives each child the height its content needs. On a text, or a box with text, align sets the text left, centered or right. In a row an icon takes its own width unless you give it a weight. On a box with children, align (start|center|end) places its content vertically. fill/color: a brand color role name. textRole: a brand typography role name.
 EDGE: {id,from:NODE id,to:NODE id,label?,arrow?:boolean,color?}. Join boxes: an edge to a text or an icon is drawn but cannot stay attached when a node moves.
@@ -54,7 +54,7 @@ A labelled edge needs room: its label must fit the gap between the two nodes, so
 Generated IDs are reserved: <slide>_title, <slide>_subtitle, <slide>_detail, <box with children>_group, <labelled edge>_label.
 A card's align has no effect when it holds a box, grid or image, because those fill the spare space.
 IDs match [a-zA-Z_][a-zA-Z0-9_-]{4,40} and are unique across the deck.
-Nest at most 6 levels. Run compose contract --brand brand-contract.json for the brand's content area, gap, padding and line sizes.
+Nest at most 8 levels. Run compose contract --brand brand-contract.json for the brand's content area, gap, padding and line sizes.
 Text is measured with the brand font. Content that cannot fit at its role's size fails with the shortfall; rewrite, split or restructure.`;
 
 export function validateComposition(comp,contract,{collect}={}) {
@@ -96,7 +96,7 @@ export function validateComposition(comp,contract,{collect}={}) {
     const inspect=(n,depth,inFree)=>{
       const where=`${s.id}/${n?.id??n?.type}`;
       if(!n||typeof n!=='object'||!fields[n.type])fail(where,'unknown node type');
-      if(depth>6)fail(where,'nest at most 6 levels');
+      if(depth>8)fail(where,'nest at most 8 levels');
       if(Object.keys(n).some(k=>!common.includes(k)&&!fields[n.type].includes(k)))fail(where,'unsupported node field; never silently drop content');
       if(++nodes>80)fail(s.id,'use at most 80 nodes per slide');
       const needsId=['box','text','image','icon'].includes(n.type)||n.group;
@@ -145,7 +145,7 @@ export function validateComposition(comp,contract,{collect}={}) {
     // One bad node does not hide the others: each is checked on its own and its children are still visited.
     const walk=(n,depth,inFree)=>{
       attempt(()=>inspect(n,depth,inFree));
-      if(n&&typeof n==='object'&&Array.isArray(n.children)&&depth<=6)for(const k of n.children.slice(0,12))walk(k,depth+1,n.type==='free');
+      if(n&&typeof n==='object'&&Array.isArray(n.children)&&depth<=8)for(const k of n.children.slice(0,12))walk(k,depth+1,n.type==='free');
     };
     if(s.layout!==undefined) {
       // A template layout slide (cover, section break, closing) fills that layout's placeholders and draws nothing else.

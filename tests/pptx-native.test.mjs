@@ -268,7 +268,8 @@ test('an icon can be recolored, drawn as a ring or drawn as bare geometry',async
   // Plain: no disc, and the geometry alone is fitted to the slot.
   const plain=await emit({color:'headingPrimary',style:'plain'},'plain.pptx');
   assert.doesNotMatch(plain.group,/prst="ellipse"/);assert.ok(has(plain,'2867B2')&&lacks(plain,'FFFFFF'));
-  const [,cx,cy]=plain.group.match(/<a:ext cx="(\d+)" cy="(\d+)"/);assert.equal(Math.round(cx/12700),Math.round(cy/12700));
+  // Every plain icon is enlarged by the same factor, so a set of them stays one size.
+  const extent=g=>Number(g.match(/<a:chExt cx="(\d+)"/)[1]);assert.equal(Math.round(extent(plain.group)/extent(solid.group)*100),70);
   await assert.rejects(()=>emit({style:'neon'},'bad.pptx'),/style must be one of solid\|outline\|plain/);
 });
 

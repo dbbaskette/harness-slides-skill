@@ -16,10 +16,12 @@ back, at the quality of a one-line sketch.
 
 ## The lead
 
-1. **Split the content slides into sections** of four to seven neighbouring
-   slides, four sections at most. Keep slides that are compared with each other,
-   or that build on each other, in one section. Keep the cover, section breaks
-   and closing slide yourself.
+1. **Split the content slides into sections** of three or four neighbouring
+   slides, one worker each, up to about eight workers; past that, make the
+   sections larger. A designing worker spends several minutes on a slide, so a
+   small section is what keeps the build short. Keep slides that are compared
+   with each other, or that build on each other, in one section. Keep the
+   cover, section breaks and closing slide yourself.
 2. **Write the house style once**, in `presentation-brief.md`, and keep it to
    what has to match across sections: what each color stands for, the icon
    style and color, where a caveat such as "illustrative" goes, and how arrows
@@ -71,5 +73,7 @@ run `compose contract --brand` for the sizes. Design each slide from what it
 must make the audience understand, not from the nearest row of boxes. Write
 only your section file, with the deck's `direction` copied unchanged and your ID
 prefix on every node. Check with `compose compile` and no `--output` until it
-fits, then preview each slide, and revise and look again where it needs it.
-Before returning, name your weakest slide, fix it and preview once more.
+fits, then preview each slide, and revise and look again where it needs it,
+twice at most. Before returning, name your weakest slide, fix it and preview
+once more. Report what still bothers you instead of polishing further: the
+lead reviews the deck as a whole.

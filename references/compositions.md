@@ -173,7 +173,9 @@ A deck of more than about ten content slides can be
 Open every image. Because `compile` checks every slide in the file, either add
 slides one at a time or draft them all and then take them in turn with
 `--slide`. Either way, look at each slide; if it needs revising, revise it and
-look at the revision before the next. Findings point at things to look at: wording that describes a relationship
+look at the revision before the next. Two revisions is the limit for a slide:
+after that, write down what still bothers you and move on. The final review
+picks up the worst of them. Findings point at things to look at: wording that describes a relationship
 with nothing drawn, a layout repeated from the previous slide, an arrow that
 could not be attached, an icon that blends into the card behind it, a weight
 the content overrode, a deck with
