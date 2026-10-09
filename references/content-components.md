@@ -1,5 +1,8 @@
 # Content-led compositions
 
+Prefer [compositions](compositions.md) for new slides. Use these typed components
+for tables and charts, which compositions do not yet express.
+
 Approve [the per-slide proposal](design-walkthrough.md) first.
 For a new deck, the agent can prepare a typed deck
 plan instead of hand-placing every object. Unbranded decks use neutral defaults;

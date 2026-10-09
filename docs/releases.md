@@ -13,7 +13,7 @@ silently adopting the current installation pointer. A version label alone does
 not prove byte identity; the installed content digest and task runtime hashes
 identify retained code. A failed compatibility check names both versions.
 
-Users see “Using Harness Slides v0.9.0”. `--version` is an offline human-readable
+Users see “Using Harness Slides v0.10.0”. `--version` is an offline human-readable
 check; `version` returns `package`, `runtimeVersion` and resolved `runtime` as
 JSON. Run it from the returned runtime. This does not authenticate Google or
 query releases. The existing `workspace restore --version v000001` remains a
