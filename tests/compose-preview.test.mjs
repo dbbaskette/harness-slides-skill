@@ -55,7 +55,7 @@ test('a preview builds the deck, imports it once, exports the render and returns
   assert.deepEqual((await readdir(join(dir,'preview'))).sort(),['contact-sheet.png','critic.json','deck.pdf','deck.pptx','preview.json','slide-01.png','slide-02.png','slide-03.png','slide-04.png']);
   // The whole-deck render carries one sheet of every slide and the packet a reviewer answers from.
   const sheet=decodePng(await readFile(result.contactSheet)),packet=JSON.parse(await readFile(result.critic,'utf8'));
-  assert.deepEqual([sheet.width,sheet.height],[2*16+3*12,2*9+3*12]);
+  assert.deepEqual([sheet.width,sheet.height],[2*16+3*12,2*(9+36)+3*12]);
   assert.equal(packet.deckSha256,result.deckSha256);assert.equal(packet.questions.length,8);assert.deepEqual(packet.slides.map(s=>[s.number,s.id]),[[1,'flow_slide'],[2,'prose_slide'],[3,'cards_one'],[4,'cards_two']]);assert.deepEqual(Object.keys(packet.grades),['critical','major','minor']);
   assert.ok(result.slides[0].findings.some(f=>f.code==='unattached-connector'));assert.ok(result.slides[1].findings.some(f=>f.code==='relational-text-only'));
   assert.deepEqual(JSON.parse(await readFile(join(dir,'preview','preview.json'),'utf8')).slides.map(s=>s.id),['flow_slide','prose_slide','cards_one','cards_two']);

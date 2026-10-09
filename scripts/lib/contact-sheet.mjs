@@ -57,11 +57,12 @@ export function tile(images,{columns,gap=12,numbers}={}) {
   const {width:w,height:h}=images[0];
   if(images.some(i=>i.width!==w||i.height!==h))throw new Error('Slides on a contact sheet must be one size');
   const cols=columns??(images.length<=4?2:images.length<=9?3:images.length<=16?4:5),rows=Math.ceil(images.length/cols);
-  const sheet={width:cols*w+(cols+1)*gap,height:rows*h+(rows+1)*gap};sheet.rgb=Buffer.alloc(sheet.width*sheet.height*3,136);
+  // Each slide's number sits in a band above it, so it never covers the slide.
+  const band=36,sheet={width:cols*w+(cols+1)*gap,height:rows*(h+band)+(rows+1)*gap};sheet.rgb=Buffer.alloc(sheet.width*sheet.height*3,136);
   images.forEach((image,n)=>{
-    const x=gap+(n%cols)*(w+gap),y=gap+Math.floor(n/cols)*(h+gap);
+    const x=gap+(n%cols)*(w+gap),y=gap+Math.floor(n/cols)*(h+band+gap)+band;
     for(let row=0;row<h;row++)image.rgb.copy(sheet.rgb,((y+row)*sheet.width+x)*3,row*w*3,(row+1)*w*3);
-    stamp(sheet,x,y,numbers?.[n]??n+1);
+    stamp(sheet,x,y-band+2,numbers?.[n]??n+1);
   });
   return sheet;
 }

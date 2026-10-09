@@ -20,13 +20,14 @@ test('a contact sheet tiles every slide in order and numbers each one',async t=>
   for(const [n,color] of colors.entries()){const file=join(dir,`thumb-${n}.png`);await writeFile(file,encodePng(solid(80,45,color)));files.push(file);}
   const result=await writeContactSheet(files,join(dir,'sheet.png')),sheet=decodePng(await readFile(result.path));
   // Five slides go three across: two rows, with a gap around each.
-  assert.deepEqual([sheet.width,sheet.height,result.slides],[3*80+4*12,2*45+3*12,5]);
-  assert.deepEqual(pixel(sheet,12+70,12+40),[255,0,0]);assert.deepEqual(pixel(sheet,12+80+12+70,12+40),[0,255,0]);assert.deepEqual(pixel(sheet,12+70,12+45+12+40),[255,255,0]);
+  assert.deepEqual([sheet.width,sheet.height,result.slides],[3*80+4*12,2*(45+36)+3*12,5]);
+  const top=12+36,next=12+36+45+12+36;
+  assert.deepEqual(pixel(sheet,12+70,top+40),[255,0,0]);assert.deepEqual(pixel(sheet,12+80+12+70,top+40),[0,255,0]);assert.deepEqual(pixel(sheet,12+70,next+40),[255,255,0]);
   assert.deepEqual(pixel(sheet,2,2),[136,136,136]);
-  // The number stamp is a dark box with light dots in the corner of each slide.
-  assert.deepEqual(pixel(sheet,12+1,12+1),[34,34,34]);
-  const corner=[];for(let y=0;y<32;y++)for(let x=0;x<24;x++)corner.push(pixel(sheet,12+x,12+y).join());
-  assert.ok(corner.includes('255,255,255'));
+  // The number is a dark box with light dots in the band above each slide, never on the slide itself.
+  assert.deepEqual(pixel(sheet,12+1,12+3),[34,34,34]);assert.deepEqual(pixel(sheet,12+1,top+1),[255,0,0]);
+  const band=[];for(let y=0;y<34;y++)for(let x=0;x<24;x++)band.push(pixel(sheet,12+x,12+y).join());
+  assert.ok(band.includes('255,255,255'));
   assert.throws(()=>tile([solid(4,4,[0,0,0]),solid(5,4,[0,0,0])]),/one size/);assert.throws(()=>tile([]),/No slides/);
   await assert.rejects(()=>writeContactSheet(files,join(dir,'sheet.png')),/EEXIST/);
 });
