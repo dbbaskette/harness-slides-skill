@@ -35,7 +35,7 @@ PowerPoint inspection also needs **Python 3.9 or newer**.
 Run these commands in your terminal:
 
 ```sh
-git clone --branch v0.10.1 --depth 1 https://github.com/dbbaskette/harness-slides-skill.git
+git clone --branch v0.10.2 --depth 1 https://github.com/dbbaskette/harness-slides-skill.git
 cd harness-slides-skill
 bash scripts/Install-Harness-Slides.sh
 ```
@@ -48,8 +48,8 @@ skills. To preview the changes first, add `--dry-run` to the installer command.
 
 ## Know which version you are using
 
-The current published release is [v0.10.1](https://github.com/dbbaskette/harness-slides-skill/releases/tag/v0.10.1).
-The skill reports “Using Harness Slides v0.10.1” when starting or resuming work.
+The current published release is [v0.10.2](https://github.com/dbbaskette/harness-slides-skill/releases/tag/v0.10.2).
+The skill reports “Using Harness Slides v0.10.2” when starting or resuming work.
 A resumed deck may use its older saved runtime and will report that version.
 Guidance can refresh independently; its revision does not replace the runtime version.
 
@@ -259,7 +259,7 @@ representative guidance-start response. Bootstrap activation is shown separately
 | Scoped Google edit + final review | 3,609 |
 | New PPTX deck from native template + review | 6,853 |
 | New Google deck from native template + review | 7,880 |
-| New composed deck + contract + review | 7,179 |
+| New composed deck + contract + review | 7,950 |
 | New PPTX scene + contract + review | 6,112 |
 | New Google scene + contract + review | 7,251 |
 | Content-led PPTX + selected component + review | 8,109 |

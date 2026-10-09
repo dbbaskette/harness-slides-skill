@@ -19,15 +19,32 @@ const common=['id','type','weight','at'],gapNames=['none','tight','normal','wide
 const round=n=>Math.round(n*100)/100;
 const fail=(where,message)=>{throw new Error(`${where}: ${message}`);};
 const str=v=>typeof v==='string'&&v.trim()&&v.length<=20000;
+const relations=['order','dependency','hierarchy','membership','contrast','overlap','quantity','none'],rhythms=['anchor','dense','breathing'];
+// How each relation must show up in the structure, and what to tell the author when it does not.
+const drawn={
+  order:[f=>f.edges>0||f.chevrons>1,'Join nodes with edges or use chevrons in sequence'],
+  dependency:[f=>f.edges>0,'Join the nodes with edges'],
+  hierarchy:[f=>f.edges>0||f.nested||f.layers,'Use edges, nested boxes or stacked layers'],
+  membership:[f=>f.members,'Put the members inside a box'],
+  contrast:[f=>f.pair,'Place the things compared side by side'],
+  quantity:[f=>f.metric,'Show the number with the metric text role'],
+};
+const luminance=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255).map(v=>v<=.03928?v/12.92:((v+.055)/1.055)**2.4).reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);
+export const contrastRatio=(a,b)=>{const [hi,lo]=[luminance(a),luminance(b)].sort((x,y)=>y-x);return (hi+.05)/(lo+.05);};
 
 export const composeContract=`Composition v1 (AI-owned; describe structure, never coordinates).
-{version:1,title,slides:[{id,title,sources:[evidence IDs],canvas:NODE,connect?:[EDGE],notes?,intent?,layoutId?} | {id,title,sources,layout:TEMPLATE LAYOUT NAME,subtitle?,detail?,notes?}]}
+{version:1,title,direction?:DIRECTION,slides:[{id,title,sources:[evidence IDs],canvas:NODE,connect?:[EDGE],brief?:BRIEF,notes?,intent?,layoutId?} | {id,title,sources,layout:TEMPLATE LAYOUT NAME,subtitle?,detail?,notes?}]}
 A slide with layout uses that template layout's own placeholders (cover, section break, closing) and has no canvas; run compose layouts for the names.
 NODE containers: {type:stack,direction:row|column,gap?,align?,children:[NODE]} | {type:grid,columns:1-6,gap?,children:[NODE]} | {type:free,children:[NODE with at:{x,y,width,height} as 0-1 fractions]}.
 NODE leaves: {type:icon,id,icon:STABLE ICON ID from the brand's icon search} | {type:box,id,text?|children?,shape?:rect|ellipse|roundRect|diamond|hexagon|chevron|can,fill?,color?,textRole?,align?} | {type:text,id,text,textRole?,color?,align?} | {type:image,id,src,alt,fit?} | {type:spacer}.
 Any node may set weight (relative share, default 1). Containers may set group:true and an id.
 gap: none|tight|normal|wide. align: start|center|end|stretch. On a box with children, align (start|center|end) places its content vertically. fill/color: a brand color role name. textRole: a brand typography role name.
 EDGE: {id,from:NODE id,to:NODE id,label?,arrow?:boolean,color?}.
+DIRECTION, decided once for the deck: {focal:color role that means "look here",neutral:panel color role,meanings?:{color role:what it stands for in this deck},motif?:text}.
+With a direction, fills come only from the neutral, the meanings and white; boxes default to the neutral.
+BRIEF, per content slide: {relation:order|dependency|hierarchy|membership|contrast|overlap|quantity|none,focal?:NODE id,rhythm?:anchor|dense|breathing}.
+The title is the claim. The relation must be drawn: edges or chevrons for order, edges for dependency, edges, nesting or layers for hierarchy, a box holding its members for membership, side by side for contrast, intersecting shapes for overlap, the metric text role for quantity.
+The compiler gives the focal node the focal color; no other node may use it. Text on a dark fill is given a readable color unless you set one.
 A labelled edge needs room: its label must fit the gap between the two nodes, so put a spacer between them.
 Generated IDs are reserved: <slide>_title, <slide>_subtitle, <slide>_detail, <box with children>_group, <labelled edge>_label.
 A card's align has no effect when it holds a box, grid or image, because those fill the spare space.
@@ -38,18 +55,34 @@ export function validateComposition(comp,contract) {
   validateBrandContract(contract,{medium:'slides'});
   const d=contract.design,roles=d.slides.typography,colors=d.colors,maxFills=d.slides.constraints?.maxFills??3;
   if(comp?.version!==1)throw new Error('Use composition version 1 (run compose contract)');
-  if(Object.keys(comp).some(k=>!['version','title','slides'].includes(k)))throw new Error('Unsupported composition field');
+  if(Object.keys(comp).some(k=>!['version','title','slides','direction'].includes(k)))throw new Error('Unsupported composition field');
+  const dir=comp.direction;
+  if(dir!==undefined) {
+    if(!dir||typeof dir!=='object'||Array.isArray(dir))throw new Error('direction must be an object');
+    if(Object.keys(dir).some(k=>!['focal','neutral','meanings','motif'].includes(k)))throw new Error('unsupported direction field');
+    if(dir.focal===undefined||dir.neutral===undefined)throw new Error('direction needs focal and neutral color roles');
+    for(const key of ['focal','neutral'])if(!Object.hasOwn(colors,dir[key]))throw new Error(`direction.${key} must be a brand color role: ${Object.keys(colors).join(', ')}`);
+    if(dir.focal===dir.neutral)throw new Error('direction.focal and direction.neutral must differ');
+    if(dir.meanings!==undefined&&(!dir.meanings||typeof dir.meanings!=='object'||Array.isArray(dir.meanings)))throw new Error('direction.meanings maps color roles to what they stand for');
+    for(const [role,meaning] of Object.entries(dir.meanings??{})) {
+      if(!Object.hasOwn(colors,role))throw new Error(`direction.meanings uses ${role}, which is not a brand color role`);
+      if(role===dir.focal)throw new Error('the focal color cannot also carry a meaning');
+      if(!str(meaning))throw new Error(`direction.meanings: say what ${role} means`);
+    }
+    if(dir.motif!==undefined&&!str(dir.motif))throw new Error('direction.motif describes one recurring device, or is omitted');
+  }
+  const allowedFills=dir?[...new Set([dir.neutral,...Object.keys(dir.meanings??{}),...(Object.hasOwn(colors,'canvasPrimary')?['canvasPrimary']:[])])]:null;
   if(!str(comp.title))throw new Error('Provide a deck title');
   if(!Array.isArray(comp.slides)||!comp.slides.length||comp.slides.length>100)throw new Error('Provide 1–100 slides');
   const ids=new Set(),claim=(id,where)=>{if(!idPattern.test(id??'')||ids.has(id))fail(where,`invalid or repeated ID: ${id}`);ids.add(id);};
-  const summary=[];
-  for(const s of comp.slides) {
+  const summary=[],invalid=[];
+  for(const s of comp.slides) try {
     if(!s||typeof s!=='object'||Array.isArray(s))throw new Error('each slide must be an object');
-    if(Object.keys(s).some(k=>!['id','title','sources','canvas','connect','notes','intent','layoutId','layout','subtitle','detail'].includes(k)))fail(s.id,'unsupported slide field');
+    if(Object.keys(s).some(k=>!['id','title','sources','canvas','connect','notes','intent','layoutId','layout','subtitle','detail','brief'].includes(k)))fail(s.id,'unsupported slide field');
     claim(s.id,'slide');claim(`${s.id}_title`,s.id);
     if(!str(s.title))fail(s.id,'provide a slide title');
     if(!Array.isArray(s.sources)||!s.sources.length||s.sources.some(x=>!str(x)))fail(s.id,'provide source references');
-    const local=new Set(),fills=new Set();let nodes=0;
+    const local=new Set(),fills=new Set(),leaves=new Set(),facts={edges:0,chevrons:0,members:false,pair:false,nested:false,layers:false,metric:false},brief=s.brief,focalId=brief?.focal;let nodes=0;
     const walk=(n,depth,inFree)=>{
       const where=`${s.id}/${n?.id??n?.type}`;
       if(!n||typeof n!=='object'||!fields[n.type])fail(where,'unknown node type');
@@ -74,8 +107,19 @@ export function validateComposition(comp,contract) {
         if(n.text!==undefined&&!str(n.text))fail(where,'provide box text');
         if(!Object.hasOwn(shapeKinds,n.shape??'rect'))fail(where,`shape must be one of ${Object.keys(shapeKinds).join('|')}`);
         if(n.children!==undefined){if(n.align==='stretch')fail(where,'a box with children aligns its content start|center|end');claim(`${n.id}_group`,where);}
-        fills.add(n.fill??'canvasSecondary');
+        if(n.shape==='chevron')facts.chevrons++;
+        if(n.children!==undefined&&Array.isArray(n.children)){const inside=JSON.stringify(n.children);if((inside.match(/"type":"(box|text|icon|image)"/g)??[]).length>1)facts.members=true;if(inside.includes('"type":"box"'))facts.nested=true;}
+        // The focal node takes the focal color; every other fill must come from the deck direction.
+        if(dir) {
+          if(n.id===focalId){if(n.fill!==undefined)fail(where,'the focal node takes the focal color; remove its fill');}
+          else if(n.fill===dir.focal)fail(where,`only the focal node may use the focal color${focalId?'':'; name it in brief.focal'}`);
+          else if(n.fill!==undefined&&!allowedFills.includes(n.fill))fail(where,`fill ${n.fill} is not in the deck direction (${allowedFills.join(', ')})`);
+        }
+        fills.add(dir&&n.id===focalId?dir.focal:n.fill??dir?.neutral??'canvasSecondary');
       }
+      if(['box','text','icon','image'].includes(n.type))leaves.add(n.id);
+      if(n.type==='text'&&n.textRole==='metric')facts.metric=true;
+      if((n.type==='stack'||n.type==='grid')&&Array.isArray(n.children)&&n.children.filter(k=>k?.type==='box').length>1){if(n.type==='stack'&&n.direction==='column')facts.layers=true;else facts.pair=true;}
       if(n.type==='icon'&&(!str(n.icon)||n.icon.length>80||!/^[\w.-]+$/.test(n.icon)))fail(where,'icon needs a stable icon ID from the brand icon search');
       if(n.type==='image'){if(!str(n.src)||!str(n.alt))fail(where,'image needs src and alt');if(!['contain','cover'].includes(n.fit??'contain'))fail(where,'fit must be contain|cover');}
       const kids=n.children;
@@ -90,10 +134,20 @@ export function validateComposition(comp,contract) {
       if(s.canvas!==undefined||s.connect!==undefined)fail(s.id,'a slide with a template layout has no canvas or edges; put content on a standard slide');
       for(const key of ['subtitle','detail'])if(s[key]!==undefined){if(!str(s[key]))fail(s.id,`provide ${key} text or omit it`);claim(`${s.id}_${key}`,s.id);}
       if(s.detail!==undefined&&s.subtitle===undefined)fail(s.id,'detail needs a subtitle before it');
+      if(brief!==undefined&&(Object.keys(brief).some(k=>k!=='rhythm')||!rhythms.includes(brief.rhythm)))fail(s.id,'a template layout slide takes only brief.rhythm (anchor|dense|breathing)');
       summary.push({id:s.id,nodes:0,fills:[],edges:0,layout:s.layout});continue;
     }
     if(s.subtitle!==undefined||s.detail!==undefined)fail(s.id,'subtitle and detail belong to a slide with a template layout');
+    if(brief!==undefined) {
+      if(!brief||typeof brief!=='object'||Array.isArray(brief)||Object.keys(brief).some(k=>!['relation','focal','rhythm'].includes(k)))fail(s.id,'brief takes relation, focal and rhythm');
+      if(!relations.includes(brief.relation))fail(s.id,`brief.relation must be one of ${relations.join('|')}`);
+      if(brief.rhythm!==undefined&&!rhythms.includes(brief.rhythm))fail(s.id,`brief.rhythm must be one of ${rhythms.join('|')}`);
+      if(brief.focal!==undefined&&!dir)fail(s.id,'brief.focal needs a deck direction that names the focal color');
+    }
     walk(s.canvas,1,false);
+    facts.edges=Array.isArray(s.connect)?s.connect.length:0;
+    if(focalId!==undefined&&!leaves.has(focalId))fail(s.id,`brief.focal names ${focalId}, which is not a box, text, icon or image on this slide`);
+    if(brief&&drawn[brief.relation]&&!drawn[brief.relation][0](facts))fail(s.id,`relation "${brief.relation}" is not drawn. ${drawn[brief.relation][1]}, or set the relation to "none" if the words are enough`);
     if(fills.size>maxFills)fail(s.id,`uses ${fills.size} fill colors; the brand allows ${maxFills} per slide`);
     if(s.connect!==undefined&&(!Array.isArray(s.connect)||s.connect.length>40))fail(s.id,'connect must be a list of at most 40 edges');
     for(const c of s.connect??[]) {
@@ -106,7 +160,9 @@ export function validateComposition(comp,contract) {
       if(c.arrow!==undefined&&typeof c.arrow!=='boolean')fail(`${s.id}/${c.id}`,'arrow must be boolean');
     }
     summary.push({id:s.id,nodes,fills:[...fills],edges:(s.connect??[]).length});
-  }
+  } catch(error){invalid.push(error.message);}
+  // Report every slide that breaks a rule in one pass, so the author fixes them together.
+  if(invalid.length)throw new Error(invalid.length===1?invalid[0]:`${invalid.length} slides need changes:\n${invalid.join('\n')}`);
   return {slides:summary};
 }
 
@@ -136,7 +192,7 @@ export async function compileComposition(comp,contract,{fonts}={}) {
   const gapSize={none:0,tight:inset/2,normal:inset,wide:sp.column??28};
   const bodyRole=contract.medium.delivery==='live'?'body':'bodyReference',measure=await measurer(contract,fonts);
   const iconSize=sl.icon?.size??48;
-  const scene={version:2,title:comp.title,mode:'new',canvas:sl.canvas,theme:brandTheme(contract),slides:[]},structure={groups:[],connectors:[],icons:[],layouts:[]},problems=[];
+  const scene={version:2,title:comp.title,mode:'new',canvas:sl.canvas,theme:brandTheme(contract),slides:[]},structure={groups:[],connectors:[],icons:[],layouts:[],direction:comp.direction??null,briefs:[]},problems=[],dir=comp.direction;
 
   const style=n=>roles[n.textRole??bodyRole];
   // Text and icons keep their own size; everything else shares the space that is left.
@@ -165,13 +221,16 @@ export async function compileComposition(comp,contract,{fonts}={}) {
   };
 
   for(const s of comp.slides) try {
-    const elements=[],rects=new Map(),labels=[];
+    const elements=[],rects=new Map(),labels=[],focalId=s.brief?.focal;
+    // Text keeps its role color where that is readable on the surface behind it; otherwise it takes the brand's on-color.
+    const ink=(wanted,surface)=>contrastRatio(wanted,surface)>=4.5?wanted:[colors.onAccent,colors.canvasPrimary,colors.inkDeep].filter(Boolean).sort((a,b)=>contrastRatio(b,surface)-contrastRatio(a,surface))[0];
+    const fillRole=n=>dir&&n.id===focalId?dir.focal:n.fill??dir?.neutral??'canvasSecondary';
     const put=(element,members)=>{elements.push(element);members?.push(element.id);return element;};
     const short=(n,rect,required)=>!Number.isFinite(required)?fail(`${s.id}/${n.id??n.name??n.type}`,'has no usable room; use fewer siblings, less nesting or larger weights'):fail(`${s.id}/${n.id??n.name??n.type}`,`needs ${round(required)}pt of height but has ${round(rect.height)}pt at ${round(rect.width)}pt wide; shorten the text, split the slide or restructure`);
-    const textProps=n=>{const st=style(n);return {fontSize:st.size,bold:st.bold,color:colors[n.color??st.colorRole],...(n.align&&n.align!=='stretch'?{align:{start:'left',center:'center',end:'right'}[n.align]}:{})};};
+    const textProps=(n,surface)=>{const st=style(n);return {fontSize:st.size,bold:st.bold,color:n.color?colors[n.color]:dir&&n.id===focalId&&n.type==='text'?colors[dir.focal]:ink(colors[st.colorRole],surface),...(n.align&&n.align!=='stretch'?{align:{start:'left',center:'center',end:'right'}[n.align]}:{})};};
     const box=r=>({x:round(r.x),y:round(r.y),width:round(r.width),height:round(r.height)});
 
-    const place=(n,rect,members)=>{
+    const place=(n,rect,members,surface=colors.canvasPrimary??'#FFFFFF')=>{
       if(!(rect.width>inset)||!(rect.height>0))fail(`${s.id}/${n.id??n.name??n.type}`,'has no usable room; use fewer siblings, less nesting or larger weights');
       // Leaves and column stacks own the fit check, so the error names the node to fix.
       const checks=!n.children||n.type==='stack'&&n.direction==='column';
@@ -179,7 +238,7 @@ export async function compileComposition(comp,contract,{fonts}={}) {
       if(n.id)rects.set(n.id,rect);
       const own=n.group?[]:members;
       if(n.type==='spacer')return;
-      if(n.type==='text'){put({id:n.id,type:'text',...box(rect),text:n.text,...textProps(n)},own);return;}
+      if(n.type==='text'){put({id:n.id,type:'text',...box(rect),text:n.text,...textProps(n,surface)},own);return;}
       if(n.type==='icon') {
         // Icons are copied from the brand library as native geometry at render time, so the scene only reserves a centred square.
         if(rect.width<iconSize-.5)fail(`${s.id}/${n.id}`,`needs ${round(iconSize)}pt of width for an icon but has ${round(rect.width)}pt`);
@@ -190,18 +249,18 @@ export async function compileComposition(comp,contract,{fonts}={}) {
       }
       if(n.type==='image'){put({id:n.id,type:'image',...box(rect),src:n.src,alt:n.alt,fit:n.fit??'contain'},own);return;}
       if(n.type==='box') {
-        const base={id:n.id,type:'shape',...box(rect),shape:n.shape??'rect',fill:colors[n.fill??'canvasSecondary']};
-        if(n.text!==undefined){put({...base,text:n.text,...textProps(n)},own);return;}
+        const base={id:n.id,type:'shape',...box(rect),shape:n.shape??'rect',fill:colors[fillRole(n)]};
+        if(n.text!==undefined){put({...base,text:n.text,...textProps(n,base.fill)},own);return;}
         const inner=[];put(base,inner);
-        if(n.children)place({type:'stack',direction:'column',gap:n.gap,align:n.align,children:n.children,name:n.id},{x:rect.x+inset,y:rect.y+inset,width:rect.width-inset*2,height:rect.height-inset*2},inner);
+        if(n.children)place({type:'stack',direction:'column',gap:n.gap,align:n.align,children:n.children,name:n.id},{x:rect.x+inset,y:rect.y+inset,width:rect.width-inset*2,height:rect.height-inset*2},inner,base.fill);
         if(inner.length>1)structure.groups.push({slide:s.id,id:`${n.id}_group`,members:inner});
         own?.push(...inner);return;
       }
       const g=gapOf(n);
-      if(n.type==='free'){for(const k of n.children)place(k,{x:rect.x+k.at.x*rect.width,y:rect.y+k.at.y*rect.height,width:k.at.width*rect.width,height:k.at.height*rect.height},own);}
+      if(n.type==='free'){for(const k of n.children)place(k,{x:rect.x+k.at.x*rect.width,y:rect.y+k.at.y*rect.height,width:k.at.width*rect.width,height:k.at.height*rect.height},own,surface);}
       else if(n.type==='grid') {
         const rows=Math.ceil(n.children.length/n.columns),w=(rect.width-g*(n.columns-1))/n.columns,h=(rect.height-g*(rows-1))/rows;
-        n.children.forEach((k,i)=>place(k,{x:rect.x+(i%n.columns)*(w+g),y:rect.y+Math.floor(i/n.columns)*(h+g),width:w,height:h},own));
+        n.children.forEach((k,i)=>place(k,{x:rect.x+(i%n.columns)*(w+g),y:rect.y+Math.floor(i/n.columns)*(h+g),width:w,height:h},own,surface));
       }
       else if(n.direction==='row') {
         const widths=rowWidths(n,rect.width);let x=rect.x;
@@ -211,7 +270,7 @@ export async function compileComposition(comp,contract,{fonts}={}) {
           if(min>rect.height+.5)short(k,{width:widths[i],height:rect.height},min);
           const h=flexible(k)||(n.align??'stretch')==='stretch'?rect.height:min;
           const y=rect.y+{start:0,stretch:0,center:(rect.height-h)/2,end:rect.height-h}[n.align??'stretch'];
-          place(k,{x,y,width:widths[i],height:h},own);x+=widths[i]+g;
+          place(k,{x,y,width:widths[i],height:h},own,surface);x+=widths[i]+g;
         });
       }
       else {
@@ -221,7 +280,7 @@ export async function compileComposition(comp,contract,{fonts}={}) {
         if(heights.some((h,i)=>h<mins[i]-.5)){const spare=rect.height-gaps-mins.reduce((a,m)=>a+m,0);heights=kids.map((k,i)=>flex[i]?mins[i]+spare*(k.weight??1)/weight:mins[i]);}
         const used=heights.reduce((a,h)=>a+h,0)+gaps;
         let y=rect.y+(weight?0:{start:0,stretch:0,center:(rect.height-used)/2,end:rect.height-used}[n.align??'start']);
-        kids.forEach((k,i)=>{place(k,{x:rect.x,y,width:rect.width,height:heights[i]},own);y+=heights[i]+g;});
+        kids.forEach((k,i)=>{place(k,{x:rect.x,y,width:rect.width,height:heights[i]},own,surface);y+=heights[i]+g;});
       }
       if(n.group){if(own.length>1)structure.groups.push({slide:s.id,id:n.id,members:own});members?.push(...own);}
     };
@@ -235,6 +294,13 @@ export async function compileComposition(comp,contract,{fonts}={}) {
       for(const key of ['subtitle','detail'])if(s[key]!==undefined){const height=measure.height(s[key],body,sl.contentBox.width);put({id:`${s.id}_${key}`,type:'text',x:sl.contentBox.x,y:round(y),width:sl.contentBox.width,height:round(height),text:s[key],fontSize:body.size,bold:body.bold,color:colors[body.colorRole]});placeholders.push(`${s.id}_${key}`);y+=height+inset;}
       structure.layouts.push({slide:s.id,layout:s.layout,placeholders});
     } else place(s.canvas,sl.contentBox,null);
+    if(s.brief?.relation==='overlap') {
+      // Overlap is geometric: two shapes must intersect without one simply sitting inside the other.
+      const shapes=elements.filter(e=>e.type==='shape'),inside=(a,b)=>a.x>=b.x&&a.y>=b.y&&a.x+a.width<=b.x+b.width&&a.y+a.height<=b.y+b.height;
+      const crossing=shapes.some((a,i)=>shapes.slice(i+1).some(b=>a.x<b.x+b.width&&b.x<a.x+a.width&&a.y<b.y+b.height&&b.y<a.y+a.height&&!inside(a,b)&&!inside(b,a)));
+      if(!crossing)fail(s.id,'relation "overlap" is not drawn. Make two shapes intersect in a free container, or set the relation to "none" if the words are enough');
+    }
+    if(s.brief||s.layout)structure.briefs.push({slide:s.id,...(s.brief?.relation?{relation:s.brief.relation}:{}),...(focalId?{focal:focalId}:{}),rhythm:s.brief?.rhythm??(s.layout?'anchor':'dense')});
 
     for(const c of s.connect??[]) {
       const a=rects.get(c.from),b=rects.get(c.to),ac={x:a.x+a.width/2,y:a.y+a.height/2},bc={x:b.x+b.width/2,y:b.y+b.height/2};

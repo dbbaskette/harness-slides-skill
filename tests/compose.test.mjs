@@ -222,3 +222,69 @@ test('a slanted label is placed when its nodes sit inside a named or grouped con
     assert.ok(one&&two);assert.ok(one.x>=two.x+two.width||two.x>=one.x+one.width||one.y>=two.y+two.height||two.y>=one.y+one.height,'labels overlap');
   }
 });
+
+// Deck direction and per-slide brief.
+const direction={focal:'headingPrimary',neutral:'canvasSecondary',meanings:{accentAqua:'Valkey'}};
+const directed=(canvas,brief,extra={})=>({version:1,title:'Directed deck',direction,slides:[{id:'slide_one',title:'A claim that reads as a sentence',sources:['brief:test'],canvas,...(brief?{brief}:{}),...extra}]});
+const pair=(a={},b={})=>({type:'stack',direction:'row',children:[{type:'box',id:'node_a',text:'A',...a},{type:'box',id:'node_b',text:'B',...b}]});
+
+test('a deck direction names its focal, neutral and meaning colors by brand role',()=>{
+  const c=brand(),bad=d=>()=>validateComposition({...directed(pair()),direction:d},c);
+  validateComposition(directed(pair()),c);
+  assert.throws(bad({...direction,focal:'#FF0000'}),/direction\.focal must be a brand color role/);
+  assert.throws(bad({...direction,meanings:{notARole:'x'}}),/direction\.meanings uses notARole, which is not a brand color role/);
+  assert.throws(bad({...direction,meanings:{accentAqua:''}}),/say what accentAqua means/);
+  assert.throws(bad({...direction,meanings:{headingPrimary:'x'}}),/the focal color cannot also carry a meaning/);
+  assert.throws(bad({...direction,mood:'bold'}),/unsupported direction field/);
+  assert.throws(bad({focal:'headingPrimary'}),/direction needs focal and neutral/);
+});
+
+test('with a direction, fills come only from the neutral, the meanings and white, and boxes default to the neutral',async()=>{
+  const c=brand(),stray=directed(pair({fill:'inkSecondary'}));
+  assert.throws(()=>validateComposition(stray,c),/slide_one\/node_a: fill inkSecondary is not in the deck direction \(canvasSecondary, accentAqua, canvasPrimary\)/);
+  const {scene}=await compileComposition(directed(pair({fill:'accentAqua'},{fill:'canvasPrimary'})),c);
+  assert.equal(byId(scene,'node_a').fill,'#0091DA');assert.equal(byId(scene,'node_b').fill,'#FFFFFF');
+  const other={...directed(pair()),direction:{...direction,neutral:'canvasPrimary'}};
+  assert.equal(byId((await compileComposition(other,c)).scene,'node_a').fill,'#FFFFFF');
+});
+
+test('the compiler colors the one focal node and refuses a second emphasis',async()=>{
+  const c=brand(),{scene,structure}=await compileComposition(directed(pair(),{relation:'contrast',focal:'node_b'}),c);
+  assert.equal(byId(scene,'node_b').fill,'#2867B2');assert.equal(byId(scene,'node_b').color,'#FFFFFF');assert.equal(byId(scene,'node_a').fill,'#F0F2F5');assert.equal(byId(scene,'node_a').color,'#202124');
+  assert.deepEqual(structure.briefs,[{slide:'slide_one',relation:'contrast',focal:'node_b',rhythm:'dense'}]);assert.deepEqual(structure.direction,direction);
+  const bad=(canvas,brief)=>()=>validateComposition(directed(canvas,brief),c);
+  assert.throws(bad(pair({fill:'headingPrimary'}),{relation:'contrast',focal:'node_b'}),/slide_one\/node_a: only the focal node may use the focal color/);
+  assert.throws(bad(pair({fill:'headingPrimary'})),/slide_one\/node_a: only the focal node may use the focal color; name it in brief\.focal/);
+  assert.throws(bad(pair({},{fill:'accentAqua'}),{relation:'contrast',focal:'node_b'}),/slide_one\/node_b: the focal node takes the focal color; remove its fill/);
+  assert.throws(bad(pair(),{relation:'contrast',focal:'missing_node'}),/brief\.focal names missing_node, which is not a box, text, icon or image on this slide/);
+});
+
+test('text on a dark fill gets a readable color unless the author chose one',async()=>{
+  const c=brand(),{scene}=await compileComposition(deck(pair({fill:'headingPrimary'},{fill:'headingPrimary',color:'inkDeep'})),c);
+  assert.equal(byId(scene,'node_a').color,'#FFFFFF');assert.equal(byId(scene,'node_b').color,'#202124');
+  const card=deck({type:'box',id:'dark_card',fill:'headingPrimary',children:[{type:'text',id:'card_text',text:'Inside'}]});
+  assert.equal(byId((await compileComposition(card,c)).scene,'card_text').color,'#FFFFFF');
+});
+
+test('a relation other than none must be drawn',async()=>{
+  const c=brand(),ok=(canvas,relation,extra)=>validateComposition(directed(canvas,{relation},extra),c),no=(canvas,relation,pattern,extra)=>assert.throws(()=>ok(canvas,relation,extra),pattern);
+  const edge={connect:[{id:'edge_ab',from:'node_a',to:'node_b'}]},column={type:'stack',direction:'column',children:[{type:'box',id:'node_a',text:'A'},{type:'box',id:'node_b',text:'B'}]};
+  const words={type:'text',id:'only_text',text:'First this, then that.'},card={type:'box',id:'card_main',children:[{type:'text',id:'member_a',text:'A'},{type:'text',id:'member_b',text:'B'}]};
+  no(words,'order',/slide_one: relation "order" is not drawn\. Join nodes with edges or use chevrons in sequence/);ok(pair(),'order',edge);ok(pair({shape:'chevron'},{shape:'chevron'}),'order');
+  no(pair(),'dependency',/relation "dependency" is not drawn\. Join the nodes with edges/);ok(pair(),'dependency',edge);
+  no(words,'hierarchy',/relation "hierarchy" is not drawn/);ok(column,'hierarchy');ok({type:'box',id:'outer_box',children:[{type:'box',id:'inner_box',text:'x'}]},'hierarchy');
+  no(pair(),'membership',/relation "membership" is not drawn\. Put the members inside a box/);ok(card,'membership');
+  ok({type:'box',id:'pack_box',children:[{type:'text',id:'pack_name',text:'Bundle'},{type:'grid',columns:2,children:[{type:'box',id:'pack_one',text:'JSON'},{type:'box',id:'pack_two',text:'Search'}]}]},'membership');
+  no(column,'contrast',/relation "contrast" is not drawn\. Place the things compared side by side/);ok(pair(),'contrast');
+  no(pair(),'quantity',/relation "quantity" is not drawn\. Show the number with the metric text role/);ok({type:'text',id:'big_number',text:'42%',textRole:'metric'},'quantity');
+  ok(words,'none');assert.throws(()=>ok(words,'sequence'),/brief\.relation must be one of order\|dependency\|hierarchy\|membership\|contrast\|overlap\|quantity\|none/);
+  assert.throws(()=>validateComposition(directed(words,{relation:'none',rhythm:'busy'}),c),/brief\.rhythm must be one of anchor\|dense\|breathing/);
+  const apart={type:'free',children:[{type:'box',id:'node_a',text:'A',shape:'ellipse',at:{x:0,y:0,width:.4,height:.6}},{type:'box',id:'node_b',text:'B',shape:'ellipse',at:{x:.5,y:0,width:.4,height:.6}}]};
+  await assert.rejects(()=>compileComposition(directed(apart,{relation:'overlap'}),c),/relation "overlap" is not drawn\. Make two shapes intersect/);
+  apart.children[1].at.x=.3;await compileComposition(directed(apart,{relation:'overlap'}),c);
+});
+
+test('compositions without a direction or briefs still compile unchanged',async()=>{
+  const {scene,structure}=await compileComposition(deck(pair({fill:'inkSecondary'})),brand());
+  assert.equal(byId(scene,'node_a').fill,'#555555');assert.equal(structure.direction,null);assert.deepEqual(structure.briefs,[]);
+});

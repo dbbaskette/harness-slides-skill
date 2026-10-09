@@ -9,14 +9,13 @@ import {renderCompositionDir} from './compose-file.mjs';
 import {importDeck,updateDeck,exportPdf,previewPrefix} from '../google-drive-deck.mjs';
 import {hash} from './common.mjs';
 import {themeFor,color} from './scene.mjs';
+import {contrastRatio as contrast} from './compose.mjs';
 
 // Wording that states an order or a dependency. Everyday words such as "after" or "next" alone are not enough.
 const relational=/→|->|=>|\b(?:and then|, then|first\b.{1,80}\bthen|leads? to|results? in|depends? on|flows? (?:to|into|through|from)|sends? (?:\w+ ){1,4}to|hands? off to|followed by|versus|vs\.?|step \d|stage \d|phase \d)\b/i;
 const numbered=/^\s*(?:(?:step|stage|phase)\s*)?\d+[.):]?\s/i;
 const signature=slide=>JSON.stringify(slide.elements.filter(e=>e.role!=='title').map(e=>[e.type,...['x','y','width','height'].map(k=>Math.round(e[k]/20))]));
 
-const luminance=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255).map(v=>v<=.03928?v/12.92:((v+.055)/1.055)**2.4).reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);
-const contrast=(a,b)=>{const [hi,lo]=[luminance(a),luminance(b)].sort((x,y)=>y-x);return (hi+.05)/(lo+.05);};
 // The filled shape drawn beneath a box, if any: the last one before it in drawing order that contains it.
 const backdrop=(slide,box,before=slide.elements.length)=>slide.elements.slice(0,before).filter(e=>e.type==='shape'&&e.fill&&e.x<=box.x+.5&&e.y<=box.y+.5&&e.x+e.width>=box.x+box.width-.5&&e.y+e.height>=box.y+box.height-.5).at(-1);
 
@@ -37,6 +36,18 @@ export async function screenComposition({scene,structure={groups:[],connectors:[
   // Cover, section and closing slides are text by design and repeat on purpose.
   const templated=new Set((structure.layouts??[]).map(l=>l.slide));
   for(let i=findings.length-1;i>=0;i--)if(templated.has(findings[i].slide)&&['text-only','similar-geometry','density','measured-text-overflow'].includes(findings[i].code))findings.splice(i,1);
+  // Deck-level discipline: one direction for the whole deck, a brief per content slide, and a rhythm that varies.
+  const briefs=new Map((structure.briefs??[]).map(b=>[b.slide,b])),content=scene.slides.filter(s=>!templated.has(s.id));
+  if(!structure.direction&&content.length)findings.push({slide:content[0].id,severity:'info',code:'no-direction',detail:'This deck has no direction. Decide once which color means "look here", which is the neutral and what each other color stands for, so every slide follows the same rules.'});
+  let run=0;
+  for(const slide of scene.slides) {
+    const brief=briefs.get(slide.id);
+    run=(brief?.rhythm??(templated.has(slide.id)?'anchor':'dense'))==='dense'?run+1:0;
+    if(run>=4)findings.push({slide:slide.id,severity:'info',code:'dense-run',detail:`${run} dense slides in a row. Give the audience a pause: a section break, one large statement or a single image.`});
+    if(templated.has(slide.id))continue;
+    if(!brief?.relation)findings.push({slide:slide.id,severity:'info',code:'no-brief',detail:'This slide has no brief. Name the relation between its parts and its focal node, so the form follows from the content.'});
+    if(slide.title.trim().split(/\s+/).length<4)findings.push({slide:slide.id,severity:'info',code:'label-title',detail:'The title reads as a label. Write the claim as a sentence the slide then supports.'});
+  }
   scene.slides.forEach((slide,index)=>{
     if(templated.has(slide.id))return;
     const body=slide.elements.filter(e=>e.role!=='title'),words=body.map(e=>e.text??'').join(' '),edges=structure.connectors.filter(c=>c.slide===slide.id).length;
