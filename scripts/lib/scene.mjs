@@ -7,6 +7,10 @@ export const defaultTheme = Object.freeze({
 });
 const idPattern = /^[a-zA-Z_][a-zA-Z0-9_-]{4,49}$/;
 const types = new Set(['text','shape','line','image','table','chart']);
+// Native preset shapes every emitter can draw: [PowerPoint preset, Google Slides shape type, CSS preview radius,
+// fraction of the shape's width its text area spans, fraction of its height]. A preset's text area is smaller
+// than its bounding box, so layout must measure text against these fractions.
+export const shapeKinds = Object.freeze({rect:['rect','RECTANGLE','0',1,1],ellipse:['ellipse','ELLIPSE','50%',.7,.7],roundRect:['roundRect','ROUND_RECTANGLE','12px',1,1],diamond:['diamond','DIAMOND','0',.5,.5],hexagon:['hexagon','HEXAGON','0',.6,.65],chevron:['chevron','CHEVRON','0',.6,1],can:['can','CAN','10px',1,.6]});
 const positive = (n, name, max=2000) => { if (!Number.isFinite(n) || n<=0 || n>max) throw new Error(`Invalid ${name}`); };
 const nonempty = (s, name) => { if (typeof s !== 'string' || !s.trim() || s.length>20000) throw new Error(`Invalid ${name}`); };
 export function themeFor(scene) {
@@ -58,7 +62,7 @@ export function validateScene(scene) {
       if(e.href!==undefined){let url;try{url=new URL(e.href);}catch{throw new Error('Use an absolute HTTP(S) hyperlink');}if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw new Error('Use an HTTP(S) hyperlink without credentials');}
       if (e.align !== undefined && !['left','center','right'].includes(e.align)) throw new Error('Invalid text alignment');
       if (e.type==='text') nonempty(e.text,'text');
-      if (e.type==='shape') {if (!['rect','ellipse'].includes(e.shape??'rect')) throw new Error('Use rect or ellipse');if(e.text!==undefined)nonempty(e.text,'shape text');}
+      if (e.type==='shape') {if (!Object.hasOwn(shapeKinds,e.shape??'rect')) throw new Error(`Use one of: ${Object.keys(shapeKinds).join(', ')}`);if(e.text!==undefined)nonempty(e.text,'shape text');}
       if (e.type==='image') { nonempty(e.src,'image source'); nonempty(e.alt,'image alt text'); if (!['contain','cover'].includes(e.fit??'contain')) throw new Error('Invalid image fit'); }
       for(const key of ['headerFill','headerColor','bodyFill'])if(e[key]!==undefined)color(e[key],theme);
       if(e.padding!==undefined && (!Number.isFinite(e.padding)||e.padding<0||e.padding>40))throw new Error('Invalid table padding');
@@ -101,7 +105,7 @@ export function renderSceneHtml(scene) {
     if (e.type==='line') return `<svg class="object" data-object-id="${e.id}" style="${box}" viewBox="0 0 ${e.width} ${e.height}"><defs><marker id="a-${e.id}" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6Z" fill="${color(e.color??'accent',t)}"/></marker></defs><line x1="${e.flipH?e.width:0}" y1="${e.flipV?e.height:0}" x2="${e.flipH?0:e.width}" y2="${e.flipV?0:e.height}" stroke="${color(e.color??'accent',t)}" stroke-width="${e.weight??2}" ${e.arrow?`marker-end="url(#a-${e.id})"`:''}/></svg>`;
     if (e.type==='table') return `<table class="object" data-object-id="${e.id}" style="${box};${textStyle}">${(e.columnWidths??e.rows[0].map(()=>e.width/e.rows[0].length)).map(w=>`<col style="width:${w}px">`).join('')}${e.rows.map((row,i)=>`<tr>${row.map(c=>`<${i?'td':'th'} style="padding:${e.padding??3.6}px;color:${color(i?(e.color??'text'):(e.headerColor??e.color??'text'),t)};background:${color(i?(e.bodyFill??'background'):(e.headerFill??'muted'),t)}">${escape(c)}</${i?'td':'th'}>`).join('')}</tr>`).join('')}</table>`;
     if (e.type==='chart') return `<div class="object chart" data-object-id="${e.id}" style="${box}"><strong>${escape(e.chartType)} chart · native PowerPoint data</strong>${e.series.map(s=>`<p>${escape(s.name)}: ${s.values.map((v,i)=>`${escape(s.labels[i])} ${v}`).join(', ')}</p>`).join('')}<small>Chart geometry needs target-rendered review</small></div>`;
-    return `<div class="object text" data-object-id="${e.id}" style="${box};${textStyle};background:${e.fill?color(e.fill,t):'transparent'};border-radius:${e.shape==='ellipse'?'50%':'0'}">${escape(e.text??'')}</div>`;
+    return `<div class="object text" data-object-id="${e.id}" style="${box};${textStyle};background:${e.fill?color(e.fill,t):'transparent'};border-radius:${shapeKinds[e.shape??'rect'][2]}">${escape(e.text??'')}</div>`;
   };
   return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escape(scene.title)}</title><style>body{background:#eee;margin:20px;font-family:${JSON.stringify(t.font)},sans-serif}section{position:relative;width:${scene.canvas.width}px;height:${scene.canvas.height}px;background:${t.background};margin:20px auto;overflow:hidden;box-shadow:0 2px 8px #0002}.object{position:absolute;box-sizing:border-box}.text{white-space:pre-wrap;display:flex;align-items:center;padding:3.6px;overflow:hidden}table{border-collapse:collapse;table-layout:fixed}td,th{padding:3.6px;border:1px solid #ccc}th{background:${t.muted}}.chart{border:1px dashed #999;padding:12px;overflow:auto}</style><p>Editable scene preview. Native editor metrics, charts and template artwork require final rendered review.</p>${scene.slides.map(s=>`<section data-slide-id="${s.id}" aria-label="${escape(s.title)}">${s.elements.map(view).join('')}</section>`).join('')}</html>`;
 }
@@ -115,7 +119,7 @@ export const contract = `Scene v2 (AI-owned intermediate; users may supply a bri
 Coordinates are points. Stable IDs match [a-zA-Z_][a-zA-Z0-9_-]{4,49} and are unique across the scene.
 Slide: {id,title,sources:[evidence IDs],elements:[...],intent?:{takeaway,relationship,rationale,evidence,audienceQuestion,alternative:{treatment,reason},visual:{family,purpose,route?}},notes?:string,layoutId?:native Google layout ID,replace?:[existing object IDs],protect?:[existing object IDs]}.
 Element: {id,type:text|shape|line|table|image|chart,x,y,width,height,...}.
-Text/shape: text, href?:absolute HTTP(S) hyperlink, role?:title|body, fontSize, color/fill (hex or theme key), bold, align:left|center|right. Shape: rect|ellipse.
+Text/shape: text, href?:absolute HTTP(S) hyperlink, role?:title|body, fontSize, color/fill (hex or theme key), bold, align:left|center|right. Shape: rect|ellipse|roundRect|diamond|hexagon|chevron|can.
 Line: color, weight, arrow, flipH/flipV. Table: rows (rectangular strings), fontSize, headerFill/headerColor/bodyFill, padding, columnWidths (points summing to width).
 Image: src (local path for PPTX, public HTTPS URL for Google), alt, fit:contain|cover.
 Chart: chartType:bar|line|pie, series:[{name,labels:[...],values:[...]}], source, colors?:[hex], labelSize?:points. Native editable chart data in PPTX; Google requires an existing linked Sheets chart via sheetsChart:{spreadsheetId,chartId}.

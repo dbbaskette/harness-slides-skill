@@ -37,3 +37,14 @@ test('shared installer links three harnesses to one verified version without rep
   const result=await install({home,shared});assert.equal(result.status,'installed');assert.equal((await install({home,shared})).runtime,result.runtime);
   await writeFile(join(result.runtime,'references','authoring.md'),'tampered');await assert.rejects(()=>install({home,shared}),/modified/);
 });
+
+test('the installer installs engine packages on request and reports the outcome',async t=>{
+  const {mkdir}=await import('node:fs/promises'),dir=await temporary(t),home=join(dir,'home'),shared=join(dir,'shared'),calls=[];
+  const run=async(command,args,options)=>{calls.push({command,args,cwd:options.cwd});await mkdir(join(options.cwd,'node_modules'));await writeFile(join(options.cwd,'node_modules','.package-lock.json'),'{}');};
+  assert.equal((await install({home,shared})).dependencies,'skipped');
+  const first=await install({home,shared,dependencies:true,run});
+  assert.equal(first.dependencies,'installed');assert.deepEqual(calls,[{command:'npm',args:['ci','--omit=dev','--ignore-scripts','--no-audit','--no-fund'],cwd:first.runtime}]);
+  assert.equal((await install({home,shared,dependencies:true,run})).dependencies,'present');assert.equal(calls.length,1);
+  const other=join(dir,'other'),failed=await install({home:join(dir,'home2'),shared:other,dependencies:true,run:async()=>{throw new Error('registry unreachable');}});
+  assert.equal(failed.status,'installed');assert.match(failed.dependencies,/^failed: registry unreachable/);assert.match(failed.next,/npm ci --omit=dev --ignore-scripts/);
+});

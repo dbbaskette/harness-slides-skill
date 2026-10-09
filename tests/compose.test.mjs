@@ -153,3 +153,27 @@ test('a group with one member is not recorded',async()=>{
   const {structure}=await compileComposition(deck({type:'stack',direction:'row',id:'lone_group',group:true,children:[{type:'box',id:'only_box',text:'x'}]}),brand());
   assert.deepEqual(structure.groups,[]);
 });
+
+test('the wider native shape set compiles and reaches every emitter',async t=>{
+  const {shapeKinds}=await import('../scripts/lib/scene.mjs'),{compileGoogleScene}=await import('../scripts/lib/google-slides.mjs'),{renderPptxScene}=await import('../scripts/lib/pptx-render.mjs');
+  const {temporary}=await import('./fixtures.mjs'),{join}=await import('node:path'),{execFile}=await import('node:child_process'),{promisify}=await import('node:util');
+  const names=Object.keys(shapeKinds);assert.deepEqual(names,['rect','ellipse','roundRect','diamond','hexagon','chevron','can']);
+  const {scene}=await compileComposition(deck({type:'grid',columns:4,children:names.map(shape=>({type:'box',id:`shape_${shape}`,shape,text:shape}))}),brand());
+  assert.deepEqual(scene.slides[0].elements.filter(e=>e.type==='shape').map(e=>e.shape),names);
+  const built=compileGoogleScene(scene,{presentationId:'test_deck',revisionId:'r1',pageSize:{width:{magnitude:960,unit:'PT'},height:{magnitude:540,unit:'PT'}},slides:[]});
+  assert.deepEqual(built.requests.filter(r=>r.createShape&&r.createShape.shapeType!=='TEXT_BOX').map(r=>r.createShape.shapeType).filter(v=>v!=='RECTANGLE'||true).slice(0,7).sort(),names.map(n=>shapeKinds[n][1]).sort());
+  const out=join(await temporary(t),'shapes.pptx');await renderPptxScene(scene,out);
+  const {stdout}=await promisify(execFile)('unzip',['-p',out,'ppt/slides/slide1.xml']);
+  for(const n of names)assert.match(stdout,new RegExp(`prst="${shapeKinds[n][0]}"`));
+  assert.throws(()=>validateComposition(deck({type:'box',id:'star_shape',shape:'star5',text:'x'}),brand()),/shape must be one of/);
+});
+
+test('non-rectangular shapes measure text against their smaller inner text area',async()=>{
+  const cell=(shape,text)=>deck({type:'grid',columns:4,children:[{type:'box',id:'shape_box',shape,text},{type:'spacer'},{type:'spacer'},{type:'spacer'}]});
+  // A 202pt-wide cell: one long word fits a rectangle's 166pt text width but not a diamond's 101pt.
+  const word='Observability';
+  await compileComposition(cell('rect',word),brand());
+  const tall=(await compileComposition(cell('diamond','A diamond holds only a few short words of text'),brand()).catch(e=>e));
+  assert.match(String(tall.message??''),/slide_one\/shape_box: needs [\d.]+pt of height but has 360pt/);
+  await assert.rejects(()=>compileComposition(deck({type:'grid',columns:6,gap:'wide',children:Array.from({length:6},(_,i)=>({type:'box',id:`tiny_box${i}`,shape:'diamond',text:'Observability and tracing for every service in the fleet'}))}),brand()),/needs [\d.]+pt of height/);
+});

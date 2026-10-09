@@ -1,5 +1,5 @@
 import { request, gcloudToken } from '../google-drive-deck.mjs';
-import { validateScene, themeFor, color } from './scene.mjs';
+import { validateScene, themeFor, color, shapeKinds } from './scene.mjs';
 import { digest } from './common.mjs';
 const validId = id => { if (!/^[A-Za-z0-9_-]+$/.test(id??'')) throw new Error('Provide a native Google presentation ID'); return id; };
 const rgb = hex => Object.fromEntries(['red','green','blue'].map((k,i)=>[k,parseInt(hex.slice(1+i*2,3+i*2),16)/255]));
@@ -72,7 +72,7 @@ export function compileGoogleScene(scene,deck,{localImages=false}={}) {
         requests.push({updateTableRowProperties:{objectId:e.id,rowIndices:e.rows.map((_,i)=>i),tableRowProperties:{minRowHeight:{magnitude:e.height/e.rows.length,unit:'PT'}},fields:'minRowHeight'}});
         e.rows.forEach((row,rowIndex)=>row.forEach((value,columnIndex)=>{if(value)requests.push(...text({...e,text:value,bold:rowIndex===0,color:rowIndex===0?(e.headerColor??e.color??'text'):(e.color??'text')}, {rowIndex,columnIndex}));requests.push({updateTableCellProperties:{objectId:e.id,tableRange:{location:{rowIndex,columnIndex},rowSpan:1,columnSpan:1},tableCellProperties:{tableCellBackgroundFill:{solidFill:{color:solid(rowIndex===0?(e.headerFill??'muted'):(e.bodyFill??'background')),alpha:1}},contentAlignment:'MIDDLE'},fields:'tableCellBackgroundFill,contentAlignment'}});}));
       } else {
-        requests.push({createShape:{objectId:e.id,shapeType:e.type==='text'?'TEXT_BOX':e.shape==='ellipse'?'ELLIPSE':'RECTANGLE',elementProperties:props(s,e)}});
+        requests.push({createShape:{objectId:e.id,shapeType:e.type==='text'?'TEXT_BOX':shapeKinds[e.shape??'rect'][1],elementProperties:props(s,e)}});
         requests.push({updateShapeProperties:{objectId:e.id,shapeProperties:{shapeBackgroundFill:e.fill?{solidFill:{color:solid(e.fill),alpha:1}}:{propertyState:'NOT_RENDERED'},outline:{propertyState:'NOT_RENDERED'},contentAlignment:'MIDDLE',autofit:{autofitType:'NONE'}},fields:'shapeBackgroundFill,outline,contentAlignment,autofit.autofitType'}});
         if(e.text)requests.push(...text(e));
       }
