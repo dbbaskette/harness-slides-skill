@@ -63,7 +63,7 @@ library for icon IDs. Shapes: `rect`, `roundRect`, `ellipse`, `diamond`,
 ## Build, look, fix
 
 ```sh
-node scripts/harness-slides.mjs compose compile --file composition.json --brand brand-contract.json --design-project CONTENT --output NEW_DIR
+node scripts/harness-slides.mjs compose compile --file composition.json --brand brand-contract.json --output NEW_DIR
 node scripts/harness-slides.mjs compose preview --file NEW_DIR --output NEW_PREVIEW_DIR --slide SLIDE_ID
 ```
 
@@ -78,7 +78,8 @@ LibreOffice is installed and Google is unavailable.
 
 Record the user's actual approval of the per-slide design in the presentation
 brief, in their words. A composition without `intent` blocks needs no separate
-proposal file.
+proposal file. Add `--design-project CONTENT` to `compile` only when slides carry
+`intent` blocks approved through `design propose`.
 
 Open every image. After each new slide, look at it and revise once before moving
 on. Findings point at things to look at: wording that describes a relationship
