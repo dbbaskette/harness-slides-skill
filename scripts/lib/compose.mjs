@@ -53,7 +53,7 @@ Text is measured with the brand font. Content that cannot fit at its role's size
 
 export function validateComposition(comp,contract) {
   validateBrandContract(contract,{medium:'slides'});
-  const d=contract.design,roles=d.slides.typography,colors=d.colors,maxFills=d.slides.constraints?.maxFills??3;
+  const d=contract.design,roles=d.slides.typography,colors=d.colors;
   if(comp?.version!==1)throw new Error('Use composition version 1 (run compose contract)');
   if(Object.keys(comp).some(k=>!['version','title','slides','direction'].includes(k)))throw new Error('Unsupported composition field');
   const dir=comp.direction;
@@ -154,9 +154,6 @@ export function validateComposition(comp,contract) {
     facts.edges=Array.isArray(s.connect)?s.connect.length:0;
     if(focalId!==undefined&&!leaves.has(focalId))fail(s.id,`brief.focal names ${focalId}, which is not a box or text on this slide`);
     if(brief&&drawn[brief.relation]&&!drawn[brief.relation][0](facts))fail(s.id,`relation "${brief.relation}" is not drawn. ${drawn[brief.relation][1]}, or set the relation to "none" if the words are enough`);
-    // The focal color is the one planned emphasis, so it does not use up the slide's color allowance.
-    const counted=[...fills].filter(role=>!dir||role!==dir.focal).length;
-    if(counted>maxFills)fail(s.id,`uses ${counted} fill colors; the brand allows ${maxFills} per slide`);
     if(s.connect!==undefined&&(!Array.isArray(s.connect)||s.connect.length>40))fail(s.id,'connect must be a list of at most 40 edges');
     for(const c of s.connect??[]) {
       if(!c||typeof c!=='object')fail(s.id,'each edge must be an object');

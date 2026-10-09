@@ -75,11 +75,10 @@ leave a small diagram stranded.
 Give color a job. One focal color marks the point of a slide. Panels start in a
 neutral. Any further color stands for one thing, such as a product or a state,
 and keeps that meaning on every slide, with a label or other cue besides color.
-A slide rarely needs more than two or three such colors; do not add one because
-the brand palette offers it. Use the selected brand palette and its rules.
+Use as many as the content has things to tell apart, and none because the
+brand palette offers it. Use the selected brand palette and its rules.
 Honor the user's selected subset and excluded colors in text, shapes,
-connectors, charts and image briefs. More colors for necessary data categories
-need an explicit task-specific decision.
+connectors, charts and image briefs.
 
 Align repeated components to common anchors; group related objects, preserve
 whitespace and keep enough room for native text wrapping.

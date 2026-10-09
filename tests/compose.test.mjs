@@ -27,14 +27,13 @@ test('validation rejects raw colors, unknown fields, bad edges and too many fill
   assert.throws(bad({type:'text',id:'tiny_role',text:'x',textRole:'footnote'}),/textRole must be one of/);
   assert.throws(bad({type:'stack',direction:'row',children:[{type:'box',id:'same_name',text:'a'},{type:'box',id:'same_name',text:'b'}]}),/repeated ID/);
   assert.throws(bad({type:'stack',direction:'row',children:[{type:'box',id:'placed_abs',text:'a',at:{x:0,y:0,width:1,height:1}}]}),/only valid inside a free/);
-  assert.throws(bad({type:'grid',columns:2,children:['canvasPrimary','canvasSecondary','headingPrimary','accentAqua'].map((fill,i)=>({type:'box',id:`fill_box${i}`,text:'x',fill}))}),/uses 4 fill colors; the brand allows 3/);
   const edge=deck({type:'box',id:'only_node',text:'x'});edge.slides[0].connect=[{id:'edge_bad',from:'only_node',to:'missing_node'}];
   assert.throws(()=>validateComposition(edge,c),/two distinct nodes/);
 });
 
-test('the brand can raise the fill limit through constraints',()=>{
-  const canvas={type:'grid',columns:2,children:['canvasPrimary','canvasSecondary','headingPrimary','accentAqua'].map((fill,i)=>({type:'box',id:`fill_box${i}`,text:'x',fill}))};
-  assert.equal(validateComposition(deck(canvas),brand({constraints:{maxFills:4}})).slides[0].fills.length,4);
+test('a slide may use as many fill colors as its content needs',()=>{
+  const canvas={type:'grid',columns:3,children:['canvasPrimary','canvasSecondary','headingPrimary','accentAqua','inkDeep'].map((fill,i)=>({type:'box',id:`fill_box${i}`,text:'x',fill}))};
+  assert.equal(validateComposition(deck(canvas),brand()).slides[0].fills.length,5);
 });
 
 test('row stack divides the content box by weight with the normal gap',async()=>{
@@ -128,9 +127,8 @@ test('generated IDs are reserved and reported with their node',()=>{
   assert.throws(()=>validateComposition(edge,c),/repeated ID: edge_ab_label/);
 });
 
-test('validation counts default fills and rejects malformed structure with a located message',()=>{
+test('validation rejects malformed structure with a located message',()=>{
   const c=brand(),bad=canvas=>()=>validateComposition(deck(canvas),c);
-  assert.throws(bad({type:'grid',columns:2,children:[{type:'box',id:'plain_box',text:'x'},...['canvasPrimary','headingPrimary','accentAqua'].map((fill,i)=>({type:'box',id:`fill_box${i}`,text:'x',fill}))]}),/uses 4 fill colors/);
   assert.throws(bad({type:'box',id:'card_align',align:'stretch',children:[{type:'text',id:'card_text',text:'x'}]}),/aligns its content start\|center\|end/);
   assert.throws(bad({type:'stack',direction:'row',id:'group_flag',group:'yes',children:[{type:'spacer'}]}),/group must be boolean/);
   const shaped=deck({type:'box',id:'only_box',text:'x'});shaped.slides[0].connect={};assert.throws(()=>validateComposition(shaped,c),/connect must be a list/);

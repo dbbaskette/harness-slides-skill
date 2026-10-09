@@ -26,8 +26,8 @@ Every slide then follows it. Boxes start neutral, and fills come only from the
 neutral, the meanings and the brand's canvas color. A color in `meanings` keeps
 that meaning on every slide; never borrow it for decoration. Nothing uses the
 focal color except the one node a slide names as its point: not another box, not
-text, not an arrow. Arrows are drawn in an ink color. The focal color does not
-count toward the brand's limit on fill colors per slide.
+text, not an arrow. Arrows are drawn in an ink color. There is no limit on how
+many colors a slide uses; each one has to be in the direction, with a meaning.
 
 ## Give every content slide a brief
 
