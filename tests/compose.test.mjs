@@ -390,3 +390,15 @@ test('one compile reports every structure and fit problem on every slide',async(
   assert.equal(found[0],'7 problems to fix:');
   for(const part of [/slide_one: provide source references/,/slide_one\/heavy_box: weight must be above 0 and at most 10/,/slide_one\/tinted_box: fill must be a brand color role/,/slide_three\/only_box: textRole must be one of/,/slide_two\/long_left: needs [\d.]+pt of height but has 360pt at [\d.]+pt wide: the text runs to \d+ lines of 20pt and \d+ fit;/,/slide_two\/long_right: needs/,/slide_three\/title: needs [\d.]+pt of height but has 66pt: it runs to \d+ lines of 28pt and 1 fits; shorten the title/])assert.ok(found.some(line=>part.test(line)),String(part));
 });
+
+test('in a row an icon takes its own width and the rest share what is left',async()=>{
+  const c=brand({icon:{size:54,library:{path:'/synthetic/icons.pptx',index:'/synthetic/index.json'}}});
+  const row=extra=>deck({type:'stack',direction:'row',children:[{type:'icon',id:'lead_icon',icon:'fi-x',...extra},{type:'box',id:'wide_box',text:'Words'},{type:'box',id:'other_box',text:'More'}]});
+  const own=await compileComposition(row({}),c);
+  assert.equal(own.structure.icons[0].width,54);assert.equal(byId(own.scene,'wide_box').width,round((864-36-54)/2));assert.equal(byId(own.scene,'wide_box').x,round(48+54+18));
+  // A weight on the icon opts back into sharing, so it can be drawn larger.
+  const shared=await compileComposition(row({weight:1}),c);assert.equal(shared.structure.icons[0].width,108);
+  // A row of icons alone still spreads them evenly.
+  const alone=await compileComposition(deck({type:'stack',direction:'row',children:[{type:'icon',id:'icon_a',icon:'fi-x'},{type:'icon',id:'icon_b',icon:'fi-y'}]}),c);
+  assert.ok(alone.structure.icons[1].x>alone.structure.icons[0].x+200);
+});

@@ -38,15 +38,15 @@ export const composeContract=`Composition v1 (AI-owned; describe structure, neve
 {version:1,title,direction?:DIRECTION,slides:[{id,title,sources:[one or more IDs],canvas:NODE,connect?:[EDGE],brief?:BRIEF,notes?,intent?,layoutId?} | {id,title,sources,layout:TEMPLATE LAYOUT NAME,subtitle?,detail?,notes?}]}
 A slide with layout uses that template layout's own placeholders (cover, section break, closing) and has no canvas; run compose layouts for the names.
 NODE containers: {type:stack,direction:row|column,gap?,align?,children:[NODE]} | {type:grid,columns:1-6,gap?,children:[NODE]} | {type:free,children:[NODE with at:{x,y,width,height} as 0-1 fractions]}.
-NODE leaves: {type:icon,id,icon:STABLE ICON ID from the brand's icon search,color?,style?:solid|outline|plain} | {type:box,id,text?|children?,shape?:rect|ellipse|roundRect|diamond|hexagon|chevron|can,fill?,color?,textRole?,align?} | {type:text,id,text,textRole?,color?,align?} | {type:image,id,src,alt,fit?} | {type:spacer}.
+NODE leaves: {type:icon,id,icon:STABLE ICON ID from the brand's icon search,color?,style?:solid|outline|plain} | {type:box,id,text?|children?,shape?:rect|ellipse|roundRect|diamond|hexagon|chevron|can,fill?,color?,textRole?,align?,gap?} | {type:text,id,text,textRole?,color?,align?} | {type:image,id,src,alt,fit?} | {type:spacer}.
 sources name what a slide rests on: a document section, a finding, or one ID such as request or author_knowledge when it comes from the brief or general knowledge.
 Any node may set weight (relative share, above 0 up to 10, default 1). A node never goes below the size its content needs; when that overrides a weight you set, compile and preview report it as weight-overridden. An empty box has no minimum, so use empty boxes for bars drawn to scale.
 An icon keeps the library's own colors unless you set color (a brand color role) or style: solid is a light icon on a colored disc, outline a colored icon in a ring, plain a colored icon with no container. On a filled card use plain or outline with a color that reads on the fill.
 A card's content sits inside its shape's text area, so a diamond, ellipse or hexagon holds much less than a rectangle of the same size. Containers may set group:true and an id.
-gap: none|tight|normal|wide. align: start|center|end|stretch. In a row, stretch (the default) makes every child fill the row's height; start, center or end gives each child the height its content needs. On a box with children, align (start|center|end) places its content vertically. fill/color: a brand color role name. textRole: a brand typography role name.
-EDGE: {id,from:NODE id,to:NODE id,label?,arrow?:boolean,color?}.
+gap: none|tight|normal|wide. align: start|center|end|stretch. In a row, stretch (the default) makes every child fill the row's height; start, center or end gives each child the height its content needs. On a text, or a box with text, align sets the text left, centered or right. In a row an icon takes its own width unless you give it a weight. On a box with children, align (start|center|end) places its content vertically. fill/color: a brand color role name. textRole: a brand typography role name.
+EDGE: {id,from:NODE id,to:NODE id,label?,arrow?:boolean,color?}. Join boxes: an edge to a text or an icon is drawn but cannot stay attached when a node moves.
 DIRECTION, decided once for the deck: {focal:color role that means "look here",neutral:panel color role,meanings?:{color role:what it stands for in this deck},motif?:text}.
-With a direction, fills come only from the neutral, the meanings and white; boxes default to the neutral.
+With a direction, fills come only from the neutral, the meanings and white; boxes default to the neutral. Text, icon and edge colors may be any role except the focal.
 BRIEF, per content slide: {relation:order|dependency|hierarchy|membership|contrast|parallel|overlap|quantity|none,focal?:NODE id,rhythm?:anchor|dense|breathing}.
 The title is the claim. The relation must be drawn: edges, chevrons or a column of steps for order, edges for dependency, edges, nesting or layers for hierarchy, a box holding two or more members for membership, side by side for contrast, a grid, row or column of like nodes for parallel, intersecting shapes for overlap, the metric text role for quantity.
 The focal node is a box or text; the compiler gives it the focal color and no other node, text or edge may use it. Text inside a filled box is given a readable color unless you set one.
@@ -234,7 +234,15 @@ export async function compileComposition(comp,contract,{fonts}={}) {
   // Text and icons keep their own size; everything else shares the space that is left.
   const flexible=n=>n.type!=='text'&&n.type!=='icon';
   const gapOf=n=>gapSize[n.gap??'normal'];
-  const rowWidths=(n,width)=>{const kids=n.children,total=kids.reduce((a,k)=>a+(k.weight??1),0),usable=width-gapOf(n)*(kids.length-1);return kids.map(k=>usable*(k.weight??1)/total);};
+  // In a row an icon takes its own width, as text takes its own height in a column; a weight on it opts back into sharing.
+  const rowWidths=(n,width)=>{
+    const kids=n.children,own=k=>k.type==='icon'&&k.weight===undefined,total=kids.reduce((a,k)=>a+(own(k)?0:k.weight??1),0);
+    if(!total){const each=(width-gapOf(n)*(kids.length-1))/kids.length;return kids.map(()=>each);}
+    const usable=width-gapOf(n)*(kids.length-1)-kids.filter(own).length*iconSize;
+    // Too narrow for the icons themselves: share as before, so the icon's own check reports the width it lacks.
+    if(!(usable>0)){const all=kids.reduce((a,k)=>a+(k.weight??1),0),span=width-gapOf(n)*(kids.length-1);return kids.map(k=>span*(k.weight??1)/all);}
+    return kids.map(k=>own(k)?iconSize:usable*(k.weight??1)/total);
+  };
   const need=(n,width)=>{
     if(!(width>7.2))return Infinity; // narrower than the text insets: nothing can be laid out
     if(n.type==='text')return measure.height(n.text,style(n),width);
@@ -300,6 +308,9 @@ export async function compileComposition(comp,contract,{fonts}={}) {
     const box=r=>({x:round(r.x),y:round(r.y),width:round(r.width),height:round(r.height)});
 
     const place=(n,rect,members,surface=colors.canvasPrimary??'#FFFFFF')=>{
+      // A spacer may be any size, and an icon reports the width it lacks rather than a general lack of room.
+      if(n.type==='spacer')return;
+      if(n.type==='icon'&&rect.width<iconSize-.5)fail(`${s.id}/${n.id}`,`needs ${round(iconSize)}pt of width for an icon but has ${round(Math.max(0,rect.width))}pt`);
       if(!(rect.width>inset)||!(rect.height>0))fail(`${s.id}/${n.id??n.name??n.type}`,'has no usable room; use fewer siblings, less nesting or larger weights');
       // Leaves and column stacks own the fit check, so the error names the node to fix.
       const checks=!n.children||n.type==='stack'&&n.direction==='column';
@@ -338,7 +349,7 @@ export async function compileComposition(comp,contract,{fonts}={}) {
       else if(n.direction==='row') {
         const widths=rowWidths(n,rect.width);let x=rect.x;
         n.children.forEach((k,i)=>{
-          if(!(widths[i]>inset))fail(`${s.id}/${k.id??k.type}`,'has no usable room; use fewer siblings, less nesting or larger weights');
+          if(!(widths[i]>inset)&&k.type!=='spacer'&&k.type!=='icon')fail(`${s.id}/${k.id??k.type}`,'has no usable room; use fewer siblings, less nesting or larger weights');
           const min=need(k,widths[i]);
           if(min>rect.height+.5){short(k,{width:widths[i],height:rect.height},min);x+=widths[i]+g;return;}
           // Stretch fills the row. Any other alignment gives a child the height its content needs; a child with nothing to measure still fills.

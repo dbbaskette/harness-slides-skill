@@ -242,7 +242,7 @@ const iconDeck=icon=>({version:1,title:'Icons',slides:[{id:'icon_slide',title:'A
 
 test('icons are copied from the brand library as grouped native geometry, fitted and centred in their slot',async t=>{
   const dir=await temporary(t),c=await withIcons(dir,await brand(dir)),compiled=await compileComposition(iconDeck('fi-test-s001-l001'),c),output=join(dir,'icons-deck.pptx');
-  assert.deepEqual(compiled.structure.icons.map(i=>[i.slide,i.id,i.icon,i.width,i.height,i.order]),[['icon_slide','lead_icon','fi-test-s001-l001',108,108,1]]);
+  assert.deepEqual(compiled.structure.icons.map(i=>[i.slide,i.id,i.icon,i.width,i.height,i.order]),[['icon_slide','lead_icon','fi-test-s001-l001',54,54,1]]);
   assert.ok(!compiled.scene.slides[0].elements.some(e=>e.id==='lead_icon'));
   const result=await emitNativePptx({...compiled,brand:c,output,base:dir}),xml=await part(output,'ppt/slides/harnessSlide1.xml');
   assert.deepEqual(result.icons.map(({colors,...rest})=>rest),[{id:'lead_icon',icon:'fi-test-s001-l001',label:'Test ring'}]);assert.ok(result.icons[0].colors.includes('2867B2'));assert.deepEqual(await audit(output),[]);
@@ -250,7 +250,7 @@ test('icons are copied from the brand library as grouped native geometry, fitted
   assert.match(group,/descr="Test ring"/);assert.match(group,/prst="ellipse"/);assert.doesNotMatch(group,/<p:pic>/);
   const [,x,y]=group.match(/<a:off x="(\d+)" y="(\d+)"/),[,cx,cy]=group.match(/<a:ext cx="(\d+)" cy="(\d+)"/);
   // The 2:1 icon fills the slot's width and is centred vertically in it.
-  assert.equal(Math.round(cx/12700),108);assert.equal(Math.round(cy/12700),54);assert.equal(Math.round(x/12700),Math.round(slot.x));assert.equal(Math.round(y/12700),Math.round(slot.y+27));
+  assert.equal(Math.round(cx/12700),54);assert.equal(Math.round(cy/12700),27);assert.equal(Math.round(x/12700),Math.round(slot.x));assert.equal(Math.round(y/12700),Math.round(slot.y+13.5));
   const ids=[...xml.matchAll(/<p:cNvPr id="(\d+)"/g)].map(m=>m[1]);assert.equal(new Set(ids).size,ids.length);
 });
 
@@ -280,7 +280,7 @@ test('icon problems are reported against the composition node and leave no outpu
   await assert.rejects(()=>emit('fi-test-s001-l002',c,'c.pptx'),/lead_icon: icon fi-test-s001-l002 is a picture/);
   assert.deepEqual((await readdir(dir)).filter(n=>/^[abc]\.pptx$/.test(n)),[]);
   await assert.rejects(()=>compileComposition(iconDeck('not an id!'),c),/stable icon ID/);
-  const narrow={version:1,title:'Icons',slides:[{id:'icon_slide',title:'t',sources:['brief:test'],canvas:{type:'grid',columns:6,gap:'wide',children:Array.from({length:6},(_,i)=>({type:'stack',direction:'row',gap:'wide',children:[{type:'icon',id:`tiny_icon${i}`,icon:'fi-test-s001-l001'},{type:'spacer'},{type:'spacer'}]}))}}]};
+  const narrow={version:1,title:'Icons',slides:[{id:'icon_slide',title:'t',sources:['brief:test'],canvas:{type:'grid',columns:6,gap:'wide',children:Array.from({length:6},(_,i)=>({type:'stack',direction:'row',gap:'wide',children:[{type:'icon',id:`tiny_icon${i}`,icon:'fi-test-s001-l001'},{type:'spacer'},{type:'spacer'},{type:'spacer'}]}))}}]};
   await assert.rejects(()=>compileComposition(narrow,c),/needs 54pt of width for an icon/);
 });
 

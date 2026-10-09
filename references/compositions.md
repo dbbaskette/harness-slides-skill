@@ -34,7 +34,8 @@ neutral, the meanings and the brand's canvas color. A color in `meanings` keeps
 that meaning on every slide; never borrow it for decoration. Nothing uses the
 focal color except the one node a slide names as its point: not another box, not
 text, not an arrow. Arrows are drawn in an ink color. There is no limit on how
-many colors a slide uses; each one has to be in the direction, with a meaning.
+many fill colors a slide uses; each one has to be in the direction, with a
+meaning. Text and icons may use the brand's ink and on-color roles freely.
 
 ## Give every content slide a brief
 
@@ -171,8 +172,8 @@ A deck of more than about ten content slides can be
 
 Open every image. Because `compile` checks every slide in the file, either add
 slides one at a time or draft them all and then take them in turn with
-`--slide`. Either way, look at each slide, revise it once and look at the
-revision before the next. Findings point at things to look at: wording that describes a relationship
+`--slide`. Either way, look at each slide; if it needs revising, revise it and
+look at the revision before the next. Findings point at things to look at: wording that describes a relationship
 with nothing drawn, a layout repeated from the previous slide, an arrow that
 could not be attached, an icon that blends into the card behind it, a weight
 the content overrode, a deck with
@@ -190,7 +191,9 @@ node scripts/harness-slides.mjs drive import --file deck.pptx --name TITLE
 Before delivering, run `compose preview` on the finished build without `--slide`
 and open every image, in order: each slide, then the run of slides as a deck.
 Name the three weakest slides and what is wrong with each, fix them, and
-preview again. That is the final review for a composed deck. Show the user those images and
+preview again. That is the final review for a composed deck. Note what you
+found and fixed in `presentation-brief.md`, with the deck hash the preview
+returns. Show the user those images and
 wait, as [the walkthrough](design-walkthrough.md#show-rendered-output-and-pause-again)
 describes. The preview file and the delivered file are imports of the same
 build.

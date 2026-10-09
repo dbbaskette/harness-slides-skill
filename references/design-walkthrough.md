@@ -23,8 +23,8 @@ the user is approving those as well as the slides.
 Compare with the strongest feasible alternative for the same content. Rejecting
 fabricated metrics, unrelated stock images or fake customer logos does not establish
 that columns are better than a supported native construction or approved icons.
-Consider a concrete asset candidate before choosing no asset. Record its concept,
-route and selected/not-needed/unavailable reason per slide; no asset quota.
+Consider a concrete asset candidate before choosing no asset, and say in the
+proposal what it is and why it was chosen or left out. There is no asset quota.
 
 Example: “Persistence versus availability: left, a native disk/recovery sequence;
 right, a primary/replica serving relationship. Short labels, optional approved disk

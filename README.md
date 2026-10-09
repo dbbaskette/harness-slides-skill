@@ -257,14 +257,14 @@ representative guidance-start response. Bootstrap activation is shown separately
 | Bootstrap + current guidance entry | 1,419 |
 | Scoped PPTX edit + final review | 3,177 |
 | Scoped Google edit + final review | 3,764 |
-| New PPTX deck from native template + review | 7,113 |
-| New Google deck from native template + review | 8,140 |
-| New composed deck + contract | 7,154 |
-| Parallel build, lead | 7,967 |
-| Parallel build, each worker | 4,927 |
-| New PPTX scene + contract + review | 6,372 |
-| New Google scene + contract + review | 7,511 |
-| Content-led PPTX + selected component + review | 8,396 |
+| New PPTX deck from native template + review | 7,118 |
+| New Google deck from native template + review | 8,145 |
+| New composed deck + contract | 7,278 |
+| Parallel build, lead | 8,091 |
+| Parallel build, each worker | 5,046 |
+| New PPTX scene + contract + review | 6,377 |
+| New Google scene + contract + review | 7,516 |
+| Content-led PPTX + selected component + review | 8,401 |
 | Font screening + structured critique + review | 3,609 |
 | Optional image guidance + download result | 2,561 |
 
