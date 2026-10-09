@@ -48,6 +48,17 @@ design. Equivalent geometry may be justified for genuinely comparable content.
 Creative pass reasons must be specific to each slide, not duplicated bulk approvals.
 This targets boilerplate, not a claim that string validation proves comprehension.
 
+Judge visual finish within `focal-hierarchy`, `reading-order` and `technical-fit`,
+not just the presence of actors and readable text. At thumbnail size, identify
+what attracts attention first and whether the intended focal element dominates.
+At delivery size, follow each node/path label to its unambiguous owner; inspect
+connector clearance, region insets, awkward gaps and contrast on actual fills.
+A bland wireframe or floating labels can be an `issue` despite a correct
+relationship and no clipping. Give a concrete repair and reinspect its pixels;
+do not call explanatory accuracy or palette compliance artistic quality. A
+deliberately restrained slide can pass when its hierarchy and finish serve the
+brief. User taste remains a separate rendered checkpoint.
+
 ```sh
 node scripts/harness-slides.mjs review --output REVIEW --assessment critique.json --revision REVIEW_HASH
 node scripts/harness-slides.mjs review --output REVIEW --mark 1,2 --revision REVIEW_HASH --note 'Actual pixel findings and repairs'

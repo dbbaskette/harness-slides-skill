@@ -64,11 +64,27 @@ Keep palette, typography, hierarchy, recurring anchors and asset treatment
 coherent. The narrative thread comes from the takeaways and their progression;
 it does not require every slide to share the same body layout.
 
+For new work/redesigns, establish an art direction as well as an information
+structure: the focal scale, contrast between dominant and supporting elements,
+color roles and label treatment. A technically correct diagram can still look
+like an unfinished wireframe. Make its mechanism visually prominent, with
+deliberate proportions and a clear silhouette at thumbnail size; then judge the
+actual full-size pixels. White space should frame a focal element rather than
+leave a small diagram stranded. Choose restraint or richer color for this brief;
+neither all-neutral panels nor saturated panels are a default for every slide.
+
 Give color a role: emphasize the finding, distinguish meaningful categories or
 signal sections. Use the selected brand palette if present. Align repeated
 components to common anchors; group related objects, preserve whitespace and
 keep enough room for native text wrapping. Use color boxes to make meaningful
 grouping visible, with labels or other cues besides color.
+
+Place node labels inside their object or consistently beside it; put captions
+next to their visual and path labels beside the specific connector segment they
+describe. Leave clearance around arrowheads and route connectors around text.
+Use consistent insets within comparable regions. A label centered in leftover
+space, or halfway between two unrelated objects, has an ambiguous owner even
+when it does not overlap. Repair ownership and reading order before shrinking it.
 
 Use native objects for diagrams and editable labels. Prefer an available approved
 functional icon library when a recognizable concept benefits from an icon;

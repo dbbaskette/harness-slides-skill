@@ -255,11 +255,11 @@ representative guidance-start response. Bootstrap activation is shown separately
 | Bootstrap + current guidance entry | 1,365 |
 | Scoped PPTX edit + final review | 3,022 |
 | Scoped Google edit + final review | 3,609 |
-| New PPTX deck from native template + review | 6,291 |
-| New Google deck from native template + review | 7,318 |
-| New PPTX scene + contract + review | 5,685 |
-| New Google scene + contract + review | 6,824 |
-| Content-led PPTX + selected component + review | 7,664 |
+| New PPTX deck from native template + review | 6,689 |
+| New Google deck from native template + review | 7,716 |
+| New PPTX scene + contract + review | 5,935 |
+| New Google scene + contract + review | 7,074 |
+| Content-led PPTX + selected component + review | 7,914 |
 | Font screening + structured critique + review | 3,439 |
 | Optional image guidance + download result | 2,507 |
 

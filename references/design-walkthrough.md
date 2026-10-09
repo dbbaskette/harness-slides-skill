@@ -14,6 +14,10 @@ specific diagram/icon/image proposal and any important caveat. Explain what the
 visual shows and what it makes easier to understand. “Three boxes,” “modern diagram”
 or “engaging image” is not a useful proposal. Keep the selected theme across slides.
 
+Describe the visual direction too: what dominates, which regions/paths use which
+color roles, and where labels sit. A proposed diagram is reviewable when the user
+can picture its scale and emphasis, not merely count its nodes.
+
 Compare with the strongest feasible alternative for the same content. Rejecting
 fabricated metrics, unrelated stock images or fake customer logos does not establish
 that columns are better than a supported native construction or approved icons.
