@@ -79,6 +79,13 @@ components to common anchors; group related objects, preserve whitespace and
 keep enough room for native text wrapping. Use color boxes to make meaningful
 grouping visible, with labels or other cues besides color.
 
+Use a compact working palette: default to at most 3–4 chromatic content colors
+per slide, often fewer, and reuse their meanings across the deck. Neutrals and
+required identity artwork are separate; do not add an accent simply because the
+brand palette offers it. Honor the user's selected subset and excluded colors
+in text, shapes, connectors, charts and image briefs. More colors for necessary
+data categories require an explicit task-specific decision, not random variety.
+
 Place node labels inside their object or consistently beside it; put captions
 next to their visual and path labels beside the specific connector segment they
 describe. Leave clearance around arrowheads and route connectors around text.

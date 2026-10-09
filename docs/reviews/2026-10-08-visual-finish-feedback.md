@@ -54,3 +54,11 @@ Standalone discovery/activation is unchanged. The native-template Slides path
 adds 398 `cl100k_base` tokens conditionally; no provider implementation or full
 catalog enters model context. Subjective design judgment needs rendered feedback,
 not a token count or an automated PASS.
+
+## Palette feedback before release
+
+The user liked the stronger compositions and asked to remove yellow from this
+demo. That preference is local to the example: Brand continues to own the color
+options. Generic guidance recommends a compact 3–4-color content palette without
+prescribing particular hues. The demo uses blue/teal/purple, with native identity
+artwork retained; no brand palette or default hue set was changed.
