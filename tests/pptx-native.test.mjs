@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFile,writeFile} from 'node:fs/promises';
+import {readFile,writeFile,readdir,mkdir} from 'node:fs/promises';
 import {join} from 'node:path';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
@@ -11,6 +11,7 @@ import {hash} from '../scripts/lib/common.mjs';
 import {compileComposition} from '../scripts/lib/compose.mjs';
 import {renderPptxScene} from '../scripts/lib/pptx-render.mjs';
 import {emitNativePptx} from '../scripts/lib/pptx-native.mjs';
+import {previewComposition} from '../scripts/lib/compose-preview.mjs';
 import {pptxTool} from '../scripts/lib/presentation-tools.mjs';
 
 const exec=promisify(execFile),cli=fileURLToPath(new URL('../scripts/harness-slides.mjs',import.meta.url));
@@ -201,6 +202,64 @@ test('templates written with paired tags, stale view relationships or no slides 
     replace:{'ppt/presentation.xml':[[presentation.match(/<p:sldIdLst>.*<\/p:sldIdLst>/s)[0],'']],'ppt/_rels/presentation.xml.rels':[[rels,rels.replace(/<Relationship [^>]*relationships\/slide"[^>]*\/>/g,'')]],'[Content_Types].xml':[[types,types.replace(/<Override [^>]*\/ppt\/slides\/[^>]*\/>/g,'')]]}});
   const second=join(dir,'empty-out.pptx');await emitNativePptx({scene,structure,brand:await rebrand(c,empty),output:second,base:dir});
   assert.deepEqual(await audit(second),[]);assert.match(await part(second,'ppt/presentation.xml'),/<p:sldIdLst><p:sldId id="256" r:id="rId\d+"\/><\/p:sldIdLst><p:sldSz/);
+});
+
+test('a template that binds the relationships prefix on each entry, not on its root, renders a well-formed deck',async t=>{
+  const dir=await temporary(t),c=await brand(dir),source=c.design.nativeTemplate.path,presentation=await part(source,'ppt/presentation.xml');
+  const space='http://schemas.openxmlformats.org/officeDocument/2006/relationships',root=xml=>xml.match(/<p:presentation\b[^>]*>/)[0];
+  // Some producers bind r on every element that carries r:id and leave it off the root. The file is well formed as it stands.
+  const local=join(dir,'local.pptx');
+  await rewrite(source,local,{replace:{'ppt/presentation.xml':[[presentation,presentation.replace(` xmlns:r="${space}"`,'').replace(/<p:\w+\b[^>]*\br:id="[^"]*"/g,`$& xmlns:r="${space}"`)]]}});
+  assert.doesNotMatch(root(await part(local,'ppt/presentation.xml')),/xmlns:r=/);assert.deepEqual((await audit(local)).filter(p=>p.startsWith('malformed')),[]);
+  const brandFile=join(dir,'brand.json'),comp=join(dir,'composition.json'),output=join(dir,'deck.pptx'),two=flow();
+  two.slides.push({id:'second_slide',title:'A second slide follows',sources:['brief:test'],canvas:{type:'text',id:'second_text',text:'Both slides are listed.'}});
+  await writeFile(brandFile,JSON.stringify(await rebrand(c,local)));await writeFile(comp,JSON.stringify(two));
+  await exec('node',[cli,'compose','compile','--file',comp,'--brand',brandFile,'--output',join(dir,'compiled')]);
+  const render=()=>exec('node',[cli,'compose','render','--file',join(dir,'compiled'),'--output',output]),result=JSON.parse((await render()).stdout);
+  assert.equal(result.emitter,'native template');assert.equal(result.slides,2);assert.deepEqual(await audit(output),[]);
+  const written=await part(output,'ppt/presentation.xml');
+  assert.equal(root(written).match(/xmlns:r=/g).length,1);assert.match(written,/<p:sldIdLst><p:sldId id="256" r:id="rId\d+"\/><p:sldId id="257" r:id="rId\d+"\/><\/p:sldIdLst>/);
+  assert.equal((await pptxTool('inspect',[output])).slides.length,2);
+  // A deck already at the output is refused and left as it was.
+  const first=hash(await readFile(output));await assert.rejects(render,/already exists/);assert.equal(hash(await readFile(output)),first);
+  // A root that already binds the prefix is not given it twice.
+  const plain=join(dir,'plain.pptx');await emitNativePptx({...await compileComposition(flow(),c),brand:c,output:plain,base:dir});
+  assert.equal(root(await part(plain,'ppt/presentation.xml')),root(presentation));
+});
+
+test('a template whose slide list, relationships or content types are written with other prefixes is refused by name',async t=>{
+  const dir=await temporary(t),c=await brand(dir),source=c.design.nativeTemplate.path,{scene,structure}=await compileComposition(flow(),c);
+  // The emitter adds its entries as text. Where a part is written another way they would be dropped, so the template is refused instead.
+  const prefixed=xml=>xml.replace(/<(\/?)(?=[A-Z])/g,'<$1n:').replace(' xmlns=',' xmlns:n=');
+  const cases=[['ppt/presentation.xml',xml=>xml.replace(/<(\/?)p:/g,'<$1q:').replace('xmlns:p=','xmlns:q='),/ppt\/presentation\.xml has no <p:sldSz/],
+    ['ppt/_rels/presentation.xml.rels',prefixed,/ppt\/_rels\/presentation\.xml\.rels has no <\/Relationships>/],['[Content_Types].xml',prefixed,/\[Content_Types\]\.xml has no <\/Types>/]];
+  for(const [index,[name,change,message]] of cases.entries()) {
+    const text=await part(source,name),path=join(dir,`other${index}.pptx`);await rewrite(source,path,{replace:{[name]:[[text,change(text)]]}});
+    assert.deepEqual((await audit(path)).filter(p=>p.startsWith('malformed')),[]);
+    await assert.rejects(async()=>emitNativePptx({scene,structure,brand:await rebrand(c,path),output:join(dir,`other${index}-out.pptx`),base:dir}),message);
+  }
+  assert.deepEqual((await readdir(dir)).filter(n=>n.endsWith('-out.pptx')),[]);
+});
+
+test('a deck that cannot be read back is not left at its output, by render or by preview',async t=>{
+  const dir=await temporary(t),c=await brand(dir),source=c.design.nativeTemplate.path;
+  // A part the emitter copies as it is, using a prefix nothing binds: the deck is written, then cannot be read back.
+  const broken=join(dir,'broken.pptx');await rewrite(source,broken,{replace:{'ppt/theme/theme1.xml':[['<a:themeElements>','<a:themeElements zz:mark="1">']]}});
+  const brandFile=join(dir,'brand.json'),comp=join(dir,'composition.json'),compiled=join(dir,'compiled'),neutral=join(dir,'neutral'),kept=join(dir,'kept.pptx'),bin=join(dir,'bin');
+  await writeFile(brandFile,JSON.stringify(await rebrand(c,broken)));await writeFile(comp,JSON.stringify(flow()));await writeFile(kept,'kept');
+  await exec('node',[cli,'compose','compile','--file',comp,'--brand',brandFile,'--output',compiled]);await exec('node',[cli,'compose','compile','--file',comp,'--output',neutral]);
+  // A stand-in for the reader that always fails, for the generated deck below.
+  await mkdir(bin);await writeFile(join(bin,'python3'),'#!/bin/sh\necho "reader unavailable" >&2\nexit 1\n',{mode:0o755});
+  const before=(await readdir(dir)).sort(),render=(file,output,options)=>exec(process.execPath,[cli,'compose','render','--file',file,'--output',output],options);
+  await assert.rejects(()=>render(compiled,join(dir,'deck.pptx')),/unbound prefix/);
+  // A file that was already there is not this render's to remove.
+  await assert.rejects(()=>render(compiled,kept),/unbound prefix/);assert.equal(await readFile(kept,'utf8'),'kept');
+  // A preview builds the same deck inside its own new folder and removes the folder. Nothing is uploaded.
+  const uploads=[],upload=async()=>{uploads.push('upload');throw new Error('nothing should be uploaded');};
+  await assert.rejects(()=>previewComposition({file:compiled,output:join(dir,'preview')},{run:async()=>({stdout:''}),drive:{importDeck:upload,updateDeck:upload,exportPdf:upload}}),/unbound prefix/);assert.deepEqual(uploads,[]);
+  // The generated deck is read back as well, and removed when that fails.
+  await assert.rejects(()=>render(neutral,join(dir,'neutral.pptx'),{env:{...process.env,PATH:bin}}),/reader unavailable/);
+  assert.deepEqual((await readdir(dir)).sort(),before);
 });
 
 test('hand-edited structure that would corrupt the slide is refused, and failures leave no partial file',async t=>{
