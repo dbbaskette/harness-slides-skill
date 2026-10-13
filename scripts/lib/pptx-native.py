@@ -49,6 +49,31 @@ def TAG(name):
     return rf'<{name}\b[^>]*?(?:/>|>\s*</{name}>)'
 
 
+# A part's root start tag, after any declaration and comments. Group 1 ends where another attribute can go.
+ROOT = re.compile(r'''(?:\ufeff|\s|<\?.*?\?>|<!--.*?-->)*(<[^\s/>!?]+(?:\s+[^\s=/>]+\s*=\s*(?:"[^"]*"|'[^']*'))*)\s*/?>''', re.S)
+
+
+def declare(part, xml, prefix, uri):
+    """Bind a prefix on a part's root element, unless the root already binds it.
+
+    A producer may bind a prefix on each element that uses it and not on the root.
+    Anything written elsewhere in that part with the prefix would then be unbound.
+    """
+    root = ROOT.match(xml)
+    if not root:
+        raise ValueError(f'{part} has no root element the native emitter can read')
+    if re.search(rf'\sxmlns:{prefix}\s*=', root.group(1)):
+        return xml
+    return f'{xml[:root.end(1)]} xmlns:{prefix}="{uri}"{xml[root.end(1):]}'
+
+
+def before(part, xml, anchor, addition):
+    """Insert text before an anchor. A part without the anchor is refused, so an addition is never dropped unnoticed."""
+    if anchor not in xml:
+        raise ValueError(f'{part} has no {anchor}, where the native emitter adds its entries; the template writes this part in a form the emitter does not read')
+    return xml.replace(anchor, addition + anchor, 1)
+
+
 TREE = ('<p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm>'
         '<a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>')
 
@@ -652,9 +677,11 @@ def emit(template, plan_path, output, layout_part=None):
     if re.search(r'<p:sldIdLst\b', presentation):
         presentation = re.sub(r'<p:sldIdLst\s*/>|<p:sldIdLst\b.*?</p:sldIdLst>', listing, presentation, count=1, flags=re.S)
     else:
-        presentation = presentation.replace('<p:sldSz', listing + '<p:sldSz', 1)
+        presentation = before('ppt/presentation.xml', presentation, '<p:sldSz', listing)
+    # The new slide list uses r:id. The list it replaced may have bound r on each of its own entries, not on the root.
+    presentation = declare('ppt/presentation.xml', presentation, 'r', REL)
     parts['ppt/presentation.xml'] = presentation.encode('utf-8')
-    parts['ppt/_rels/presentation.xml.rels'] = pres_rels.replace('</Relationships>', ''.join(new_rels) + '</Relationships>').encode('utf-8')
+    parts['ppt/_rels/presentation.xml.rels'] = before('ppt/_rels/presentation.xml.rels', pres_rels, '</Relationships>', ''.join(new_rels)).encode('utf-8')
 
     keep = reachable(parts) | {'[Content_Types].xml'}
     removed = sorted(n for n in parts if n not in keep)
@@ -686,7 +713,7 @@ def emit(template, plan_path, output, layout_part=None):
     defaults = ''.join(f'<Default Extension="{x}" ContentType="{IMAGE_TYPES[x]}"/>' for x in sorted(extensions)
                        if not re.search(rf'<Default\b[^>]*Extension="{x}"', types, flags=re.I))
     added = ''.join(f'<Override PartName="/{name}" ContentType="{kind}"/>' for name, kind in overrides)
-    parts['[Content_Types].xml'] = types.replace('</Types>', defaults + added + '</Types>').encode('utf-8')
+    parts['[Content_Types].xml'] = before('[Content_Types].xml', types, '</Types>', defaults + added).encode('utf-8')
 
     with open(output, 'xb') as stream:
         try:

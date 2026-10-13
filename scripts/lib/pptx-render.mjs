@@ -1,4 +1,4 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { validateScene, themeFor, color, shapeKinds } from './scene.mjs';
 import { pptxTool } from './presentation-tools.mjs';
@@ -45,7 +45,8 @@ export async function renderPptxScene(scene,output,{base=process.cwd(),brand}={}
     try{const content=join(dir,'content.pptx');await writeFile(content,bytes,{flag:'wx',mode:0o600});await composePptx({root:native.path,sources:[{name:'content',file:content}],slides:scene.slides.map((_,i)=>({source:'content',number:i+1,layout})),output});}finally{await rm(dir,{recursive:true,force:true});}
     }
   }else await writeFile(output,bytes,{flag:'wx',mode:0o600});
-  const inventory=await pptxTool('inspect',[output]);
+  // This call created the file, so one that cannot be read back is removed rather than left under the output name.
+  const inventory=await pptxTool('inspect',[output]).catch(async error=>{await rm(output,{force:true}).catch(()=>{});throw error;});
   return {output,slides:inventory.slides.length,sha256:inventory.sha256,editable:true,status:'unreviewed draft',inventory};
 }
 

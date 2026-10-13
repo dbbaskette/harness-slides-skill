@@ -1,5 +1,6 @@
 // Native emitter boundary: turn a compiled scene and its structure into a plan for pptx-native.py.
-import {readFile,writeFile,mkdtemp,rm} from 'node:fs/promises';
+import {constants} from 'node:fs';
+import {readFile,writeFile,copyFile,mkdtemp,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {execFile} from 'node:child_process';
@@ -66,12 +67,16 @@ export async function emitNativePptx({scene,structure={groups:[],connectors:[]},
   const plan={layoutPart:native.layoutPart,...(iconLibrary?{iconLibrary}:{}),font:brand.design.fontFamily,shapeInset:sl.spacing?.inset??16,slides};
   const dir=await mkdtemp(join(tmpdir(),'harness-native-'));
   try {
-    const planFile=join(dir,'plan.json');await writeFile(planFile,JSON.stringify(plan),{flag:'wx',mode:0o600});
+    // The deck is written and read back in this private folder. It takes its output name only once it reads back, so a failed render leaves nothing there.
+    const planFile=join(dir,'plan.json'),built=join(dir,'deck.pptx'),target=resolve(output);await writeFile(planFile,JSON.stringify(plan),{flag:'wx',mode:0o600});
     let stdout;
-    try{({stdout}=await exec('python3',['-B',fileURLToPath(new URL('./pptx-native.py',import.meta.url)),'emit',resolve(native.path),planFile,resolve(output)],{timeout:120000,maxBuffer:16*1024*1024}));}
+    try{({stdout}=await exec('python3',['-B',fileURLToPath(new URL('./pptx-native.py',import.meta.url)),'emit',resolve(native.path),planFile,built],{timeout:120000,maxBuffer:16*1024*1024}));}
     catch(error){throw new Error(error.code==='ENOENT'?'Python 3.9+ is required. Run harness-slides doctor.':error.stderr?.trim()||error.message);}
-    const emitted=JSON.parse(stdout),inventory=await pptxTool('inspect',[resolve(output)]);
-    return {output:resolve(output),slides:emitted.slides,sha256:inventory.sha256,editable:true,status:'unreviewed draft',emitter:'native template',layoutPart:emitted.layoutPart,titlePlaceholder:emitted.titlePlaceholder,removedTemplateParts:emitted.removedTemplateParts,icons:emitted.report.flatMap(r=>r.icons),native:emitted.report};
+    const emitted=JSON.parse(stdout),inventory=await pptxTool('inspect',[built]);
+    // An existing file is never replaced. A copy that stops part way is removed; one that found a file already there leaves it alone.
+    try{await copyFile(built,target,constants.COPYFILE_EXCL);}
+    catch(error){if(error.code==='EEXIST')throw new Error(`${target} already exists; choose a new output file`);await rm(target,{force:true}).catch(()=>{});throw error;}
+    return {output:target,slides:emitted.slides,sha256:inventory.sha256,editable:true,status:'unreviewed draft',emitter:'native template',layoutPart:emitted.layoutPart,titlePlaceholder:emitted.titlePlaceholder,removedTemplateParts:emitted.removedTemplateParts,icons:emitted.report.flatMap(r=>r.icons),native:emitted.report};
   } finally{await rm(dir,{recursive:true,force:true});}
 }
 
