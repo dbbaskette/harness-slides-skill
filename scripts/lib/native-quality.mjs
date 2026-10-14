@@ -1,4 +1,4 @@
-import {digest} from './common.mjs';
+import {digest,canonicalDigest} from './common.mjs';
 import {assessCritique} from './slide-quality.mjs';
 const questions={
   'title-support':'Does the title follow from the actual cited evidence and visible qualifications?',
@@ -26,9 +26,10 @@ const textOf=e=>e.shape?.text?.textElements?.map(t=>t.textRun?.content??'').join
 const allObjects=slide=>(slide.pageElements??slide.children??[]).flatMap(e=>[e,...(e.elementGroup?allObjects(e.elementGroup):[])]);
 const pt=v=>v?.unit==='EMU'?(v.magnitude??0)/12700:v?.magnitude??0;
 function box(e){const t=e.transform??{},w=pt(e.size?.width),h=pt(e.size?.height),x=pt({magnitude:t.translateX,unit:t.unit}),y=pt({magnitude:t.translateY,unit:t.unit});const points=[[0,0],[w,0],[0,h],[w,h]].map(([a,b])=>[x+a*(t.scaleX??1)+b*(t.shearX??0),y+a*(t.shearY??0)+b*(t.scaleY??1)]);return [Math.min(...points.map(p=>p[0])),Math.min(...points.map(p=>p[1])),Math.max(...points.map(p=>p[0]))-Math.min(...points.map(p=>p[0])),Math.max(...points.map(p=>p[1]))-Math.min(...points.map(p=>p[1]))];}
-export function auditNativeReview({snapshot,record,plan,mapping}){
+// designRevision is the session's revision of plan. Without it, the mapping may name either digest form of the plan.
+export function auditNativeReview({snapshot,record,plan,mapping,designRevision}){
   if(snapshot.presentationId!==record.source.presentationId||snapshot.revisionId!==record.source.nativeRevision||!Array.isArray(snapshot.slides)||snapshot.slides.length!==record.slides.length)throw new Error('Native snapshot and rendered revision/coverage differ');
-  if(!mapping||mapping.schema!==1||mapping.planRevision!==digest(plan)||!Array.isArray(mapping.slides)||mapping.slides.length!==plan.slides.length||new Set(mapping.slides.map(s=>s.id)).size!==mapping.slides.length||new Set(mapping.slides.map(s=>s.planId)).size!==mapping.slides.length)throw new Error('Map each native slide once to the current approved design');
+  if(!mapping||mapping.schema!==1||!(designRevision?[designRevision]:[canonicalDigest(plan),digest(plan)]).includes(mapping.planRevision)||!Array.isArray(mapping.slides)||mapping.slides.length!==plan.slides.length||new Set(mapping.slides.map(s=>s.id)).size!==mapping.slides.length||new Set(mapping.slides.map(s=>s.planId)).size!==mapping.slides.length)throw new Error('Map each native slide once to the current approved design');
   const prompts=[],findings=[],geometries=new Map(),bindings=[],width=pt(snapshot.pageSize?.width),height=pt(snapshot.pageSize?.height);
   if(!(width>0&&height>0))throw new Error('Native snapshot needs its actual canvas size');
   for(const [i,slide] of snapshot.slides.entries()){
@@ -48,7 +49,7 @@ export function auditNativeReview({snapshot,record,plan,mapping}){
   }
   const groups=[...geometries.values()].filter(ids=>ids.length>=3);
   for(const group of groups)for(const id of group){prompts.find(p=>p.slide===id).criteria.push({id:'repetition-justification',question:questions['repetition-justification']});findings.push({slide:id,code:'similar-native-geometry',severity:'info',relatedSlides:group,detail:'Equivalent native geometry needs a content-specific deck-wide judgment; no automatic alternation.'});}
-  const report={schema:1,policy:3,sceneDigest:digest(snapshot),artifactDigest:digest(record.slides.map(s=>[s.id,s.imageSha256])),nativeRevision:snapshot.revisionId,presentationId:snapshot.presentationId,designRevision:digest(plan),bindings,prompts,findings,deckReview:{groups},limitations:['Native text presence does not establish that all glyphs appear in exported pixels.','Object IDs/source coverage cannot automatically prove comprehension or factual support.','Offline snapshots do not certify an unchanged live Google revision.']};report.revision=digest(report);return report;
+  const report={schema:1,policy:3,sceneDigest:digest(snapshot),artifactDigest:digest(record.slides.map(s=>[s.id,s.imageSha256])),nativeRevision:snapshot.revisionId,presentationId:snapshot.presentationId,designRevision:mapping.planRevision,bindings,prompts,findings,deckReview:{groups},limitations:['Native text presence does not establish that all glyphs appear in exported pixels.','Object IDs/source coverage cannot automatically prove comprehension or factual support.','Offline snapshots do not certify an unchanged live Google revision.']};report.revision=digest(report);return report;
 }
 export function assessNativeCritique(quality,assessment){
   const result=assessCritique(quality,assessment);

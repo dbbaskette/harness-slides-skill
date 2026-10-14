@@ -15,7 +15,7 @@ import { request, checkDriveAccess, probeGooglePresentation, exportDeck, importD
 import { renderPptxScene, composePptx } from './lib/pptx-render.mjs';
 import { install } from './install.mjs';
 import { chooseTemplate } from './lib/template-routing.mjs';
-import { runtimeVersion } from './lib/runtime-version.mjs';
+import { runtimeVersion, capabilities } from './lib/runtime-version.mjs';
 import { searchRecipes } from './lib/layouts.mjs';
 import {proposeDesign,respondDesign,designStatus,getApprovedDesign,presentDesign,requireSceneDesign,designRevisionOf} from './lib/design-session.mjs';
 import {refusal,imageProblem} from './lib/refusals.mjs';
@@ -140,7 +140,7 @@ async function run(v,p) {
   if(command==='scene'&&action==='contract'){console.log(contract);return;}
   if(command==='outline'&&action==='contract'){const m=await import('./lib/outline.mjs');console.log(m.outlineContract+(v.brand?'\n'+await m.outlineSizes(await json(v.brand),{fonts:v.fonts?await json(v.fonts):undefined}):''));return;}
   if(command==='compose'&&action==='contract'){const m=await import('./lib/compose.mjs');console.log(m.composeContract+(v.brand?'\n'+await m.composeSizes(await json(v.brand),{fonts:v.fonts?await json(v.fonts):undefined}):''));return;}
-  if(command==='version')result=await runtimeVersion();
+  if(command==='version')result={...await runtimeVersion(),capabilities:[...capabilities]};
   else if(command==='design'){result=action==='propose'?await proposeDesign({project:v.project,plan:await json(v.file),expected:v.expected,mode:v.mode}):action==='respond'?await respondDesign({project:v.project,reply:await json(v.file)}):action==='check'?{...await getApprovedDesign(v.project),buildAllowed:true}:action==='present'?await presentDesign({project:v.project,review:v.output,revision:v.revision}):await designStatus(v.project);}
   else if(command==='delivery'){const {inspectDelivery}=await import('./lib/delivery.mjs');result=await inspectDelivery({scene:await json(v.file),format:v.format,companions:v.companion??[]});}
   else if(command==='outline'){const m=await import('./lib/outline.mjs');result=action==='check'?await m.checkOutlineFile(v):action==='draft'?await m.draftOutlineFile(v):await m.startOutlineFile(v);}

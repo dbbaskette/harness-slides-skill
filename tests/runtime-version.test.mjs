@@ -10,3 +10,11 @@ test('version resolves the selected runtime and rejects invalid identities',asyn
 test('standalone version reporting does not reinterpret workspace restore version flags',async()=>{await assert.rejects(()=>exec(process.execPath,[cli,'version','extra']),/no action/);await assert.rejects(()=>exec(process.execPath,[cli,'version','--version','v000001']),/not valid/);});
 
 test('workspace restore still accepts its existing --version ID after adding --version reporting',async t=>{const dir=await temporary(t),root=join(dir,'workspace'),s=await sceneFixture();await initWorkspace({root,scene:s,format:'pptx'});const first=await loadWorkspace(root);s.slides[0].elements[0].text='A revised synthetic title';await saveScene({root,scene:s,expectedDigest:first.current.sceneDigest});const current=await loadWorkspace(root),restored=JSON.parse((await exec(process.execPath,[cli,'workspace','restore','--project',root,'--version','v000001','--expected',current.current.sceneDigest])).stdout);assert.equal(restored.id,'v000003');assert.equal((await loadWorkspace(root)).scene.slides[0].elements[0].text,first.scene.slides[0].elements[0].text);});
+
+test('version reports the capabilities of the executing runtime as a stable, sorted list of names',async()=>{
+  const record=JSON.parse((await exec(process.execPath,[cli,'version'])).stdout);
+  assert.deepEqual(record.capabilities,['assets','canonical-digests','compose-review','compose-section','design-batch','design-schema-2','json-refusals','relative-records']);
+  // Every name is documented in the integration contract, which is how callers learn what each one means.
+  const contract=await readFile(new URL('../docs/specs/2026-10-14-design-integration-contract.md',import.meta.url),'utf8');
+  for(const name of record.capabilities)assert.match(contract,new RegExp(`\\| \`${name}\` \\|`),`${name} is not documented`);
+});
