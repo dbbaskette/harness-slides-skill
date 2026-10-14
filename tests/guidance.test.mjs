@@ -175,3 +175,55 @@ test('installed discovery entry is the small bootstrap while executable helpers 
 });
 
 test('resuming through a newer installation reports the saved executable version, not the new pointer',async t=>{const f=await fixture(t),pin=await start(f),newRuntime=join(f.dir,'new runtime'),current=join(f.dir,'current');await mkdir(join(newRuntime,'scripts'),{recursive:true});await writeFile(join(newRuntime,'package.json'),JSON.stringify({name:pkg.name,version:'0.3.0'}));await writeFile(join(newRuntime,'package-lock.json'),'{}');await writeFile(join(newRuntime,'scripts/helper.mjs'),'New installed helper');await symlink(newRuntime,current);const continued=await resume({project:f.project,task:pin.task,runtime:current});assert.equal(continued.runtime,f.runtime);assert.equal(continued.runtimeVersion,'0.2.0');assert.equal(continued.runtimeDigest,pin.runtimeDigest);});
+
+// A project can arrive with a .harness-slides/guidance/repository.git someone else made. Nothing in it may choose
+// which guidance start returns or run a command: not its config, its hooks, or files that redirect what git reads.
+async function planted(f, configure) {
+  const repository = join(f.project, '.' + skill, 'guidance/repository.git'), markers = join(f.dir, 'markers');
+  for (const path of [join(f.project, '.' + skill), markers]) await rm(path, { recursive: true, force: true });
+  await mkdir(markers);
+  await exec('git', ['init', '-q', '--bare', '--initial-branch=main', repository]);
+  const script = async (path, name) => { await mkdir(join(path, '..'), { recursive: true }); await writeFile(path, `#!/bin/sh\ntouch '${join(markers, name)}'\n`); await chmod(path, 0o755); return path; };
+  const set = (...pair) => exec('git', ['config', '--file', join(repository, 'config'), ...pair]);
+  await configure({ repository, set, script, markers });
+  return markers;
+}
+const hooks = ['reference-transaction', 'post-checkout', 'post-merge', 'pre-auto-gc', 'fsmonitor-watchman', 'post-index-change'];
+test('a planted guidance repository config can neither redirect start nor run a command', async t => {
+  const f = await fixture(t), other = await fixture(t); await guide(other, 'Foreign'); await other.commit();
+  const scenarios = {
+    'url insteadOf': ({ set }) => set(`url.${other.source}.insteadOf`, f.source),
+    'url insteadOf to a command': async ({ set, markers }) => { await set('protocol.ext.allow', 'always'); await set(`url.ext::sh -c touch% ${join(markers, 'ext')}.insteadOf`, f.source); },
+    'remote URL': async ({ set }) => { await set('remote.origin.url', other.source); await set('remote.origin.fetch', '+refs/heads/*:refs/heads/*'); },
+    'included config': async ({ repository, set }) => { const extra = join(repository, '..', 'extra.config'); await writeFile(extra, `[url "${other.source}"]\n\tinsteadOf = ${f.source}\n`); await set('include.path', extra); },
+    'hooks path and hooks': async ({ repository, set, script, markers }) => {
+      for (const hook of hooks) { await script(join(markers, 'hooks', hook), 'hooksPath-' + hook); await script(join(repository, 'hooks', hook), 'hooks-' + hook); }
+      await set('core.hooksPath', join(markers, 'hooks'));
+    },
+    'fsmonitor': async ({ set, script, markers }) => set('core.fsmonitor', await script(join(markers, 'bin', 'fsmonitor'), 'fsmonitor')),
+    'other executable settings': async ({ set, script, markers }) => {
+      for (const key of ['core.sshCommand', 'core.gitProxy', 'credential.helper', 'core.askPass', 'gc.auto']) await set(key, key === 'gc.auto' ? '1' : await script(join(markers, 'bin', key), key));
+      await set('http.proxy', 'http://127.0.0.1:9'); await set('core.alternateRefsCommand', await script(join(markers, 'bin', 'alternate-refs'), 'alternate-refs'));
+    },
+  };
+  for (const [name, configure] of Object.entries(scenarios)) {
+    const markers = await planted(f, configure), result = await start(f);
+    assert.equal(result.revision, f.first, name); assert.match(await readFile(result.guidance, 'utf8'), /First guidance/, name);
+    assert.deepEqual((await readdir(markers)).filter(item => !['hooks', 'bin'].includes(item)), [], name);
+  }
+});
+test('a planted guidance repository cannot substitute objects or history', async t => {
+  const f = await fixture(t), other = await fixture(t); await guide(other, 'Foreign'); const foreign = await other.commit();
+  await guide(f, 'Second'); const head = await f.commit();
+  const borrow = async ({ repository }) => { await mkdir(join(repository, 'objects/info'), { recursive: true }); await writeFile(join(repository, 'objects/info/alternates'), join(other.source, '.git/objects') + '\n'); };
+  // Replacement refs and grafts are honoured by default, so either would make a commit read as another.
+  let markers = await planted(f, async state => { await borrow(state); await exec('git', ['--git-dir=' + state.repository, 'update-ref', 'refs/replace/' + head, foreign]); });
+  let result = await start(f);
+  assert.equal(result.revision, head); assert.match(await readFile(result.guidance, 'utf8'), /Second guidance/);
+  markers = await planted(f, async state => { await borrow(state); await mkdir(join(state.repository, 'info'), { recursive: true }); await writeFile(join(state.repository, 'info/grafts'), `${head} ${foreign}\n`); });
+  await assert.rejects(start({ ...f, revision: foreign }), /fetch failed/);
+  // A repository whose commondir points at another one would have git use that one's config, objects and refs.
+  markers = await planted(f, async ({ repository }) => writeFile(join(repository, 'commondir'), join(other.source, '.git') + '\n'));
+  result = await start(f); assert.equal(result.revision, head); assert.match(await readFile(result.guidance, 'utf8'), /Second guidance/);
+  assert.deepEqual(await readdir(markers), []);
+});
