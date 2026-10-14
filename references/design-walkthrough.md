@@ -58,8 +58,9 @@ Do not make users edit JSON or run helpers.
 
 Record what the user actually said, once, where the method keeps it:
 
-- **Compositions:** in the presentation brief, in the user's words. No proposal
-  file or helper record is needed.
+- **Compositions:** in the presentation brief, in the user's words. They may
+  instead be bound to the design session in [checkpoint records](design-records.md),
+  which `compose compile` then checks.
 - **Typed components, scenes and native-template builds:** in
   [checkpoint records](design-records.md), which those builds check.
 
