@@ -6,7 +6,9 @@ section-scoped check is milestone 2 (issue #47), the
 [asset manifest](#the-asset-manifest) was added for milestone 3 (issue #49), and the
 [design-bound review of a composition](#design-bound-review-of-a-composition) for
 milestone 4 (issue #50). [Paths in records](#paths-in-records) are relative to the
-project since issue #57.
+project since issue #57. Since issue #59, digests that stand for the same content
+[ignore key order](#key-order), and `version` reports
+[capabilities](#detecting-support).
 
 ## Why
 
@@ -42,9 +44,37 @@ exercises the same contract, and Training Studio copies it.
 | Rendered user review | `review ... --design-project`, then `design present` | Needs a review record bound to the design; a composition's comes from `review --compiled`. |
 | Read a refusal as data | `--json` on any `design`, `assets` or `images` action, `compose compile`, `compose preview` and `review` | See [refusals](#refusals). |
 
+## Detecting support
+
+`main` and the 0.13.1 release both report version 0.13.1, so a version number
+cannot tell a caller what a runtime supports. To detect support, read
+`capabilities` from `harness-slides version` and look for a name. Do not compare
+versions, and do not provoke a refusal to find out.
+
+```json
+{"package":"harness-slides","runtimeVersion":"0.13.1","runtime":"/…/harness-slides",
+ "capabilities":["assets","canonical-digests","compose-review","compose-section",
+   "design-batch","design-schema-2","json-refusals","relative-records"]}
+```
+
+The list is sorted. A name is added with its feature and never renamed, removed
+or reused. A runtime without `capabilities` (0.13.1 and earlier) has none of them.
+
+| Capability | The runtime supports |
+| --- | --- |
+| `assets` | [The asset manifest](#the-asset-manifest): `assets add-supplied`, `assets icon`, `assets status` and `assets check`, images recorded by `images generate` and `images download`, and asset IDs in a composition compiled with `--asset-project` |
+| `canonical-digests` | Intents, slide approvals and plan revisions that [ignore key order](#key-order) |
+| `compose-review` | `review --compiled COMPILED --design-project DIR`, the [design-bound review of a composition](#design-bound-review-of-a-composition) |
+| `compose-section` | `--section` on `compose compile` and `compose preview` ([sections](#sections)), `--design-project` on `compose preview`, and `compose compile --design-project` checking without `--output` |
+| `design-batch` | `design propose --mode batch` and [the whole-plan question](#the-whole-plan-question) |
+| `design-schema-2` | [Proposal schema 2](#proposal-schema-2): `copy`, `objectives`, `qualifications`, `notes` and `asset.candidates`, and the `asset-unresolved` fallback |
+| `json-refusals` | `--json` [refusals](#refusals) on the commands that list it |
+| `relative-records` | [Paths in records](#paths-in-records) relative to the project, so a project can move |
+
 ## Proposal schema 2
 
-Schema 1 is still accepted, and it is stored and digested exactly as before.
+Schema 1 is still accepted, and it is stored exactly as before. Its revision, like
+every new revision, ignores [key order](#key-order).
 Schema 2 keeps every schema-1 field and adds optional fields on each slide:
 
 | Field | Shape | Meaning |
@@ -307,6 +337,37 @@ the next `workspace save`. An older review record or workspace manifest still
 names absolute paths until then, so it does not survive a move: prepare the review
 again.
 
+## Key order
+
+A caller, an agent or a tool such as Python's `json.dumps(sort_keys=True)` may
+write the same JSON with its keys in another order. Where a digest stands for the
+same content, it is canonical: object keys are sorted at every depth before
+hashing. Array order still counts, so a reordered list of slides, points or
+sources is a change.
+
+| Digest | Canonical |
+| --- | --- |
+| A built slide's `intent`, compared with the approved one by every check against the design and by the PPTX quality report in `review` | Yes |
+| A slide's approval binding in the session | Yes |
+| The plan revision of a new proposal | Yes |
+| Scene, build, review, asset and workspace digests | No. They hash records the runtime writes itself. |
+
+A proposal sent again with only its key order changed is unchanged. It keeps the
+stored plan, its revision, its approvals and any rendered review, and it adds no
+proposal to the responses. A proposal with a changed slide keeps the approvals of
+its unchanged slides, whatever their key order.
+
+A session written before this change still reads, and keeps every approval whose
+slide is unchanged. Its revision stays the same, so compile reports, review records,
+workspace manifests and native mappings that name it stay valid. Its approvals are
+bound again in canonical form when it is read, and stored that way on the next
+`design propose`, `respond` or `present`. A changed proposal gets a canonical
+revision. A session record with a canonical revision still reads after a tool
+rewrites it with its keys in another order. One with an older revision does not:
+that revision is the digest of the plan in the order it was stored, so a reordered
+copy is refused as `design-state-invalid`. Keep that file as it was written; once a
+changed proposal gives it a canonical revision, it can be rewritten too.
+
 ## Refusals
 
 With `--json`, a refusal is printed on stdout, and the exit status is 1:
@@ -404,6 +465,9 @@ Without `--json` the same refusal is the same sentence on stderr as before.
   `assets status --design-project` does.
 - An image generated before the manifest existed is recorded when `images
   download` is run again with its project and ID.
+- A session record whose revision predates [canonical digests](#key-order) is
+  refused if a tool rewrites it with its keys in another order. Its revision stays
+  order-dependent until a changed proposal replaces it.
 
 ## Not in this change
 

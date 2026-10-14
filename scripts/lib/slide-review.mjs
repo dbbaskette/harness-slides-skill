@@ -9,7 +9,7 @@ import { getApprovedDesign, requireSceneDesign } from './design-session.mjs';
 import {auditNativeReview,assessNativeCritique,auditCompositionReview,categorizeReview} from './native-quality.mjs';
 import {refuse} from './refusals.mjs';
 import {verifyBuiltAssets} from './assets.mjs';
-import {digest,recordedPath,recordedLocation} from './common.mjs';
+import {digest,canonicalDigest,recordedPath,recordedLocation} from './common.mjs';
 import { pptxTool } from './presentation-tools.mjs';
 const exec = promisify(execFile);
 const hash = data => createHash('sha256').update(data).digest('hex');
@@ -230,11 +230,11 @@ export async function prepareReview({ file, previews, compiled, output, designPr
           if(!nativeSnapshot||!decisions||qualityReport)throw new Error('Native creative review needs --native-snapshot and --decisions');
           const snapshot=JSON.parse(await bytes(resolve(nativeSnapshot))),mapping=JSON.parse(await bytes(resolve(decisions)));
           record.nativeSnapshot=resolve(nativeSnapshot);record.nativeSnapshotDigest=digest(snapshot);
-          record.creativeQuality=auditNativeReview({snapshot,record,plan:approved.plan,mapping});record.designBinding=record.creativeQuality.bindings;
+          record.creativeQuality=auditNativeReview({snapshot,record,plan:approved.plan,designRevision:approved.revision,mapping});record.designBinding=record.creativeQuality.bindings;
         }else{
           if(!qualityReport||nativeSnapshot||decisions)throw new Error('PPTX creative review needs its built --quality-report');
           const q=JSON.parse(await bytes(resolve(qualityReport))),{revision:qr,...payload}=q;
-          if(qr!==digest(payload)||q.artifactDigest!==digest({'deck.pptx':source.sha256})||q.prompts.length!==pages.length||q.prompts.some((p,i)=>p.slide!==approved.plan.slides[i].id||p.title!==approved.plan.slides[i].title||digest(p.intent)!==digest(approved.plan.slides[i].intent)))throw new Error('Scene quality, built artifact and approved design differ');
+          if(qr!==digest(payload)||q.artifactDigest!==digest({'deck.pptx':source.sha256})||q.prompts.length!==pages.length||q.prompts.some((p,i)=>p.slide!==approved.plan.slides[i].id||p.title!==approved.plan.slides[i].title||canonicalDigest(p.intent)!==canonicalDigest(approved.plan.slides[i].intent)))throw new Error('Scene quality, built artifact and approved design differ');
           record.creativeQuality={...q,builtArtifactDigest:q.artifactDigest,artifactDigest:digest(record.slides.map(s=>[s.id,s.imageSha256])),designRevision:approved.revision};
           record.creativeQuality.prompts=q.prompts.map((p,i)=>({...p,approvedCopy:approved.plan.slides[i].visibleText,approvedComposition:approved.plan.slides[i].composition,assetCandidate:approved.plan.slides[i].asset,criteria:[...p.criteria,...['composition-decision','explanatory-value','focal-hierarchy','asset-purpose','rendered-text-completeness','approved-design'].filter(id=>!p.criteria.some(c=>c.id===id)).map(id=>({id,question:id==='rendered-text-completeness'?'Compare approved text and native/export pixels, including complete heading prefixes and labels.':'Judge the actual delivered slide against its approved content and asset decision.'}))]}));
           delete record.creativeQuality.revision;record.creativeQuality.revision=digest(record.creativeQuality);

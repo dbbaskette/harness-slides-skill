@@ -116,7 +116,7 @@ test('schema 2 fields are checked, and schema 1 stays exactly as it was',async t
   const old=schema1(1);validateDesignProposal(old);
   for(const [key,value] of [['notes','Speaker notes'],['objectives',['objective_one']],['copy',{points:[{text:'x'}]}],['qualifications',['x']]]){const p=schema1(1);p.slides[0][key]=value;assert.throws(()=>validateDesignProposal(p),/Each design slide/);}
   const p=schema1(1);p.slides[0].asset.candidates=[];assert.throws(()=>validateDesignProposal(p),/asset/);
-  // A schema-1 plan is stored and digested exactly as before: no rendered text is added.
+  // A schema-1 plan is stored exactly as before: no rendered text is added.
   const project=await temporary(t),s=await proposeDesign({project,plan:old});await assert.rejects(()=>getApprovedDesign(project),/Awaiting/);
   assert.equal(s.slides[0].visibleText,old.slides[0].visibleText);assert.equal(Object.keys(s.slides[0]).includes('copy'),false);
 });

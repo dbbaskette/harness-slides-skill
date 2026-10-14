@@ -25,8 +25,12 @@ revision is never moved to older guidance. Runtimes up to 0.12.0 predate this an
 are still refused.
 
 Users see “Using Harness Slides v0.13.1”. `--version` is an offline human-readable
-check; `version` returns `package`, `runtimeVersion` and resolved `runtime` as
-JSON. Run it from the returned runtime. This does not authenticate Google or
+check; `version` returns `package`, `runtimeVersion`, resolved `runtime` and
+`capabilities` as JSON. Run it from the returned runtime. `capabilities` names the
+features a caller can rely on, as listed in the
+[integration contract](specs/2026-10-14-design-integration-contract.md#detecting-support);
+a release that adds a feature adds its name there and in
+`scripts/lib/runtime-version.mjs`. This does not authenticate Google or
 query releases. The existing `workspace restore --version v000001` remains a
 workspace history selector.
 

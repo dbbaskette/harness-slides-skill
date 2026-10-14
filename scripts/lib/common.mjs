@@ -3,6 +3,10 @@ import { readFile, writeFile, lstat, realpath } from 'node:fs/promises';
 import { resolve, relative, isAbsolute, sep } from 'node:path';
 export const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 export const digest = value => hash(JSON.stringify(value));
+// The same content gives the same digest whatever order its object keys were written in, for values that callers
+// write or re-serialise (Python's sort_keys, an agent). Array order still counts.
+const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object' && typeof value.toJSON !== 'function' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
+export const canonicalDigest = value => digest(canonical(value));
 export const json = async file => JSON.parse(await readFile(file, 'utf8'));
 export const saveJson = (file, value) => writeFile(file, JSON.stringify(value, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
 export const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));

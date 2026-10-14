@@ -2,7 +2,7 @@
 import {mkdir,lstat,readFile,writeFile,rename,rm,open} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {digest,regularInside,recordedPath,recordedLocation} from './common.mjs';
+import {digest,canonicalDigest,regularInside,recordedPath,recordedLocation} from './common.mjs';
 import {validateSlideDecision} from './slide-decisions.mjs';
 import {refuse,refuseAll} from './refusals.mjs';
 const text=(v)=>typeof v==='string'&&v.trim()&&v.length<=20000;
@@ -57,8 +57,12 @@ async function locked(project,action){
 }
 async function readSession(project){
   const value=JSON.parse(await readFile(await regularInside(project,recordPath),'utf8'));
-  if(value.schema!==1||value.tool!=='harness-slides-design'||value.revision!==digest(value.plan))throw new Error('Design state changed outside the checkpoint; recover the proposal');
+  // A revision is the canonical digest of the plan; one written before canonical digests is the digest of the plan as stored.
+  if(value.schema!==1||value.tool!=='harness-slides-design'||![canonicalDigest(value.plan),digest(value.plan)].includes(value.revision))throw new Error('Design state changed outside the checkpoint; recover the proposal');
   validateDesignProposal(value.plan);
+  // An approval written before canonical digests is bound to its slide's key order. It is rebound when its slide is unchanged,
+  // so a later proposal that reorders keys keeps it; the next write stores the canonical binding.
+  for(const s of value.plan.slides){const a=value.approvals?.[s.id];if(a&&a.binding===legacyBinding(value,s))a.binding=binding(value,s);}
   // The session names files relative to the project. One written before that named its project and kept absolute paths:
   // those inside it are rebased, so it reads after a move too, and the next write stores them relative.
   if(typeof value.project==='string'){
@@ -74,7 +78,8 @@ async function save(project,dir,value){
   return statusOf(value,project);
 }
 // Presenter notes are not approved copy: changing them keeps a slide's approval.
-const binding=(session,{notes:_,...s})=>digest([session.plan.title,session.plan.scope,session.plan.slides.map(x=>x.id),s]);
+const bound=(session,{notes:_,...s})=>[session.plan.title,session.plan.scope,session.plan.slides.map(x=>x.id),s];
+const binding=(session,s)=>canonicalDigest(bound(session,s)),legacyBinding=(session,s)=>digest(bound(session,s));
 function pending(session){return session.plan.slides.filter(s=>session.approvals[s.id]?.binding!==binding(session,s));}
 function questionFor(session){
   if(session.awaitingRevision)return null;
@@ -104,7 +109,9 @@ export async function proposeDesign({project,plan,expected,mode}){
     let old;try{old=await readSession(root);}catch(e){if(e.code!=='ENOENT')throw e;}
     if(old&&expected!==old.revision)throw new Error('Design revision changed; use the current expected revision');
     if(!old&&expected)throw new Error('No existing design revision');
-    const revision=digest(plan),session={schema:1,tool:'harness-slides-design',plan:structuredClone(plan),revision,mode:mode??old?.mode??'guided',approvals:old?.approvals??{},feedback:old?.feedback??[],responses:old?.responses??[],rendered:old?.revision===revision?old.rendered:null,waiveRendered:old?.waiveRendered??false};
+    // The same content sent back in another key order is unchanged: it keeps the stored plan and its revision.
+    if(old&&canonicalDigest(old.plan)===canonicalDigest(plan))plan=old.plan;
+    const revision=old?.plan===plan?old.revision:canonicalDigest(plan),session={schema:1,tool:'harness-slides-design',plan:structuredClone(plan),revision,mode:mode??old?.mode??'guided',approvals:old?.approvals??{},feedback:old?.feedback??[],responses:old?.responses??[],rendered:old?.revision===revision?old.rendered:null,waiveRendered:old?.waiveRendered??false};
     // An unchanged resubmission is not a fix or approval of requested revisions.
     if(old?.awaitingRevision&&old.revision===revision)session.awaitingRevision=true;
     if(old?.revision!==revision){session.waiveRendered=false;session.responses.push({kind:'proposal',revision,at:new Date().toISOString()});}
@@ -186,7 +193,7 @@ export async function requireSceneDesign(scene,project,revision,{section=false}=
   for(const s of scene.slides){
     const want=byId.get(s.id);
     if(s.title!==want.title)problems.push({code:'design-mismatch',slide:s.id,detail:`${s.id}: its title differs from the approved design; revise the proposal before construction`});
-    else if(s.intent&&digest(s.intent)!==digest(want.intent))problems.push({code:'design-mismatch',slide:s.id,detail:`${s.id}: its intent differs from the approved design; revise the proposal before construction`});
+    else if(s.intent&&canonicalDigest(s.intent)!==canonicalDigest(want.intent))problems.push({code:'design-mismatch',slide:s.id,detail:`${s.id}: its intent differs from the approved design; revise the proposal before construction`});
   }
   if(problems.length)throw refuseAll(problems.length===1?problems[0].detail:`${problems.length} slides differ from the approved design:\n${problems.map(p=>p.detail).join('\n')}`,problems);
   return {...approved,scope:section?'section':'deck',slides:ids};
