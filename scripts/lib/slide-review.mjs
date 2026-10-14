@@ -5,8 +5,10 @@ import { readFile, writeFile, lstat, mkdir, mkdtemp, open, rename, rm, readdir }
 import { join, resolve, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
-import { getApprovedDesign } from './design-session.mjs';
-import {auditNativeReview,assessNativeCritique} from './native-quality.mjs';
+import { getApprovedDesign, requireSceneDesign } from './design-session.mjs';
+import {auditNativeReview,assessNativeCritique,auditCompositionReview,categorizeReview} from './native-quality.mjs';
+import {refuse} from './refusals.mjs';
+import {verifyBuiltAssets} from './assets.mjs';
 import {digest} from './common.mjs';
 import { pptxTool } from './presentation-tools.mjs';
 const exec = promisify(execFile);
@@ -18,6 +20,17 @@ async function regularFile(file) {
   if (!s.isFile() || s.isSymbolicLink()) throw new Error(`Expected regular file: ${file}`);
 }
 async function bytes(file) { await regularFile(file); return readFile(file); }
+const stale=message=>refuse(message,{code:'review-stale'});
+// A compiled composition, read with the hash of each file so the review can tell when the build changed under it.
+const buildFiles=['scene.json','structure.json','compose-report.json','brand-contract.json'];
+async function readBuild(dir){
+  dir=resolve(dir);const files={},values={};
+  for(const name of buildFiles){
+    let data;try{data=await bytes(join(dir,name));}catch(error){if(error.code==='ENOENT')throw refuse(`${dir} is not a compiled composition: ${name} is missing. Compile it with compose compile --output`,{code:'input-missing'});throw error;}
+    files[name]=hash(data);values[name]=JSON.parse(data);
+  }
+  return {dir,files,binding:digest(files),scene:values['scene.json'],structure:values['structure.json'],report:values['compose-report.json']};
+}
 async function readRecord(output) {
   try {
     const record = JSON.parse(await bytes(join(output, 'review.json')));
@@ -73,7 +86,7 @@ async function save(output, record) {
   await atomic(join(output, 'review.json'), `${JSON.stringify(record, null, 2)}\n`);
   return { output, record: join(output, 'review.json'), contactSheet: join(output, 'contact-sheet.html'), revision: record.revision,
     slides: record.slides.length, changed: record.slides.filter(s => !s.reused).map(s => s.number), pending: record.pending,
-    visualReviewComplete: record.visualReviewComplete, creativeReviewRequired:record.creativeReviewRequired??false, creativeReviewComplete:record.creativeReviewComplete, readyForUserReview:record.readyForUserReview, ...(record.creativeQuality?{qualityRevision:record.creativeQuality.revision,assessmentBinding:{schema:1,sceneDigest:record.creativeQuality.sceneDigest,qualityRevision:record.creativeQuality.revision,artifactDigest:record.creativeQuality.artifactDigest},qualityReport:join(output,'review.json')}:{} ) };
+    visualReviewComplete: record.visualReviewComplete, creativeReviewRequired:record.creativeReviewRequired??false, creativeReviewComplete:record.creativeReviewComplete, readyForUserReview:record.readyForUserReview, ...(record.creativeQuality?{designReview:categorizeReview(record.creativeQuality,record.creativeAssessment),qualityRevision:record.creativeQuality.revision,assessmentBinding:{schema:1,sceneDigest:record.creativeQuality.sceneDigest,qualityRevision:record.creativeQuality.revision,artifactDigest:record.creativeQuality.artifactDigest},qualityReport:join(output,'review.json')}:{} ) };
 }
 
 export async function renderPptx({ file, output, selected, run = exec, soffice = process.env.HARNESS_SOFFICE || 'soffice', pdftoppm = process.env.HARNESS_PDFTOPPM || 'pdftoppm', pdfinfo = process.env.HARNESS_PDFINFO || 'pdfinfo' }) {
@@ -95,8 +108,9 @@ export async function renderPptx({ file, output, selected, run = exec, soffice =
 async function renderSignature(options) {
   const run = options.run ?? exec;
   const versions = [];
-  for (const [name, args] of [[options.soffice || process.env.HARNESS_SOFFICE || 'soffice', ['--version']], [options.pdftoppm || process.env.HARNESS_PDFTOPPM || 'pdftoppm', ['-v']], [options.pdfinfo || process.env.HARNESS_PDFINFO || 'pdfinfo', ['-v']]]) {
-    const result = await run(name, args, { timeout: 10000 });
+  for (const [name, args, provider] of [[options.soffice || process.env.HARNESS_SOFFICE || 'soffice', ['--version'], 'libreoffice'], [options.pdftoppm || process.env.HARNESS_PDFTOPPM || 'pdftoppm', ['-v'], 'poppler'], [options.pdfinfo || process.env.HARNESS_PDFINFO || 'pdfinfo', ['-v'], 'poppler']]) {
+    // A missing renderer is named before anything is rendered, so the caller can install it and retry.
+    const result = await run(name, args, { timeout: 10000 }).catch(error => { throw error.code === 'ENOENT' ? refuse(`${name} is not installed. Review renders PPTX with LibreOffice (soffice) and Poppler (pdftoppm, pdfinfo)`, { code: 'renderer-unavailable', provider }) : error; });
     versions.push([name, result.stdout, result.stderr]);
   }
   try {
@@ -111,13 +125,37 @@ async function renderSignature(options) {
   return hash(JSON.stringify(versions));
 }
 
-export async function prepareReview({ file, previews, output, designProject, nativeSnapshot, decisions, qualityReport, refresh = false, render = renderPptx, inventory = file => pptxTool('inventory', [file]), signature = renderSignature, ...options }) {
-  if (!!file === !!previews || !output) throw new Error('Provide --output and exactly one of --file or --previews');
+export async function prepareReview({ file, previews, compiled, output, designProject, nativeSnapshot, decisions, qualityReport, refresh = false, render = renderPptx, inventory = file => pptxTool('inventory', [file]), signature = renderSignature, renderComposition, screen, ...options }) {
+  if ([file, previews, compiled].filter(Boolean).length !== 1 || !output) throw refuse('Provide --output and exactly one of --file, --previews or --compiled', { code: 'input-invalid' });
+  if (compiled && !designProject) throw refuse('--compiled needs --design-project: a composition review is checked against the approved design', { code: 'input-invalid' });
+  if (compiled && (nativeSnapshot || decisions || qualityReport)) throw refuse('--compiled takes no --native-snapshot, --decisions or --quality-report: the compiled build supplies them', { code: 'input-invalid' });
   return locked(output, async (dir, previous) => {
     if(previous?.creativeReviewRequired&&!designProject)throw new Error('Retain the design project and native/scene quality inputs; creative review cannot be downgraded');
     let source, revision, renderer, pages, images, rendererKey;
-    let temp;
+    let temp, build;
     try {
+      if (compiled) {
+        // Review renders the build itself, so the deck it reviews is the deck it binds. An unchanged build keeps its deck and receipts.
+        build = await readBuild(compiled);
+        if (!build.report.designRevision) throw refuse('This build was compiled without --design-project, so it is not bound to a design. Compile it with --design-project, then review it', { code: 'design-missing', next: 'Compile the composition with --design-project, then prepare the review' });
+        if (build.report.designScope === 'section') throw refuse('This build is a section. Review the whole deck: merge the sections with compose merge, compile the merged deck with --design-project, then review it', { code: 'input-invalid' });
+        const approved = await getApprovedDesign(designProject);
+        if (build.report.designRevision !== approved.revision) throw refuse('This build was compiled against an older design revision. Compile the composition again against the approved design, then review it', { code: 'review-stale', next: 'Compile the composition again with --design-project, then prepare the review' });
+        await requireSceneDesign(build.scene, designProject, approved.revision);
+        await verifyBuiltAssets(build.dir);
+        file = join(dir, 'deck.pptx');
+        let current = null; try { current = hash(await bytes(file)); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+        build.native = previous?.compiled?.binding === build.binding && previous.source?.file === file && current === previous.source.sha256 ? previous.compiled.native : null;
+        if (!build.native) {
+          const scratch = await mkdtemp(join(tmpdir(), 'harness-compose-review-'));
+          try {
+            const draw = renderComposition ?? (await import('./compose-file.mjs')).renderCompositionDir;
+            const built = await draw({ file: build.dir, output: join(scratch, 'deck.pptx') });
+            build.native = built.native ?? [];
+            await atomic(file, await bytes(join(scratch, 'deck.pptx')));
+          } finally { await rm(scratch, { recursive: true, force: true }); }
+        }
+      }
       if (file) {
         file = resolve(file);
         const data = await bytes(file);
@@ -173,7 +211,13 @@ export async function prepareReview({ file, previews, output, designProject, nat
       const record={schemaVersion:1,tool:'harness-slides-review',source,revision,renderer,rendererKey,slides:resultPages};
       if(designProject){
         const approved=await getApprovedDesign(designProject);record.designProject=resolve(designProject);record.designRevision=approved.revision;record.creativeReviewRequired=true;
-        if(previews){
+        if(build){
+          if(pages.length!==approved.plan.slides.length)throw new Error('The rendered deck and the approved design have different slide counts');
+          const screens=await (screen??(await import('./compose-preview.mjs')).screenComposition)({scene:build.scene,structure:build.structure,native:build.native});
+          record.compiled={dir:build.dir,binding:build.binding,files:build.files,native:build.native};
+          record.creativeQuality=auditCompositionReview({scene:build.scene,structure:build.structure,report:build.report,plan:approved.plan,designRevision:approved.revision,screens,binding:build.binding,builtArtifactDigest:digest({'deck.pptx':source.sha256}),artifactDigest:digest(record.slides.map(s=>[s.id,s.imageSha256]))});
+          record.designBinding=pages.map((p,i)=>({nativeId:p.id,planId:approved.plan.slides[i].id}));
+        }else if(previews){
           if(!nativeSnapshot||!decisions||qualityReport)throw new Error('Native creative review needs --native-snapshot and --decisions');
           const snapshot=JSON.parse(await bytes(resolve(nativeSnapshot))),mapping=JSON.parse(await bytes(resolve(decisions)));
           record.nativeSnapshot=resolve(nativeSnapshot);record.nativeSnapshotDigest=digest(snapshot);
@@ -210,14 +254,19 @@ export async function markReview({ output, revision, numbers, status = 'reviewed
 export async function verifyReview(output,record){
   if(!record)record=await readRecord(resolve(output));
   if(!record)throw new Error('Prepare native review first');
-  if(record.source.type==='pptx'&&hash(await bytes(record.source.file))!==record.source.sha256)throw new Error('Deck changed after rendering; prepare review again');
-  for(const slide of record.slides)if(!/^slide-\d+-[a-f0-9]+\.png$/.test(slide.image)||hash(await bytes(join(output,slide.image)))!==slide.imageSha256)throw new Error('Preview changed; prepare review again');
+  if(record.source.type==='pptx'&&hash(await bytes(record.source.file))!==record.source.sha256)throw stale('Deck changed after rendering; prepare review again');
+  for(const slide of record.slides)if(!/^slide-\d+-[a-f0-9]+\.png$/.test(slide.image)||hash(await bytes(join(output,slide.image)))!==slide.imageSha256)throw stale('Preview changed; prepare review again');
   if(record.creativeReviewRequired){
-    await getApprovedDesign(record.designProject,{revision:record.designRevision});
-    if(record.nativeSnapshot&&digest(JSON.parse(await bytes(record.nativeSnapshot)))!==record.nativeSnapshotDigest)throw new Error('Native snapshot changed; prepare current review');
+    try{await getApprovedDesign(record.designProject,{revision:record.designRevision});}catch(error){if(/Approved design revision changed/.test(error.message))throw stale('Approved design revision changed after this review was prepared; build the current design and prepare review again');throw error;}
+    if(record.compiled){
+      let now;try{now=await readBuild(record.compiled.dir);}catch(error){throw stale(`The compiled build changed after this review was prepared (${error.message}); prepare review again`);}
+      if(now.binding!==record.compiled.binding)throw stale('The compiled build changed after this review was prepared; prepare review again');
+      await verifyBuiltAssets(record.compiled.dir);
+    }
+    if(record.nativeSnapshot&&digest(JSON.parse(await bytes(record.nativeSnapshot)))!==record.nativeSnapshotDigest)throw stale('Native snapshot changed; prepare current review');
     if(!record.creativeQuality)throw new Error('Creative report is missing');
     const {revision,...payload}=record.creativeQuality;
-    if(revision!==digest(payload)||record.creativeQuality.artifactDigest!==digest(record.slides.map(s=>[s.id,s.imageSha256]))||record.source.type==='pptx'&&record.creativeQuality.builtArtifactDigest!==digest({'deck.pptx':record.source.sha256}))throw new Error('Creative quality binding changed');
+    if(revision!==digest(payload)||record.creativeQuality.artifactDigest!==digest(record.slides.map(s=>[s.id,s.imageSha256]))||record.source.type==='pptx'&&record.creativeQuality.builtArtifactDigest!==digest({'deck.pptx':record.source.sha256})||record.compiled&&record.creativeQuality.build!==record.compiled.binding)throw stale('Creative quality binding changed');
     if(record.creativeAssessment)assessNativeCritique(record.creativeQuality,record.creativeAssessment);
   }
   // Derive readiness from bound receipts rather than trusting stored summary flags.
