@@ -110,6 +110,39 @@ test('a lettered icon is indexed with its glyph and not its caption, and its cop
   assert.match(await part(single,'ppt/slides/slide1.xml'),/<a:t>VM<\/a:t>/);
 });
 
+// The lettering of a copied icon, in slide coordinates: the copy's scale, its run sizes, and the frames of its disc and its text box.
+function lettering(xml) {
+  const [ox,oy]=frame(xml,'off'),[ex,ey]=frame(xml,'ext'),[cx,cy]=frame(xml,'chOff'),[wx,wy]=frame(xml,'chExt'),scale=Math.min(ex/wx,ey/wy);
+  const place=sp=>{const [x,y]=frame(sp,'off'),[w,h]=frame(sp,'ext');return [ox+(x-cx)*ex/wx,oy+(y-cy)*ey/wy,w*ex/wx,h*ey/wy];};
+  const disc=xml.match(/<p:sp>(?:(?!<\/p:sp>).)*<a:prstGeom prst="ellipse">.*?<\/p:sp>/s)[0],text=xml.match(/<p:sp>(?:(?!<\/p:sp>).)*<a:t>VM<\/a:t>.*?<\/p:sp>/s)[0];
+  const insets=Object.fromEntries(['lIns','tIns','rIns','bIns'].map(k=>[k,Number(text.match(new RegExp(`${k}="(\\d+)"`))[1])]));
+  return {scale,sizes:[...text.matchAll(/<a:(?:rPr|defRPr|endParaRPr)\b[^>]*? sz="(\d+)"/g)].map(m=>Number(m[1])),disc:place(disc),text:place(text),insets};
+}
+const within=([x,y,w,h],[X,Y,W,H])=>x>=X-1&&y>=Y-1&&x+w<=X+W+1&&y+h<=Y+H+1;
+
+test('a lettered icon copied at another size scales its text with its drawing, and stays on its disc',async t=>{
+  const dir=await temporary(t),{contract,library,icons}=await iconBrand(dir),vm=icons.find(i=>i.lettered),size=vm.entry.bounds[2]/914400;
+  for(const factor of [.5,1,2]) {
+    const output=join(dir,`vm-${factor}.pptx`);
+    await pptxTool('icon-copy',[JSON.stringify({source:library.path,index:library.index,ident:vm.entry.id,output,width:size*factor})]);
+    const l=lettering(await part(output,'ppt/slides/slide1.xml'));
+    assert.ok(Math.abs(l.scale-factor)<.001,`copied at ${factor} of the library size`);
+    // The library letters are 14 pt with no insets; they scale with the drawing, in whole hundredths of a point.
+    assert.deepEqual(l.sizes,[Math.round(1400*l.scale)],`the letters at ${factor} are ${14*factor} pt`);
+    assert.deepEqual(l.insets,{lIns:0,tIns:0,rIns:0,bIns:0});
+    assert.ok(within(l.text,l.disc),`the text box at ${factor} lies on the disc`);
+    // One line of the scaled letters fits the scaled text box.
+    assert.ok(l.sizes[0]/100*12700*1.2<=l.text[3]+1,`the letters at ${factor} fit their box`);
+  }
+  // In a composition the icon fills its slot, and its letters scale with it; text outside the icon keeps its size.
+  const comp={version:1,title:'Icons',slides:[{id:'icon_slide',title:'A lettered icon',sources:['brief:test'],canvas:{type:'stack',direction:'row',children:[{type:'icon',id:'vm_icon',icon:vm.entry.id},{type:'box',id:'side_box',text:'Beside it',weight:3}]}}]};
+  const deck=join(dir,'deck.pptx'),compiled=await compileComposition(comp,contract);await emitNativePptx({...compiled,brand:contract,output:deck,base:dir});
+  const slide=await part(deck,'ppt/slides/harnessSlide1.xml'),l=lettering(iconGroup(slide,'vm_icon')),beside=compiled.scene.slides[0].elements.find(e=>e.id==='side_box');
+  assert.ok(l.scale<1,'the slot is smaller than the library icon');
+  assert.deepEqual(l.sizes,[Math.round(1400*l.scale)]);assert.ok(within(l.text,l.disc));
+  assert.match(slide,new RegExp(`name="side_box".*?sz="${Math.round(beside.fontSize*100)}"`,'s'),'the box beside the icon keeps its own size');
+});
+
 test('an icon whose library slide repeats one of its shape IDs is refused by name rather than copied wrong',async t=>{
   const dir=await temporary(t),{contract,library,icons}=await iconBrand(dir),[database,gateway]=icons,repeated=join(dir,'repeated.pptx'),catalog=join(dir,'repeated-catalog.json');
   // Give the gateway's disc the database disc's ID, then index and hash the changed library as a brand would.

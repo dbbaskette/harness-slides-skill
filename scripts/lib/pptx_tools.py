@@ -252,6 +252,39 @@ def native_group(pkg, entry):
     return group
 
 
+# A group scales its drawing but not its text, so a copied icon's text is scaled to match.
+TEXT_SIZES = ('rPr', 'defRPr', 'endParaRPr')
+INSETS = dict(lIns=91440, tIns=45720, rIns=91440, bIns=45720)
+
+
+def scale_text(group):
+    """Scale the text inside a copied icon group by the group's own scale, from its child extent to its extent.
+
+    Run, default and end-of-paragraph sizes and character spacing are in hundredths of a point; sizes keep the
+    schema minimum of 1 pt. Paragraph spacing in points and text-box insets scale too, so the text keeps its place."""
+    frame = group.find('p:grpSpPr/a:xfrm', NS)
+    ext, child = frame.find('a:ext', NS), frame.find('a:chExt', NS)
+    factor = min(int(ext.get('cx')) / int(child.get('cx')), int(ext.get('cy')) / int(child.get('cy')))
+    if not math.isfinite(factor) or factor <= 0 or abs(factor - 1) < 1e-6:
+        return factor
+    a = '{' + NS['a'] + '}'
+    for body in group.iter('{' + NS['p'] + '}txBody'):
+        properties = body.find('a:bodyPr', NS)
+        if properties is not None:
+            for name, default in INSETS.items():
+                properties.set(name, str(round(int(properties.get(name, default)) * factor)))
+        for node in body.iter():
+            tag = node.tag[len(a):] if node.tag.startswith(a) else None
+            if tag in TEXT_SIZES:
+                if node.get('sz'):
+                    node.set('sz', str(min(400000, max(100, round(int(node.get('sz')) * factor)))))
+                if node.get('spc'):
+                    node.set('spc', str(max(-400000, min(400000, round(int(node.get('spc')) * factor)))))
+            elif tag == 'spcPts':
+                node.set('val', str(min(158400, round(int(node.get('val')) * factor))))
+    return factor
+
+
 def write_new(output, files):
     if Path(output).suffix.lower() != '.pptx':
         raise ValueError('Output must end in .pptx')
@@ -324,6 +357,7 @@ def copy_icon(source, index, ident, output, target=None, slide=1, x=0, y=0, widt
     gx = group.find('p:grpSpPr/a:xfrm', NS)
     gx.find('a:off', NS).attrib.update(x=str(round(x * EMU)), y=str(round(y * EMU)))
     gx.find('a:ext', NS).attrib.update(cx=str(w), cy=str(h))
+    scale_text(group)
     if target:
         dest, _ = load(target)
         pages = slides(dest)
