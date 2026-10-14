@@ -106,15 +106,27 @@ export async function proposeDesign({project,plan,expected,mode}){
   });
 }
 export async function designStatus(project){const session=await readSession(resolve(project));if(session.rendered){const {verifyReview}=await import('./slide-review.mjs');const record=await verifyReview(session.rendered.review);if(record.revision!==session.rendered.revision||record.creativeQuality?.revision!==session.rendered.qualityRevision||!record.visualReviewComplete||!record.creativeReviewComplete)throw new Error('Rendered review changed; present current output before user approval');}return statusOf(session);}
-export async function getApprovedDesign(project,{revision,slideIds}={}){
+// Where authored slide IDs leave the approved order. A deck starts at the first approved slide and ends at the last;
+// a section starts wherever its first slide is approved and may end early. Null when they follow it.
+function orderProblem(planIds,slideIds,section){
+  const start=section?planIds.indexOf(slideIds[0]):0;
+  if(start<0)return {slide:slideIds[0],why:`${slideIds[0]} is not in the approved design`};
+  for(let i=0;i<Math.max(slideIds.length,section?0:planIds.length-start);i++){
+    const want=planIds[start+i],got=slideIds[i];if(got===want)continue;
+    if(got===undefined)return {slide:want,why:`approved slide ${want} is missing at the end`};
+    const at=planIds.indexOf(got);if(at<0)return {slide:got,why:`${got} is not in the approved design`};
+    if(want===undefined||at<start+i||slideIds.includes(want))return {slide:got,why:`${got} is out of the approved order${want?`; ${want} comes next`:''}`};
+    return {slide:want,why:`approved slide ${want} is missing before ${got}`};
+  }
+  return null;
+}
+export async function getApprovedDesign(project,{revision,slideIds,section=false}={}){
   const session=await readSession(resolve(project));
   if(revision&&session.revision!==revision)throw new Error('Approved design revision changed; recheck the proposal');
   const waiting=session.awaitingRevision?(session.feedback.at(-1)?.slides??[]).map(slide=>({code:'design-revision-requested',slide})):pending(session).map(s=>({code:'design-awaiting-approval',slide:s.id}));
   if(waiting.length||session.awaitingRevision)throw refuseAll('Awaiting design approval; show the proposed slide(s) and wait for an actual user response before building',waiting.length?waiting:[{code:'design-revision-requested'}]);
-  if(slideIds&&(slideIds.length!==session.plan.slides.length||slideIds.some((id,i)=>id!==session.plan.slides[i].id))){
-    let i=0;while(i<slideIds.length&&slideIds[i]===session.plan.slides[i]?.id)i++;
-    throw refuse('Authored slide IDs/order differ from the approved design',{code:'design-mismatch',slide:slideIds[i]??session.plan.slides[i]?.id});
-  }
+  const problem=slideIds&&orderProblem(session.plan.slides.map(s=>s.id),slideIds,section);
+  if(problem)throw refuse(`${section?'The section\'s':'Authored'} slide IDs/order differ from the approved design: ${problem.why}`,{code:'design-mismatch',slide:problem.slide});
   return {plan:session.plan,revision:session.revision};
 }
 export async function respondDesign({project,reply}){
@@ -157,12 +169,19 @@ export async function presentDesign({project,review,revision}){
   });
 }
 
-export async function requireSceneDesign(scene,project,revision){
+// A section is a contiguous run of approved slides, declared by the caller; without it the scene must be the whole deck.
+export async function requireSceneDesign(scene,project,revision,{section=false}={}){
   const creative=scene.slides.some(s=>s.intent);
   if(!project){if(creative)throw refuse('New creative authoring needs --design-project and actual design approval',{code:'design-missing',next:'Pass --design-project with the project whose design the person approved'});return null;}
-  const approved=await getApprovedDesign(project,{revision,slideIds:scene.slides.map(s=>s.id)});
-  for(const [i,s] of scene.slides.entries())if(s.title!==approved.plan.slides[i].title||s.intent&&digest(s.intent)!==digest(approved.plan.slides[i].intent))throw refuse('Title/intent differs from the approved design; revise the proposal before construction',{code:'design-mismatch',slide:s.id});
-  return approved;
+  const ids=scene.slides.map(s=>s.id),approved=await getApprovedDesign(project,{revision,slideIds:ids,section});
+  const byId=new Map(approved.plan.slides.map(s=>[s.id,s])),problems=[];
+  for(const s of scene.slides){
+    const want=byId.get(s.id);
+    if(s.title!==want.title)problems.push({code:'design-mismatch',slide:s.id,detail:`${s.id}: its title differs from the approved design; revise the proposal before construction`});
+    else if(s.intent&&digest(s.intent)!==digest(want.intent))problems.push({code:'design-mismatch',slide:s.id,detail:`${s.id}: its intent differs from the approved design; revise the proposal before construction`});
+  }
+  if(problems.length)throw refuseAll(problems.length===1?problems[0].detail:`${problems.length} slides differ from the approved design:\n${problems.map(p=>p.detail).join('\n')}`,problems);
+  return {...approved,scope:section?'section':'deck',slides:ids};
 }
 // For a refusal: the current revision when the record is readable, otherwise null.
 export async function designRevisionOf(project){try{return (await readSession(resolve(project))).revision;}catch{return null;}}

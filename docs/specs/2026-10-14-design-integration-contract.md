@@ -2,6 +2,7 @@
 
 Status: built on `main` after 0.13.1; not yet released. Written 2026-10-14 for
 Training Studio's visual teaching plan, milestone 1 (issue #46). The
+section-scoped check is milestone 2 (issue #47), and the
 [asset manifest](#the-asset-manifest) was added for milestone 3 (issue #49).
 
 ## Why
@@ -25,7 +26,7 @@ exercises the same contract, and Training Studio copies it.
 | Read the current question | `design status --project DIR` | Returns `revision`, `mode`, `pending`, `question` and the slides it asks about. |
 | Record the person's answer | `design respond --project DIR --file reply.json` | `{questionId,planRevision,decision,feedback,waiveRendered?}` |
 | Check before building | `design check --project DIR` | Refuses until every slide is approved. |
-| Build a composition against the approval | `compose compile --file c.json --design-project DIR --output NEW` | Checks slide IDs, order and titles, and `intent` where the composition gives one. |
+| Build a composition against the approval | `compose compile --file c.json --design-project DIR [--section] [--output NEW]` | Checks slide IDs, order and titles, and `intent` where the composition gives one. It checks without `--output` too. With `--section`, see [sections](#sections). |
 | Build a typed deck plan against the approval | `deck compile --file plan.json --design-project DIR --output NEW` | The same checks. |
 | Build a scene against the approval | `workspace init`, `pptx render`, `google compile` with `--design-project` | The same checks. A workspace keeps the binding. |
 | Generate approved artwork | `images generate ... --design-project DIR --slide ID [--alt TEXT]` | Only for an approved slide whose visual family is `generated-art`. The image is recorded in the asset manifest under its `--id`. |
@@ -33,7 +34,7 @@ exercises the same contract, and Training Studio copies it.
 | Record a brand icon | `assets icon ICON_ID --project DIR [--id ID] [--alt TEXT] [--brand brand-contract.json]` | With `--brand`, checked against the brand's hashed icon index. |
 | See or check the assets | `assets status\|check --project DIR [--design-project DIR] [--brand brand-contract.json]` | `check` refuses missing or changed files, and design candidates not yet recorded. |
 | Place a recorded image | `{type:image,id,asset:ID,alt?,fit?}` or `picture:{asset:ID,alt?}` in a composition, compiled with `--asset-project DIR` | `--asset-project` defaults to `--design-project`. |
-| Preview a composition | `compose preview --file COMPILED --output NEW` | Not bound to the session. A refusal reports the design revision of the compiled build. |
+| Preview a composition | `compose preview --file COMPILED --output NEW [--design-project DIR [--section]]` | With `--design-project`, it rechecks the build against the design approved now, before it renders. Without the flag it is not bound to the session, and a refusal reports the design revision of the compiled build. |
 | Rendered user review | `review ... --design-project`, then `design present` | Needs a review record bound to the design. See below for compositions. |
 | Read a refusal as data | `--json` on any `design`, `assets` or `images` action, `compose compile` and `compose preview` | See [refusals](#refusals). |
 
@@ -159,6 +160,37 @@ whole-plan question that is `Approve the whole plan`. This records what the
 person did and nothing they did not say. An empty reply still cannot advance a
 session.
 
+## Sections
+
+A section author builds and previews only its own slides. It declares this with
+`--section` on `compose compile` and `compose preview`, next to
+`--design-project`. A section is never inferred. Without `--section` the
+composition is the whole deck, so a deck with missing slides cannot pass as a
+section.
+
+| | Whole deck (no `--section`) | Section (`--section`) |
+| --- | --- | --- |
+| Slides | Every approved slide | A contiguous run of approved slides, possibly one, possibly all |
+| Order | Approved order | Approved order, from wherever the run starts |
+| Titles | Approved titles | Approved titles |
+| `intent` | Matches the approved digest where given | Matches the approved digest where given |
+
+A refusal is `design-mismatch` and names one slide:
+
+- A slide not in the plan is extra, and that slide is named.
+- An approved slide skipped inside the run, or missing from the end of a whole
+  deck, is missing. The skipped approved slide is named.
+- A slide that belongs earlier in the plan, or ahead of a slide that comes later
+  in the file, is out of order. The misplaced slide is named.
+- Order problems report only the first. Title and intent problems are reported
+  once per slide, in one refusal.
+
+`--section` without `--design-project` is refused as `input-invalid`. The
+check-only result, the compile report (`designRevision`, `designScope`) and the
+preview result carry `design: {revision, scope, slides}`. `scope` is `deck` or
+`section`. The lead merges the sections with `compose merge` and compiles the
+merged deck without `--section`.
+
 ## Refusals
 
 With `--json`, a refusal is printed on stdout, and the exit status is 1:
@@ -188,7 +220,7 @@ Without `--json` the same refusal is the same sentence on stderr as before.
 | `design-awaiting-approval` | Construction before approval; one problem for each pending slide |
 | `design-revision-requested` | Construction after the person asked for changes |
 | `design-revision-stale` | A stale `--expected`, question ID or plan revision |
-| `design-mismatch` | Built slides whose IDs, order, titles or intent differ from the approval |
+| `design-mismatch` | Built slides whose IDs, order, titles or intent differ from the approval, or a section that is not a contiguous run of it; `slide` names the slide |
 | `design-state-invalid` | A session record changed by hand, or stored through a link; not recoverable |
 | `design-busy` | A design lock is held. A process stopped mid-write leaves `.harness-slides/design/.lock`; `next` says to remove it when no command is running |
 | `invalid-response` | A reply without the person's words, or with a decision that does not fit the question |
@@ -206,15 +238,21 @@ Without `--json` the same refusal is the same sentence on stderr as before.
 | `provider-failed` | A Google access or upload failure during preview (`provider` is `google`), or an image provider that refused or failed (`provider` is `gemini-api` or `gemini-web`; `next` is its own advice) |
 | `render-failed` | A render that produced no PDF or the wrong page count |
 | `output-exists` | An output directory that already exists |
-| `input-missing`, `input-invalid` | A missing or unreadable input file |
+| `input-missing`, `input-invalid` | A missing or unreadable input file, or `--section` without `--design-project` |
 | `unclassified` | Anything else; not recoverable until a person has looked |
 
 ## Combinations that do not work today
 
-- `compose compile` checks the design only when it writes a build. Without
-  `--output` it checks fit only, so a reordered composition still "fits".
-- A bound composition must list every slide in the design, cover and closing
-  slides included, each with a full intent and asset decision.
+- A bound composition compiled without `--section` must list every slide in the
+  design, cover and closing slides included. Every slide in the design needs a
+  full intent and asset decision, even one only the lead builds.
+- `compose compile` without `--design-project` still checks fit only, even
+  when slides carry `intent`. The design-missing refusal comes when it writes
+  a build.
+- `compose preview` rechecks the design only when it is given
+  `--design-project`. It does not compare the build's recorded
+  `designRevision` with the current one. It checks the slides against the
+  design approved now.
 - `compose preview` output is not a review record. `design present` cannot take
   it, so a composition's rendered user review is recorded in the presentation
   brief, as before. The creative review that `design present` needs comes from
@@ -243,11 +281,48 @@ Without `--json` the same refusal is the same sentence on stderr as before.
 
 ## Not in this change
 
-- Version and release. Live guidance does not describe schema 2, batch mode or
-  `--json` yet, because new tasks fetch guidance from `main` while the released
-  runtime is 0.13.1. Those lines go with the release that raises `minimumRuntime`.
+- Version and release. Live guidance does not describe schema 2, batch mode,
+  `--json`, `--section`, `--design-project` on `compose preview` or the asset manifest yet. New
+  tasks fetch guidance from `main` while the released runtime is 0.13.1. Those
+  lines go with the release that raises `minimumRuntime` (issue #51). See
+  [guidance for the release](#guidance-for-the-release).
 
-## Pending guidance lines for the release
+## Guidance for the release
+
+These lines need runtime behaviour after 0.13.1. Apply them in the release that
+raises `minimumRuntime` (issue #51). Each replaces the text quoted before it.
+
+`references/compositions.md`, in "Build, look, fix", replace "Add
+`--design-project CONTENT` to `compile` only when slides carry `intent` blocks
+approved through `design propose`." with:
+
+> Add `--design-project CONTENT` to `compile` and `preview` when slides carry
+> `intent` blocks approved through `design propose`. `compile` then checks the
+> design even without `--output`. A file that holds only some of the approved
+> slides, neighbours in approved order, adds `--section`. The whole deck never
+> takes `--section`: it lists every approved slide.
+
+`references/parallel-build.md`, in "The worker brief", after the paths bullet:
+
+> - When the deck is bound to an approved design: the design project, and that
+>   its slides must keep their approved IDs, order, titles and `intent`.
+
+`references/parallel-build.md`, in "If you are a worker", before "Check with
+`compose compile` and no `--output` until it fits", insert:
+
+> Under an approved design, add `--design-project CONTENT --section` to each
+> `compile` and `preview`. A refusal names the slide that is missing, extra,
+> out of order, retitled or given a changed `intent`.
+
+`references/design-records.md`, in the opening paragraph, replace "pass
+`--design-project CONTENT` to `compose compile` with `--output`, and list every
+composed slide in the proposal, in order and with the same titles." with:
+
+> pass `--design-project CONTENT` to `compose compile` and `compose preview`.
+> A whole deck lists every proposed slide, in order and with the same titles;
+> a section file adds `--section` and lists a run of neighbouring ones.
+
+## Guidance for the release: the asset manifest
 
 Live guidance on `main` is read by installs still running 0.13.1, which has no
 `assets` command and no `asset` image node. These lines go into guidance with the
