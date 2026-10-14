@@ -15,13 +15,11 @@ import {previewComposition} from '../scripts/lib/compose-preview.mjs';
 import {pptxTool} from '../scripts/lib/presentation-tools.mjs';
 
 const exec=promisify(execFile),cli=fileURLToPath(new URL('../scripts/harness-slides.mjs',import.meta.url));
-// unzip reads [ ] as a pattern, so the content-types part name must be escaped.
-const part=async(file,name)=>(await exec('unzip',['-p',file,name.replace(/[[\]]/g,'\\$&')],{maxBuffer:32*1024*1024})).stdout;
 const names=async file=>(await exec('unzip',['-Z1',file])).stdout.trim().split('\n');
 // A 1x1 PNG, enough for the emitter to embed and measure.
 const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAAC0lEQVR4nGNgQAYAAA4AAamRc7EAAAAASUVORK5CYII=','base64');
 
-import {brand} from './native-fixtures.mjs';
+import {brand,part,audit} from './native-fixtures.mjs';
 const flow=()=>({version:1,title:'Native deck',slides:[{id:'flow_slide',title:'Requests pass through stages',sources:['brief:test'],notes:'First line\nSecond & <last>',
   canvas:{type:'stack',direction:'row',gap:'none',children:[
     {type:'box',id:'node_from',shape:'roundRect',fill:'headingPrimary',color:'canvasPrimary',text:'Edge & <auth>',align:'center'},{type:'spacer',weight:.4},
@@ -140,30 +138,6 @@ test('preset shapes keep a small inset and a chevron pins its point depth to its
   assert.match(shape('wide_chevron'),/<a:gd name="adj" fmla="val 20000"\/>/);assert.match(shape('wide_chevron'),/lIns="45720"/);
 });
 
-// Package-level checks a strict reader would make.
-async function audit(file) {
-  const script=`import sys,zipfile,re,posixpath,json
-from xml.dom import minidom
-z=zipfile.ZipFile(sys.argv[1]);names=set(z.namelist());problems=[]
-for n in names:
-    if n.endswith('.xml') or n.endswith('.rels'):
-        try: minidom.parseString(z.read(n))
-        except Exception as e: problems.append('malformed '+n+': '+str(e))
-types=z.read('[Content_Types].xml').decode()
-seen=re.findall(r'PartName="/([^"]+)"',types)
-problems+=['duplicate override '+p for p in set(seen) if seen.count(p)>1]
-problems+=['override without part '+p for p in seen if p not in names]
-for n in names:
-    if not n.endswith('.rels'): continue
-    folder=posixpath.dirname(posixpath.dirname(n))
-    for tag in re.findall(r'<Relationship\\b[^>]*>',z.read(n).decode()):
-        if 'TargetMode="External"' in tag: continue
-        t=re.search(r'Target="([^"]*)"',tag).group(1)
-        path=t[1:] if t.startswith('/') else posixpath.normpath(posixpath.join(folder,t))
-        if path not in names: problems.append('dangling '+n+' -> '+path)
-print(json.dumps(sorted(problems)))`;
-  return JSON.parse((await exec('python3',['-c',script,file])).stdout);
-}
 // Rewrite template parts the way other producers write them.
 async function rewrite(source,target,edits) {
   const script=`import sys,zipfile,json
