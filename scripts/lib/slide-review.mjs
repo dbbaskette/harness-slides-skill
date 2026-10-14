@@ -2,15 +2,16 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile, writeFile, lstat, mkdir, mkdtemp, open, rename, rm, readdir } from 'node:fs/promises';
-import { join, resolve, dirname } from 'node:path';
+import { join, resolve, dirname, basename } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { getApprovedDesign, requireSceneDesign } from './design-session.mjs';
 import {auditNativeReview,assessNativeCritique,auditCompositionReview,categorizeReview} from './native-quality.mjs';
-import {refuse} from './refusals.mjs';
+import {refuse,refuseAll} from './refusals.mjs';
 import {verifyBuiltAssets} from './assets.mjs';
 import {digest,canonicalDigest,recordedPath,recordedLocation} from './common.mjs';
 import { pptxTool } from './presentation-tools.mjs';
+import { importDeck, updateDeck, exportPdf, previewPrefix } from '../google-drive-deck.mjs';
 const exec = promisify(execFile);
 const hash = data => createHash('sha256').update(data).digest('hex');
 const pngMagic = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
@@ -93,7 +94,8 @@ async function save(output, record) {
   const html = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Slide review</title><style>body{font:16px Arial,sans-serif;margin:24px;color:#1b1d36;background:#eee}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px}figure{margin:0;background:white;padding:12px}img{width:100%;height:auto}figcaption{padding-top:8px}code{overflow-wrap:anywhere}</style><h1>Slide review</h1><p>${record.slides.length} slides · ${record.pending.length} pending · ${escape(record.renderer)}</p><p>Revision: <code>${escape(record.revision)}</code></p><p>Open each image at full size. Rendering does not certify visual quality or native editability.</p><main>${figures}</main></html>`;
   await atomic(join(output, 'contact-sheet.html'), html);
   await atomic(join(output, 'review.json'), `${JSON.stringify(record, null, 2)}\n`);
-  return { output, record: join(output, 'review.json'), contactSheet: join(output, 'contact-sheet.html'), revision: record.revision,
+  return { output, record: join(output, 'review.json'), contactSheet: join(output, 'contact-sheet.html'), revision: record.revision, renderer: record.renderer,
+    ...(record.remote ? { fileId: record.remote.fileId, url: record.remote.url, next: `Reuse this Drive file for the next Google render: --file-id ${record.remote.fileId}` } : {}),
     slides: record.slides.length, changed: record.slides.filter(s => !s.reused).map(s => s.number), pending: record.pending,
     visualReviewComplete: record.visualReviewComplete, creativeReviewRequired:record.creativeReviewRequired??false, creativeReviewComplete:record.creativeReviewComplete, readyForUserReview:record.readyForUserReview, ...(record.creativeQuality?{designReview:categorizeReview(record.creativeQuality,record.creativeAssessment),qualityRevision:record.creativeQuality.revision,assessmentBinding:{schema:1,sceneDigest:record.creativeQuality.sceneDigest,qualityRevision:record.creativeQuality.revision,artifactDigest:record.creativeQuality.artifactDigest},qualityReport:join(output,'review.json')}:{} ) };
 }
@@ -114,14 +116,45 @@ export async function renderPptx({ file, output, selected, run = exec, soffice =
   } finally { await rm(profile, { recursive: true, force: true }); }
 }
 
+// Google Slides draws the deck by the route compose preview --renderer google takes: the exact bytes the review hashes are
+// uploaded (or replace a "Preview: …" file given by fileId), exported as a PDF and cut into pictures with Poppler. The Drive
+// copy only carries the render: the reviewed deck is still REVIEW/deck.pptx, so the receipts bind the same bytes.
+export async function renderGoogle({ file, output, selected, title, fileId, drive = {}, google, run = exec, pdftoppm = process.env.HARNESS_PDFTOPPM || 'pdftoppm', pdfinfo = process.env.HARNESS_PDFINFO || 'pdfinfo' }) {
+  const d = { importDeck, updateDeck, exportPdf, ...drive }, pdf = join(output, 'snapshot.pdf');
+  let remote = null;
+  try {
+    try {
+      remote = fileId ? await d.updateDeck({ fileId, file }, google) : await d.importDeck({ file, name: `${previewPrefix}${title || 'Review'}` }, google);
+      await d.exportPdf({ fileId: remote.id, output: pdf }, google);
+    } catch (error) { throw refuse(`Google Slides could not render the deck: ${String(error.message).split('\n')[0]}`, { code: 'provider-failed', provider: 'google' }); }
+    const { stdout } = await run(pdfinfo, [pdf], { timeout: 30000, maxBuffer: 1024 * 1024 });
+    const count = Number(/^Pages:\s+(\d+)/m.exec(stdout)?.[1]);
+    if (!Number.isSafeInteger(count) || count < 1) throw new Error('Renderer did not report a page count');
+    for (const number of selected) await run(pdftoppm, ['-f', String(number), '-l', String(number), '-singlefile', '-scale-to', '1600', '-png', pdf, join(output, `page-${number}`)], { timeout: 60000, maxBuffer: 1024 * 1024 });
+    return { count, image: number => join(output, `page-${number}.png`), remote: { provider: 'google', fileId: remote.id, url: remote.url } };
+  } catch (error) { throw stranded(error, remote); }
+}
+// The upload already happened: say where it is, so a retry reuses it instead of creating another file.
+function stranded(error, remote) {
+  if (remote && !String(error.message).includes(`--file-id ${remote.id}`)) error.message += ` The review deck is in Drive (${remote.url}); retry with --renderer google --file-id ${remote.id}.`;
+  return error;
+}
+
 async function renderSignature(options) {
-  const run = options.run ?? exec;
+  const run = options.run ?? exec, google = options.renderer === 'google';
   const versions = [];
-  for (const [name, args, provider] of [[options.soffice || process.env.HARNESS_SOFFICE || 'soffice', ['--version'], 'libreoffice'], [options.pdftoppm || process.env.HARNESS_PDFTOPPM || 'pdftoppm', ['-v'], 'poppler'], [options.pdfinfo || process.env.HARNESS_PDFINFO || 'pdfinfo', ['-v'], 'poppler']]) {
-    // A missing renderer is named before anything is rendered, so the caller can install it and retry.
-    const result = await run(name, args, { timeout: 10000 }).catch(error => { throw error.code === 'ENOENT' ? refuse(`${name} is not installed. Review renders PPTX with LibreOffice (soffice) and Poppler (pdftoppm, pdfinfo)`, { code: 'renderer-unavailable', provider }) : error; });
+  const poppler = [[options.pdftoppm || process.env.HARNESS_PDFTOPPM || 'pdftoppm', ['-v'], 'poppler'], [options.pdfinfo || process.env.HARNESS_PDFINFO || 'pdfinfo', ['-v'], 'poppler']];
+  for (const [name, args, provider] of google ? poppler : [[options.soffice || process.env.HARNESS_SOFFICE || 'soffice', ['--version'], 'libreoffice'], ...poppler]) {
+    // A missing renderer is named before anything is rendered or uploaded, so the caller can install it and retry.
+    const result = await run(name, args, { timeout: 10000 }).catch(error => {
+      if (error.code !== 'ENOENT') throw error;
+      throw google ? refuse(`${name} is not installed. A Google render still needs Poppler (pdftoppm, pdfinfo) to turn its PDF into pictures`, { code: 'renderer-unavailable', provider, next: 'Install Poppler (brew install poppler), then prepare the review again' })
+        : refuse(`${name} is not installed. Review renders PPTX with LibreOffice (soffice) and Poppler (pdftoppm, pdfinfo)`, { code: 'renderer-unavailable', provider, next: provider === 'libreoffice' ? 'Install LibreOffice, or render through Google Drive with --renderer google' : 'Install Poppler (brew install poppler), then prepare the review again' });
+    });
     versions.push([name, result.stdout, result.stderr]);
   }
+  // Google draws with its own fonts, so the fonts installed here do not change its pictures.
+  if (google) return hash(JSON.stringify(['google-slides-pdf-export', versions]));
   try {
     const { stdout } = await run('fc-list', ['-f', '%{file}\n'], { timeout: 10000 });
     const files = [...new Set(stdout.trim().split('\n').filter(Boolean))].sort();
@@ -134,13 +167,17 @@ async function renderSignature(options) {
   return hash(JSON.stringify(versions));
 }
 
-export async function prepareReview({ file, previews, compiled, output, designProject, nativeSnapshot, decisions, qualityReport, refresh = false, render = renderPptx, inventory = file => pptxTool('inventory', [file]), signature = renderSignature, renderComposition, screen, ...options }) {
+export async function prepareReview({ file, previews, compiled, output, designProject, nativeSnapshot, decisions, qualityReport, refresh = false, renderer = 'local', fileId, render, inventory = file => pptxTool('inventory', [file]), signature = renderSignature, renderComposition, screen, ...options }) {
   if ([file, previews, compiled].filter(Boolean).length !== 1 || !output) throw refuse('Provide --output and exactly one of --file, --previews or --compiled', { code: 'input-invalid' });
+  renderer ??= 'local';
+  if (!['local', 'google'].includes(renderer)) throw refuse('--renderer is local (LibreOffice) or google (Google Slides through Drive)', { code: 'input-invalid' });
+  if (previews && renderer !== 'local') throw refuse('--previews are already rendered: --renderer applies to --file and --compiled', { code: 'input-invalid' });
+  if (fileId && renderer !== 'google') throw refuse('--file-id names the Drive file a Google render reuses: give it with --renderer google', { code: 'input-invalid' });
   if (compiled && !designProject) throw refuse('--compiled needs --design-project: a composition review is checked against the approved design', { code: 'input-invalid' });
   if (compiled && (nativeSnapshot || decisions || qualityReport)) throw refuse('--compiled takes no --native-snapshot, --decisions or --quality-report: the compiled build supplies them', { code: 'input-invalid' });
   return locked(output, async (dir, previous) => {
     if(previous?.creativeReviewRequired&&!designProject)throw new Error('Retain the design project and native/scene quality inputs; creative review cannot be downgraded');
-    let source, revision, renderer, pages, images, rendererKey;
+    let source, revision, label, pages, images, rendererKey, remote;
     let temp, build;
     try {
       if (compiled) {
@@ -175,12 +212,14 @@ export async function prepareReview({ file, previews, compiled, output, designPr
         if (!deck.slides.length || deck.slides.length > 500) throw new Error('Review requires 1–500 slides');
         revision = hash(data);
         source = { type: 'pptx', file, sha256: revision };
-        rendererKey = await signature(options);
-        renderer = 'LibreOffice PDF / Poppler; verify fidelity in the target editor';
+        rendererKey = await signature({ ...options, renderer });
+        label = renderer === 'google' ? 'Google Slides PDF export / Poppler; verify fidelity in the target editor' : 'LibreOffice PDF / Poppler; verify fidelity in the target editor';
         pages = deck.slides;
         images = async selected => {
-          const result = await render({ file: snapshot, output: temp, selected, ...options });
-          if (result.count !== pages.length) throw new Error(`Rendered ${result.count} pages for ${pages.length} slides. Hidden slides or export coverage are missing.`);
+          const draw = render ?? (renderer === 'google' ? renderGoogle : renderPptx);
+          const result = await draw({ file: snapshot, output: temp, selected, ...options, ...(renderer === 'google' ? { title: build?.scene.title ?? basename(file).replace(/\.pptx$/i, ''), fileId } : {}) });
+          remote = result.remote;
+          if (result.count !== pages.length) throw stranded(new Error(`Rendered ${result.count} pages for ${pages.length} slides. Hidden slides or export coverage are missing.`), remote && { id: remote.fileId, url: remote.url });
           return result.image;
         };
       } else {
@@ -189,8 +228,8 @@ export async function prepareReview({ file, previews, compiled, output, designPr
         if (!m.presentationId || !m.revision || !m.renderer || !Array.isArray(m.slides) || !m.slides.length || m.slides.length > 500 || m.expectedSlideCount !== m.slides.length) throw new Error('Native preview manifest needs presentationId, revision, renderer, expectedSlideCount and a complete slide inventory');
         if (new Set(m.slides.map(s => s.id)).size !== m.slides.length || m.slides.some(s => typeof s.id !== 'string' || !s.id || typeof s.hidden !== 'boolean')) throw new Error('Native previews require unique slide IDs and explicit hidden flags');
         source = { type: 'google-slides', presentationId: m.presentationId, nativeRevision: m.revision };
-        renderer = String(m.renderer);
-        rendererKey = hash(renderer);
+        label = String(m.renderer);
+        rendererKey = hash(label);
         const prepared = await Promise.all(m.slides.map(async (s, i) => {
           const data = await bytes(resolve(dirname(manifestPath), s.image));
           return { number: i + 1, id: s.id, hidden: s.hidden, title: s.title ?? '', fingerprint: hash(data), data };
@@ -217,14 +256,16 @@ export async function prepareReview({ file, previews, compiled, output, designPr
       for (const page of resultPages.filter(s => !s.reused)) {
         Object.assign(page, await saveImage(dir, page.number, file ? await bytes(imagePath(page.number)) : pages[page.number - 1].data));
       }
-      const record={schemaVersion:1,tool:'harness-slides-review',source,revision,renderer,rendererKey,slides:resultPages};
+      const record={schemaVersion:1,tool:'harness-slides-review',source,revision,renderer:label,rendererKey,slides:resultPages};
+      // The Drive file a Google render used, kept while the pictures it drew are, so a later render can reuse it.
+      const drawn=remote??(renderer==='google'&&previous?.rendererKey===rendererKey?previous.remote:null);if(drawn)record.remote=drawn;
       if(designProject){
         const approved=await getApprovedDesign(designProject);record.designProject=resolve(designProject);record.designRevision=approved.revision;record.creativeReviewRequired=true;
         if(build){
           if(pages.length!==approved.plan.slides.length)throw new Error('The rendered deck and the approved design have different slide counts');
           const screens=await (screen??(await import('./compose-preview.mjs')).screenComposition)({scene:build.scene,structure:build.structure,native:build.native});
           record.compiled={dir:build.dir,binding:build.binding,files:build.files,native:build.native};
-          record.creativeQuality=auditCompositionReview({scene:build.scene,structure:build.structure,report:build.report,plan:approved.plan,designRevision:approved.revision,screens,binding:build.binding,builtArtifactDigest:digest({'deck.pptx':source.sha256}),artifactDigest:digest(record.slides.map(s=>[s.id,s.imageSha256]))});
+          record.creativeQuality=auditCompositionReview({scene:build.scene,structure:build.structure,report:build.report,plan:approved.plan,designRevision:approved.revision,screens,binding:build.binding,renderer,builtArtifactDigest:digest({'deck.pptx':source.sha256}),artifactDigest:digest(record.slides.map(s=>[s.id,s.imageSha256]))});
           record.designBinding=pages.map((p,i)=>({nativeId:p.id,planId:approved.plan.slides[i].id}));
         }else if(previews){
           if(!nativeSnapshot||!decisions||qualityReport)throw new Error('Native creative review needs --native-snapshot and --decisions');
@@ -263,7 +304,7 @@ export async function markReview({ output, revision, numbers, status = 'reviewed
 export async function verifyReview(output,record){
   output=resolve(output);const at=p=>recordedLocation(output,p);
   if(!record)record=await readRecord(output);
-  if(!record)throw new Error('Prepare native review first');
+  if(!record)throw refuse(`Prepare native review first: ${output} holds no review`,{code:'input-invalid',next:'Prepare the review first (review --compiled COMPILED --output DIR --design-project DIR, or --file or --previews), then inspect, mark and assess it'});
   if(record.source.type==='pptx'&&hash(await bytes(at(record.source.file)))!==record.source.sha256)throw stale('Deck changed after rendering; prepare review again');
   for(const slide of record.slides)if(!/^slide-\d+-[a-f0-9]+\.png$/.test(slide.image)||hash(await bytes(join(output,slide.image)))!==slide.imageSha256)throw stale('Preview changed; prepare review again');
   if(record.creativeReviewRequired){
@@ -289,6 +330,7 @@ export async function assessReview({output,revision,assessment}){
   return locked(output,async(dir,record)=>{
     if(!record||record.revision!==revision||!record.creativeReviewRequired)throw new Error('Assess the current creative review revision');
     await verifyReview(dir,record);
+    assessment=withSlideSources(record.creativeQuality,assessment);
     const receipt=assessNativeCritique(record.creativeQuality,assessment);record.creativeAssessment=assessment;
     return {...await save(dir,record),unresolved:receipt.unresolved};
   });
@@ -296,8 +338,47 @@ export async function assessReview({output,revision,assessment}){
 
 export async function inspectReview({output,slide}){
   const record=await verifyReview(resolve(output)),quality=record.creativeQuality;
-  if(!quality)throw new Error('Prepare structured creative review first');
+  if(!quality)throw noPacket();
   const prompt=quality.prompts.find(p=>p.slide===slide||record.designBinding?.some(b=>b.planId===slide&&b.nativeId===p.slide));
-  if(!prompt)throw new Error('Unknown creative review slide');
+  if(!prompt)throw refuse(`Unknown creative review slide ${slide}`,{code:'input-invalid',slide:slide??null,next:'Name a slide of this review; review --packets lists them'});
   return {revision:record.revision,assessmentBinding:{schema:1,sceneDigest:quality.sceneDigest,qualityRevision:quality.revision,artifactDigest:quality.artifactDigest},slide:prompt,findings:quality.findings.filter(f=>f.slide===prompt.slide),deckReview:quality.deckReview};
+}
+const noPacket=()=>refuse('Prepare structured creative review first: this review is not bound to a design',{code:'input-invalid',next:'Prepare the review with --design-project, then inspect it'});
+const planIdOf=(record,id)=>record.designBinding?.find(b=>b.nativeId===id)?.planId??id;
+// Every slide's packet in one call: what --slide returns for each, with its picture, its plan ID and its pixel mark.
+export async function reviewPackets({output}){
+  output=resolve(output);const record=await verifyReview(output),quality=record.creativeQuality;
+  if(!quality)throw noPacket();
+  const slides=record.slides.map(s=>{
+    const planId=planIdOf(record,s.id),packet=quality.prompts.find(p=>p.slide===s.id||p.slide===planId);
+    return {number:s.number,id:s.id,planId,title:s.title,hidden:s.hidden,image:join(output,s.image),imageSha256:s.imageSha256,mark:s.finalReview??null,packet,findings:quality.findings.filter(f=>f.slide===packet?.slide)};
+  });
+  return {schema:1,output,revision:record.revision,designRevision:record.designRevision??null,renderer:record.renderer,
+    assessmentBinding:{schema:1,sceneDigest:quality.sceneDigest,qualityRevision:quality.revision,artifactDigest:quality.artifactDigest},contactSheet:join(output,'contact-sheet.html'),
+    deckReview:quality.deckReview,designReview:categorizeReview(quality,record.creativeAssessment),
+    visualReviewComplete:record.visualReviewComplete,creativeReviewComplete:record.creativeReviewComplete,readyForUserReview:record.readyForUserReview,slides};
+}
+// The assessment's unresolved items by plan slide ID: what design present --accept-findings lists for the person. Null without an assessment.
+export function reviewFindings(record){
+  if(!record.creativeQuality||!record.creativeAssessment)return null;
+  return assessNativeCritique(record.creativeQuality,record.creativeAssessment).unresolved.map(u=>({slide:planIdOf(record,u.slide),criterion:u.criterion,status:u.status,category:u.category,detail:u.detail,...(u.objects?{objects:u.objects}:{})}));
+}
+// A check may leave out sources: the slide fixes them, so it takes the slide's own. Sources that are given must be the slide's.
+function withSlideSources(quality,assessment){
+  if(!Array.isArray(assessment?.slides))return assessment;
+  const problems=[];
+  const slides=assessment.slides.map(s=>{
+    const prompt=quality.prompts.find(p=>p.slide===s?.id);
+    if(!prompt||!Array.isArray(s.checks))return s;
+    return {...s,checks:s.checks.map(c=>{
+      if(!c||typeof c!=='object')return c;
+      if(c.sources===undefined||c.sources===null)return {...c,sources:[...prompt.sources]};
+      const stray=Array.isArray(c.sources)?c.sources.filter(x=>!prompt.sources.includes(x)):[];
+      if(!Array.isArray(c.sources)||!c.sources.length||stray.length)problems.push({code:'input-invalid',slide:s.id,detail:`${s.id}: ${c.criterion} ${stray.length?`cites ${stray.join(', ')}, not among the slide's sources (${prompt.sources.join(', ')})`:'gives sources that are not a list of the slide\'s sources'}. Leave sources out to use the slide's own`});
+      return c;
+    })};
+  });
+  if(problems.length===1)throw refuse(problems[0].detail,problems[0]);
+  if(problems.length)throw refuseAll(`${problems.length} checks cite sources that are not their slide's:\n${problems.map(p=>p.detail).join('\n')}`,problems);
+  return {...assessment,slides};
 }

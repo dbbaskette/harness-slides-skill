@@ -12,6 +12,11 @@ project since issue #57. Since issue #59, digests that stand for the same conten
 [native charts](#native-charts) since issue #40. Since issue #64, asset checks read
 every candidate of the stored plan, a design can name a brand icon by
 [library ID](#icons-by-library-id), and a composition can place an icon by asset ID.
+Since issue #67 (for 0.14.1), the composition review can
+[render through Google](#rendering-through-google), returns
+[every slide's packet in one call](#every-packet-in-one-call), fills an assessment's
+[sources from the slide](#sources-from-the-slide), and `design present` can put a deck
+to the person [with its findings listed](#presenting-with-findings).
 
 ## Why
 
@@ -44,8 +49,9 @@ exercises the same contract, and Training Studio copies it.
 | Place a recorded image | `{type:image,id,asset:ID,alt?,fit?}` or `picture:{asset:ID,alt?}` in a composition, compiled with `--asset-project DIR` | `--asset-project` defaults to `--design-project`. |
 | Place a recorded icon | `{type:icon,id,asset:ID,color?,style?}` in a composition, compiled with `--asset-project DIR` and `--brand` | `--asset-project` defaults to `--design-project`. `{type:icon,id,icon:LIBRARY_ID}` still works. |
 | Preview a composition | `compose preview --file COMPILED --output NEW [--design-project DIR [--section]]` | With `--design-project`, it rechecks the build against the design approved now, before it renders. Without the flag it is not bound to the session, and a refusal reports the design revision of the compiled build. |
-| Review a composition against the design | `review --compiled COMPILED --output REVIEW --design-project DIR` | Renders `REVIEW/deck.pptx` from the build and reviews it. See [design-bound review of a composition](#design-bound-review-of-a-composition). |
-| Rendered user review | `review ... --design-project`, then `design present` | Needs a review record bound to the design; a composition's comes from `review --compiled`. |
+| Review a composition against the design | `review --compiled COMPILED --output REVIEW --design-project DIR [--renderer local\|google] [--file-id ID]` | Renders `REVIEW/deck.pptx` from the build and reviews it. See [design-bound review of a composition](#design-bound-review-of-a-composition). |
+| Read every slide's review packet | `review --output REVIEW --packets` | See [every packet in one call](#every-packet-in-one-call). |
+| Rendered user review | `review ... --design-project`, then `design present [--accept-findings]` | Needs a review record bound to the design; a composition's comes from `review --compiled`. See [presenting with findings](#presenting-with-findings). |
 | Read a refusal as data | `--json` on any `design`, `assets` or `images` action, `compose compile`, `compose preview` and `review` | See [refusals](#refusals). |
 
 ## Detecting support
@@ -58,8 +64,9 @@ versions, and do not provoke a refusal to find out.
 ```json
 {"package":"harness-slides","runtimeVersion":"0.14.0","runtime":"/…/harness-slides",
  "capabilities":["assets","assets-approved-candidates","canonical-digests","compose-icon-assets",
-   "compose-review","compose-section","design-batch","design-icon-ids","design-schema-2",
-   "json-refusals","native-charts","relative-records"]}
+   "compose-review","compose-section","design-batch","design-icon-ids","design-present-findings",
+   "design-schema-2","json-refusals","native-charts","relative-records","review-google-renderer",
+   "review-input-refusals","review-packets","review-sources-from-slide"]}
 ```
 
 The list is sorted. A name is added with its feature and never renamed, removed
@@ -75,10 +82,15 @@ or reused. A runtime without `capabilities` (0.13.1 and earlier) has none of the
 | `compose-section` | `--section` on `compose compile` and `compose preview` ([sections](#sections)), `--design-project` on `compose preview`, and `compose compile --design-project` checking without `--output` |
 | `design-batch` | `design propose --mode batch` and [the whole-plan question](#the-whole-plan-question) |
 | `design-icon-ids` | `refType: "library-id"` on an icon candidate, and `design propose --brand` and `assets check --brand --design-project` checking it ([icons by library ID](#icons-by-library-id)) |
+| `design-present-findings` | `design present --accept-findings`, `findings` on a rendered question and `renderedFindings` in `design status` ([presenting with findings](#presenting-with-findings)) |
 | `design-schema-2` | [Proposal schema 2](#proposal-schema-2): `copy`, `objectives`, `qualifications`, `notes` and `asset.candidates`, and the `asset-unresolved` fallback |
 | `json-refusals` | `--json` [refusals](#refusals) on the commands that list it |
 | `native-charts` | A `chart` node in a composition, written by the native template emitter as an editable chart with its own embedded workbook. See [native charts](#native-charts) |
 | `relative-records` | [Paths in records](#paths-in-records) relative to the project, so a project can move |
+| `review-google-renderer` | `review --file\|--compiled ... --renderer google [--file-id ID]`, [rendering through Google](#rendering-through-google) |
+| `review-input-refusals` | `input-invalid`, with the next step, for a `review` operation on a folder that holds no review and for a call that mixes preparing with another operation |
+| `review-packets` | `review --output REVIEW --packets` ([every packet in one call](#every-packet-in-one-call)) |
+| `review-sources-from-slide` | A `review --assessment` check without `sources` taking its slide's ([sources from the slide](#sources-from-the-slide)) |
 
 ## Proposal schema 2
 
@@ -281,8 +293,9 @@ merged deck without `--section`.
 ## Design-bound review of a composition
 
 `review --compiled COMPILED --output REVIEW --design-project DIR` reviews a
-compiled composition against the approved design, on the PPTX path, without
-Google. It is the existing `review`: the same LibreOffice render, pixel marks
+compiled composition against the approved design, on the PPTX path. It renders
+with LibreOffice unless [`--renderer google`](#rendering-through-google) is given.
+It is the existing `review`: the same render, pixel marks
 (`--mark`), per-slide packet (`--slide`), assessment (`--assessment`), staleness
 checks and `design present`. Only the source of the creative report is new.
 
@@ -306,8 +319,10 @@ criteria (`visual-relationship`, `explanatory-value`, `asset-purpose`,
 | Compiled against an older design revision | `review-stale` |
 | Slides that differ from the current approval | `design-mismatch` |
 | A changed or missing asset copy | `asset-hash-changed`, `asset-file-missing` |
-| No LibreOffice or Poppler on this computer | `renderer-unavailable`, with `provider` `libreoffice` or `poppler` |
+| No LibreOffice or Poppler on this computer | `renderer-unavailable`, with `provider` `libreoffice` or `poppler`. For LibreOffice, `next` names `--renderer google` |
+| `--renderer google` and Drive refused the upload or the export | `provider-failed`, with `provider` `google` |
 | `--compiled` without `--design-project`, or with `--file`, `--previews`, `--native-snapshot`, `--decisions` or `--quality-report` | `input-invalid` |
+| `--renderer` other than `local` or `google`, `--renderer` with `--previews`, or `--file-id` without `--renderer google` | `input-invalid` |
 
 **Report.** Each finding carries a `category`. `designReview` in every result
 groups prompts and judgements into five categories:
@@ -358,6 +373,92 @@ placed asset as `{object,slide,asset,kind,sha256}`. Each later `--mark`,
 `--assessment`, `--slide`, `design status` and `design present` checks these
 again. A changed deck, image, build file or design revision is refused as
 `review-stale`. A changed asset copy is refused as `asset-hash-changed`.
+
+### Rendering through Google
+
+`--renderer google` renders the deck through the Drive route that
+`compose preview --renderer google` takes. It works for `--compiled` and `--file`.
+Poppler (`pdfinfo`, `pdftoppm`) is checked first, before anything is uploaded.
+The exact bytes of `REVIEW/deck.pptx` that the review hashes are imported into
+Drive as `Preview: <deck title>`, or replace the content of the `Preview: …` file
+named by `--file-id`. Drive exports that file as a PDF, and Poppler cuts it into
+the pictures. The receipts do not change: `builtArtifactDigest` is the hash of the
+uploaded bytes, and `artifactDigest` binds the pictures Google drew. The Drive
+copy only carries the render. The reviewed deck is still `REVIEW/deck.pptx`.
+
+The record's `renderer` names Google Slides, its `remote` keeps
+`{provider:"google",fileId,url}`, and the result returns `fileId`, `url` and a
+`next` naming `--file-id`. An unchanged build keeps its pictures and uploads
+nothing. A render with the other renderer draws every picture again. If Drive
+fails after the upload, the refusal names the file to reuse. Google draws
+with its own fonts, so the fonts on this computer do not enter the renderer's
+signature. `--renderer local` (LibreOffice) is the default.
+
+### Every packet in one call
+
+`review --output REVIEW --packets` returns every slide's packet, after the same
+receipt checks as `--slide`:
+
+```json
+{"schema":1,"output":"/…/REVIEW","revision":"<review revision>","designRevision":"<design revision>",
+ "renderer":"…","assessmentBinding":{"schema":1,"sceneDigest":"…","qualityRevision":"…","artifactDigest":"…"},
+ "contactSheet":"/…/REVIEW/contact-sheet.html","deckReview":{…},"designReview":{…},
+ "visualReviewComplete":false,"creativeReviewComplete":false,"readyForUserReview":false,
+ "slides":[{"number":1,"id":"<rendered slide ID>","planId":"operator_architecture","title":"…","hidden":false,
+   "image":"/…/REVIEW/slide-001-….png","imageSha256":"…","mark":null,
+   "packet":{"slide":"operator_architecture","criteria":[…],"objects":[…],"expectedText":[…],"sources":[…],"…":"…"},
+   "findings":[…]}]}
+```
+
+- `slides` is in deck order. `number` is what `--mark` takes. `planId` is the
+  approved slide, and `id` is the slide's ID in the rendered deck.
+- `image` is the absolute path of the picture, and `imageSha256` its hash.
+- `mark` is the slide's pixel mark (`{revision,status,note,checkedAt}`), or null.
+- `packet` is exactly what `review --slide` returns as `slide`. `findings` are
+  the build's prompts for that slide.
+- `assessmentBinding` is the head of the assessment, and `designReview` is the same
+  as in every other result.
+
+A review not bound to a design has no packets: it is refused as `input-invalid`.
+`review.json` stays an internal record. Read the packets instead.
+
+### Sources from the slide
+
+The slide fixes a check's sources: they are the `sources` of its prompt. In
+`review --assessment`, a check that leaves `sources` out (or gives null) takes
+the slide's own. Those are stored with the assessment. Sources that are given
+must be a non-empty list drawn from the slide's. Otherwise the check is refused
+as `input-invalid`, naming the slide, the criterion and the source that is not
+the slide's.
+
+### Presenting with findings
+
+`design present` needs pixel marks on every slide and a creative review with
+nothing unresolved. `design present --accept-findings` also presents a review
+whose assessment is complete but leaves findings unresolved. A person can then
+approve the deck as it stands, and the design session records that decision.
+
+- Every slide must still be marked `reviewed` for the current revision, and the
+  assessment must be recorded and valid. Findings come from the assessment only. Without them the refusal is `rendered-review-stale`, and
+  its `next` says what is missing. Without the flag, a review with findings is
+  refused as before, and `next` names `--accept-findings`.
+- The unresolved items are stored with the rendered review as
+  `{slide,criterion,status,category,detail,objects?}`, where `slide` is the
+  approved slide ID. They are part of the render binding, so the rendered
+  question's ID is bound to them.
+- The rendered question lists the findings on the slides it asks about, as
+  `findings`. Its prompt counts them, and its first option is
+  "Approve these slides with the findings listed". `design status` returns all of
+  them as `renderedFindings`. That list is empty for a deck presented without findings.
+- Only `design respond` with the person's words approves, as for any rendered
+  question. An earlier waiver of the rendered checkpoint does not cover findings:
+  a deck presented with findings always waits for an answer. The response is
+  recorded with `acceptedFindings`. `approve-remaining` is refused as
+  `invalid-response` when a slide outside the question carries findings, because
+  the person has not seen them.
+- The presentation stays current only while the assessment leaves exactly those
+  findings unresolved. A changed assessment, even a clean one, makes `design status`
+  and `design respond` refuse it as `rendered-review-stale` until it is presented again.
 
 ## Paths in records
 
@@ -467,10 +568,10 @@ Without `--json` the same refusal is the same sentence on stderr as before.
 | `assets-busy` | Another asset command holds `.harness-slides/assets.lock` |
 | `provider-missing` | An image provider that is not set up: no API key, or no web sign-in; `provider` names it |
 | `renderer-unavailable` | Poppler or LibreOffice is not installed; `provider` is `poppler` or `libreoffice` |
-| `provider-failed` | A Google access or upload failure during preview (`provider` is `google`), or an image provider that refused or failed (`provider` is `gemini-api` or `gemini-web`; `next` is its own advice) |
+| `provider-failed` | A Google access or upload failure during preview or a Google-rendered review (`provider` is `google`), or an image provider that refused or failed (`provider` is `gemini-api` or `gemini-web`; `next` is its own advice) |
 | `render-failed` | A render that produced no PDF or the wrong page count |
 | `output-exists` | An output directory that already exists |
-| `input-missing`, `input-invalid` | A missing or unreadable input file, `--section` without `--design-project`, a malformed review assessment, or a `review` given the wrong combination of sources |
+| `input-missing`, `input-invalid` | A missing or unreadable input file, `--section` without `--design-project`, a malformed review assessment or one citing sources that are not its slide's, a `review` given the wrong combination of sources, a `review` operation on a folder that holds no review, or a call that mixes preparing with another `review` operation |
 | `unclassified` | Anything else; not recoverable until a person has looked |
 
 ## Native charts
@@ -529,8 +630,7 @@ checked yet; see
   or a native Google snapshot. `compose critique` stays a separate,
   independent-reviewer critique of a preview. It is bound to the preview's deck
   hash, not to the design.
-- `review --compiled` renders with LibreOffice only, not Google. It reviews the
-  whole deck, never a section. It takes no `--fonts`, so its screens measure
+- `review --compiled` reviews the whole deck, never a section. It takes no `--fonts`, so its screens measure
   text with the fonts installed on this computer.
 - The prose-card prompt reads the build's geometry and the approved intent. It
   cannot tell whether a drawn diagram is correct. That judgement is the
@@ -579,6 +679,9 @@ checked yet; see
   [guidance for the release](#guidance-for-the-release) and the sections after it
   to live guidance, with a short note on schema 2, batch mode and `--json` in
   `references/design-records.md`.
+- Issue #67 adds runtime behaviour for 0.14.1 but no version bump. Its guidance
+  lines wait in [guidance for 0.14.1](#guidance-for-0141-composition-review-gaps)
+  until a release raises `minimumRuntime` to 0.14.1.
 
 ## Guidance for the release
 
@@ -761,3 +864,36 @@ that the Google import is unchecked; replace that sentence with its findings.
   > Prefer [compositions](compositions.md) for new slides, charts included. Use
   > these typed components for a deck already built with them, or for a chart
   > linked to Google Sheets.
+
+## Guidance for 0.14.1: composition review gaps
+
+Live guidance on `main` requires only 0.14.0, which has no `--renderer` on
+`review`, no `--packets`, no `sources` from the slide and no
+`design present --accept-findings`. These lines go into guidance with the release
+that raises `minimumRuntime` to 0.14.1 (issue #67), and not before:
+
+- `references/compositions.md`, in "Deliver", replace "Inspect each image and
+  mark it, answer every criterion with `review --assessment`, then
+  `design present` the review." with:
+
+  > `review --output REVIEW --packets` returns every slide's picture and
+  > criteria in one call. Inspect each image and mark it, answer every
+  > criterion with `review --assessment`, then `design present` the review.
+  > Without LibreOffice, add `--renderer google` to `review --compiled`: it
+  > renders through Google Drive, and the reviewed deck is still
+  > `REVIEW/deck.pptx`.
+
+- `references/native-critique.md`, after the paragraph that ends "A direct-text
+  slide approved for its reason passes without graphics.":
+
+  > In a composition review a check may leave out `sources`: it takes its
+  > slide's. Sources that are given must be the slide's.
+
+- `references/design-records.md`, in "After rendering", after "For a bound
+  composition, use the `review --compiled` output directory.":
+
+  > When the person is to decide on a deck whose review still lists findings,
+  > run `design present --accept-findings`. The question lists the findings.
+  > Show them with the slides, and record the person's answer with
+  > `design respond`. Never answer it for them.
+

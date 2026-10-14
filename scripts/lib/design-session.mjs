@@ -83,6 +83,15 @@ async function save(project,dir,value){
 const bound=(session,{notes:_,...s})=>[session.plan.title,session.plan.scope,session.plan.slides.map(x=>x.id),s];
 const binding=(session,s)=>canonicalDigest(bound(session,s)),legacyBinding=(session,s)=>digest(bound(session,s));
 function pending(session){return session.plan.slides.filter(s=>session.approvals[s.id]?.binding!==binding(session,s));}
+const findingsOn=(session,ids)=>(session.rendered?.findings??[]).filter(f=>ids.includes(f.slide));
+// The rendered review a question rests on, checked again. A deck presented with findings stays current only while its assessment leaves exactly those unresolved.
+async function checkRendered(project,session,message){
+  const {verifyReview,reviewFindings}=await import('./slide-review.mjs');
+  const record=await verifyReview(recordedLocation(project,session.rendered.review)),accepted=session.rendered.findings;
+  const creative=accepted?.length?Boolean(record.creativeAssessment)&&canonicalDigest(reviewFindings(record))===canonicalDigest(accepted):record.creativeReviewComplete;
+  if(record.revision!==session.rendered.revision||record.creativeQuality?.revision!==session.rendered.qualityRevision||!record.visualReviewComplete||!creative)throw new Error(message);
+}
+const renderedBinding=(revision,qualityRevision,images,findings)=>digest(findings?.length?[revision,qualityRevision,images,findings]:[revision,qualityRevision,images]);
 function questionFor(session){
   if(session.awaitingRevision)return null;
   const phase=pending(session).length?'design':'rendered';
@@ -93,17 +102,19 @@ function questionFor(session){
   const revision=phase==='design'?session.revision:session.rendered.binding,titles=ids.map(id=>session.plan.slides.find(s=>s.id===id).title).join('; ');
   // Batch mode is one question about every pending design, for an approver who answers the plan as a whole.
   const batch=session.mode==='batch'&&phase==='design',whole=ids.length===session.plan.slides.length;
+  // A deck presented with its findings asks about them: the person approves these slides as they stand, with what remains listed.
+  const findings=phase==='rendered'?findingsOn(session,ids):[],n=findings.length;
   return {id:digest([phase,session.revision,revision,ids]),phase,revision,planRevision:session.revision,slides:ids,
-    prompt:batch?`Approve ${whole?'the whole design plan':'the remaining designs'} (${titles}), or request changes?`:phase==='design'?`Approve the proposed design for ${titles}, or request changes?`:`Approve the rendered slides for ${titles}, or request revisions?`,
-    options:batch?[whole?'Approve the whole plan':'Approve these designs','Request changes']:phase==='design'?['Approve this design','Change this design','Review remaining designs together']:['Approve these slides','Request revisions','Review remaining slides together'],
-    wait:true,rule:'Use an available native question tool; otherwise ask in chat. Async return, defaults and elapsed time are not approval.'};
+    prompt:batch?`Approve ${whole?'the whole design plan':'the remaining designs'} (${titles}), or request changes?`:phase==='design'?`Approve the proposed design for ${titles}, or request changes?`:n?`Approve the rendered slides for ${titles} as they stand, with ${n} unresolved finding${n===1?'':'s'} listed in findings, or request revisions?`:`Approve the rendered slides for ${titles}, or request revisions?`,
+    options:batch?[whole?'Approve the whole plan':'Approve these designs','Request changes']:phase==='design'?['Approve this design','Change this design','Review remaining designs together']:[n?'Approve these slides with the findings listed':'Approve these slides','Request revisions','Review remaining slides together'],
+    ...(n?{findings}:{}),wait:true,rule:'Use an available native question tool; otherwise ask in chat. Async return, defaults and elapsed time are not approval.'};
 }
 function statusOf(session,project){
   const waiting=pending(session),question=questionFor(session);
   return {project,revision:session.revision,mode:session.mode,buildAllowed:!waiting.length&&!session.awaitingRevision,pending:waiting.map(s=>s.id),
     status:session.awaitingRevision?'revision requested':waiting.length?'awaiting design approval':!session.rendered?'design approved; build permitted':session.rendered.waived?'rendered user review explicitly waived':session.rendered.approved.length===session.plan.slides.length?'rendered user review approved':'awaiting rendered user review',
     feedback:session.feedback,question,slides:question?.phase==='design'?session.plan.slides.filter(s=>question.slides.includes(s.id)).map((s,i)=>({number:session.plan.slides.findIndex(x=>x.id===s.id)+1,...s})):question?.slides.map(id=>({id,image:recordedLocation(project,session.rendered.images[id])}))??[],
-    renderedRevision:session.rendered?.revision??null,renderedReview:session.rendered?recordedLocation(project,session.rendered.review):null,renderedAcceptance:Boolean(session.rendered&&(session.rendered.waived||session.rendered.approved.length===session.plan.slides.length))};
+    renderedRevision:session.rendered?.revision??null,renderedReview:session.rendered?recordedLocation(project,session.rendered.review):null,renderedFindings:session.rendered?.findings??[],renderedAcceptance:Boolean(session.rendered&&(session.rendered.waived||session.rendered.approved.length===session.plan.slides.length))};
 }
 export async function proposeDesign({project,plan,expected,mode,brand}){
   if(mode!==undefined&&!['guided','batch'].includes(mode))throw refuse('Choose the question mode guided or batch; autonomy is the person\'s answer, not a proposal option',{code:'invalid-proposal'});
@@ -128,7 +139,7 @@ export async function proposeDesign({project,plan,expected,mode,brand}){
     return save(root,dir,session);
   });
 }
-export async function designStatus(project){project=resolve(project);const session=await readSession(project);if(session.rendered){const {verifyReview}=await import('./slide-review.mjs');const record=await verifyReview(recordedLocation(project,session.rendered.review));if(record.revision!==session.rendered.revision||record.creativeQuality?.revision!==session.rendered.qualityRevision||!record.visualReviewComplete||!record.creativeReviewComplete)throw new Error('Rendered review changed; present current output before user approval');}return statusOf(session,project);}
+export async function designStatus(project){project=resolve(project);const session=await readSession(project);if(session.rendered)await checkRendered(project,session,'Rendered review changed; present current output before user approval');return statusOf(session,project);}
 // Where authored slide IDs leave the approved order. A deck starts at the first approved slide and ends at the last;
 // a section starts wherever its first slide is approved and may end early. Null when they follow it.
 function orderProblem(planIds,slideIds,section){
@@ -156,12 +167,16 @@ export async function respondDesign({project,reply}){
   if(!fields(reply,['questionId','planRevision','decision','feedback','waiveRendered'])||!text(reply.feedback)||typeof reply.waiveRendered!=='undefined'&&typeof reply.waiveRendered!=='boolean')throw new Error('Record the actual user response text, questionId, planRevision and decision');
   return locked(project,async(root,dir)=>{
     const session=await readSession(root),question=questionFor(session);
-    if(question?.phase==='rendered'){const {verifyReview}=await import('./slide-review.mjs');const record=await verifyReview(recordedLocation(root,session.rendered.review));if(record.revision!==session.rendered.revision||record.creativeQuality?.revision!==session.rendered.qualityRevision||!record.visualReviewComplete||!record.creativeReviewComplete)throw new Error('Rendered review changed; present current output');}
+    if(question?.phase==='rendered')await checkRendered(root,session,'Rendered review changed; present current output');
     if(!question||reply.questionId!==question.id||reply.planRevision!==session.revision)throw new Error('Question or design revision changed; do not apply a stale/default response');
     if(!['approve','revise','batch','approve-remaining','autonomous'].includes(reply.decision))throw new Error('Unknown design response');
     if(reply.decision==='autonomous'&&question.phase!=='design')throw new Error('Autonomy is chosen before construction; approve or revise rendered output');
     if(reply.waiveRendered&&!(question.phase==='design'&&['autonomous','approve-remaining'].includes(reply.decision)))throw new Error('Only explicit whole-plan/autonomous authorization can waive the rendered checkpoint');
-    session.responses.push({...reply,phase:question.phase,slides:question.slides,at:new Date().toISOString()});
+    // Approving remaining slides must not accept findings the person was not shown.
+    const unshown=question.phase==='rendered'&&reply.decision==='approve-remaining'?(session.rendered.findings??[]).filter(f=>!question.slides.includes(f.slide)&&!session.rendered.approved.includes(f.slide)):[];
+    if(unshown.length)throw refuse(`Approving the remaining slides would accept findings the person has not been shown (${[...new Set(unshown.map(f=>f.slide))].join(', ')}). Ask about the remaining slides together, with their findings`,{code:'invalid-response'});
+    const accepted=question.phase==='rendered'&&['approve','approve-remaining'].includes(reply.decision)?findingsOn(session,reply.decision==='approve-remaining'?session.plan.slides.map(s=>s.id):question.slides):[];
+    session.responses.push({...reply,phase:question.phase,slides:question.slides,...(accepted.length?{acceptedFindings:accepted}:{}),at:new Date().toISOString()});
     if(reply.decision==='batch')session.mode='batch';
     else if(reply.decision==='revise'){
       session.feedback.push({phase:question.phase,slides:question.slides,text:reply.feedback,revision:session.revision,renderRevision:session.rendered?.revision??null});session.awaitingRevision=true;
@@ -178,17 +193,24 @@ export async function respondDesign({project,reply}){
     return save(root,dir,session);
   });
 }
-export async function presentDesign({project,review,revision}){
+// acceptFindings presents a review whose assessment is complete but leaves findings unresolved. They are listed in the question,
+// which is bound to them; only the person's answer approves the deck as it stands. A waived rendered checkpoint does not cover them.
+export async function presentDesign({project,review,revision,acceptFindings=false}){
   return locked(project,async(root,dir)=>{
     const session=await readSession(root);await getApprovedDesign(root);
     review=resolve(review);const record=JSON.parse(await readFile(await regularInside(review,'review.json'),'utf8'));
-    if(record.revision!==revision||!record.visualReviewComplete||!record.creativeReviewComplete||record.designRevision!==session.revision||!record.designBinding)throw new Error('Present requires current pixel inspection and structured creative review bound to this design');
-    const {verifyReview}=await import('./slide-review.mjs');await verifyReview(review,record);if(!record.visualReviewComplete||!record.creativeReviewComplete)throw new Error('Present requires verified pixel and creative receipts');
+    const findingsNext='Resolve the findings and review again, or put the deck to the person with its findings listed: design present --accept-findings';
+    const unfinished=message=>refuse(message,{code:'rendered-review-stale',next:!record.creativeAssessment?'Record the assessment with review --assessment, then design present':acceptFindings?undefined:findingsNext});
+    if(record.revision!==revision||!record.visualReviewComplete||record.designRevision!==session.revision||!record.designBinding)throw new Error('Present requires current pixel inspection and structured creative review bound to this design');
+    if(!record.creativeReviewComplete&&!(acceptFindings&&record.creativeAssessment))throw unfinished('Present requires current pixel inspection and structured creative review bound to this design');
+    const {verifyReview,reviewFindings}=await import('./slide-review.mjs');await verifyReview(review,record);
+    if(!record.visualReviewComplete||!record.creativeReviewComplete&&!(acceptFindings&&record.creativeAssessment))throw unfinished('Present requires verified pixel and creative receipts');
+    const findings=record.creativeReviewComplete?[]:reviewFindings(record);
     const images={};for(const slide of record.slides){const id=record.designBinding.find(x=>x.nativeId===slide.id)?.planId;if(!id||images[id])throw new Error('Rendered slides must map once to the approved design');images[id]=recordedPath(root,join(review,slide.image),root);}
     if(Object.keys(images).length!==session.plan.slides.length)throw new Error('Rendered coverage differs from the approved plan');
     // The same render presented again keeps its approvals. Compared by content, so a session migrated from absolute paths still matches.
-    const renderBinding=digest([revision,record.creativeQuality.revision,images]),current=session.rendered&&digest([session.rendered.revision,session.rendered.qualityRevision,session.rendered.images]);
-    if(current!==renderBinding)session.rendered={revision,binding:renderBinding,qualityRevision:record.creativeQuality.revision,review:recordedPath(root,review,root),images,approved:[],waived:session.waiveRendered};
+    const renderBinding=renderedBinding(revision,record.creativeQuality.revision,images,findings),current=session.rendered&&renderedBinding(session.rendered.revision,session.rendered.qualityRevision,session.rendered.images,session.rendered.findings);
+    if(current!==renderBinding)session.rendered={revision,binding:renderBinding,qualityRevision:record.creativeQuality.revision,review:recordedPath(root,review,root),images,approved:[],waived:findings.length?false:session.waiveRendered,...(findings.length?{findings}:{})};
     return save(root,dir,session);
   });
 }
