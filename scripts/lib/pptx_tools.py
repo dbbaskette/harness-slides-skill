@@ -107,12 +107,22 @@ def shape_id(shape):
     return item.get('id') if item is not None else None
 
 
-def icon_index(file, catalog):
+def has_text(shape):
+    return any((t.text or '').strip() for t in shape.findall('.//a:t', NS))
+
+
+def outer(boxes):
+    left, top = min(b[0] for b in boxes), min(b[1] for b in boxes)
+    return [left, top, max(b[0] + b[2] for b in boxes) - left, max(b[1] + b[3] for b in boxes) - top]
+
+
+def icon_regions(file, catalog):
+    """Each catalog label with the drawable shapes in its region: the column above it, back to the previous label row."""
     pkg, data = load(file)
     digest = hashlib.sha256(data).hexdigest()
     if digest != catalog['source']['sha256']:
         raise ValueError('Icon source does not match the approved catalog')
-    entries = []
+    regions = []
     for page in catalog['catalogPages']:
         tree = pkg.xml(f"ppt/slides/slide{page['slide']}.xml").find('p:cSld/p:spTree', NS)
         labels = []
@@ -134,31 +144,56 @@ def icon_index(file, catalog):
             raise ValueError('Catalog label order differs from source')
         for ordinal, (label, x, y, width) in enumerate(labels, 1):
             previous_y = max([ly for _, lx, ly, lw in labels if ly < y and abs(lx - x) < width / 2] or [0])
-            selected = []
+            region = []
             for shape in tree:
                 b = box(shape)
                 if shape.tag.rsplit('}', 1)[-1] not in ICON_KINDS or not b:
-                    continue
-                if any((t.text or '').strip() for t in shape.findall('.//a:t', NS)):
                     continue
                 sx, sy, sw, sh = b
                 if sw > width * 1.1 or sh > y - previous_y:
                     continue
                 if x <= sx + sw / 2 < x + width and previous_y < sy + sh / 2 < y:
-                    selected.append((shape, b))
-            ident = f"fi-{digest[:8]}-s{page['slide']:03d}-l{ordinal:03d}"
-            bounds = None
-            if selected:
-                left = min(b[0] for _, b in selected)
-                top = min(b[1] for _, b in selected)
-                right = max(b[0] + b[2] for _, b in selected)
-                bottom = max(b[1] + b[3] for _, b in selected)
-                bounds = [left, top, right - left, bottom - top]
-            entries.append(dict(id=ident, slide=page['slide'], labelIndex=ordinal, label=label,
-                                shapeIds=[shape_id(s) for s, _ in selected], bounds=bounds,
-                                native=bool(selected) and not any(s.findall('.//p:pic', NS) or s.tag.endswith('}pic') for s, _ in selected),
-                                preview=f'references/icon-previews/{ident}.png' if selected else None))
+                    region.append((shape, b))
+            regions.append((f"fi-{digest[:8]}-s{page['slide']:03d}-l{ordinal:03d}", page['slide'], ordinal, label, region))
+    return digest, regions
+
+
+def icon_shapes(region):
+    """The shapes of an icon, chosen by position. Shapes without text are its body. A shape with text belongs
+    to the icon when its centre lies within the body, as lettering on a disc does; outside it, it is a caption."""
+    body = [b for s, b in region if not has_text(s)]
+    if not body:
+        return []
+    left, top, w, h = outer(body)
+    return [(s, b) for s, b in region if not has_text(s) or (left <= b[0] + b[2] / 2 <= left + w and top <= b[1] + b[3] / 2 <= top + h)]
+
+
+def icon_index(file, catalog):
+    digest, regions = icon_regions(file, catalog)
+    entries = []
+    for ident, slide, ordinal, label, region in regions:
+        selected = icon_shapes(region)
+        entries.append(dict(id=ident, slide=slide, labelIndex=ordinal, label=label,
+                            shapeIds=[shape_id(s) for s, _ in selected], bounds=outer([b for _, b in selected]) if selected else None,
+                            native=bool(selected) and not any(s.findall('.//p:pic', NS) or s.tag.endswith('}pic') for s, _ in selected),
+                            preview=f'references/icon-previews/{ident}.png' if selected else None))
     return dict(schemaVersion=1, sourceSha256=digest, entries=entries)
+
+
+def icon_index_check(file, catalog):
+    """Entries that list fewer shapes than their region holds, with what was left out, and entries that list a disc alone."""
+    _, regions = icon_regions(file, catalog)
+    short, disc_only = [], []
+    for ident, _, _, label, region in regions:
+        selected = icon_shapes(region)
+        if len(selected) < len(region):
+            kept = {id(s) for s, _ in selected}
+            short.append(dict(id=ident, label=label, listed=len(selected), region=len(region),
+                              left=[dict(id=shape_id(s), text=' '.join((t.text or '').strip() for t in s.findall('.//a:t', NS)).strip())
+                                    for s, _ in region if id(s) not in kept]))
+        if len(selected) == 1 and selected[0][0].find('p:spPr/a:prstGeom[@prst="ellipse"]', NS) is not None:
+            disc_only.append(dict(id=ident, label=label))
+    return dict(entries=len(regions), short=short, discOnly=disc_only)
 
 
 def native_group(pkg, entry):
@@ -367,7 +402,9 @@ if __name__ == '__main__':
         if action == 'inventory':
             result = inventory(args[0])
         elif action == 'icon-index':
-            result = icon_index(args[0], json.loads(Path(args[1]).read_text()))
+            if len(args) not in (2, 3) or args[2:] not in ([], ['--check']):
+                raise ValueError('Use icon-index <source.pptx> <catalog.json> [--check]')
+            result = (icon_index_check if args[2:] else icon_index)(args[0], json.loads(Path(args[1]).read_text()))
         elif action == 'icon-copy':
             request = json.loads(args[0])
             request['index'] = json.loads(Path(request['index']).read_text())

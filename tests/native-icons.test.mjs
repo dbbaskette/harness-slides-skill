@@ -83,6 +83,33 @@ test('icons and an editable diagram compile to native PPTX with their geometry, 
   assert.match((await exec('unzip',['-p',deck,'ppt/notesSlides/*.xml'])).stdout,/The queue absorbs bursts\./);
 });
 
+test('a lettered icon is indexed with its glyph and not its caption, and its copy draws the letters',async t=>{
+  const dir=await temporary(t),{contract,library,icons}=await iconBrand(dir),vm=icons.find(i=>i.lettered),xml=await part(library.path,'ppt/slides/slide1.xml'),named=numbers(xml);
+  // The glyph group holds text; it is inside the disc, so it is part of the icon. The caption under the disc is in the region but outside the icon.
+  assert.deepEqual(vm.entry.shapeIds,[named.vm_disc,named.vm_glyph]);
+  assert.ok(named.vm_caption&&!vm.entry.shapeIds.includes(named.vm_caption),'the caption text box is not part of the icon');
+  assert.deepEqual(vm.entry.bounds,[480,90,80,80].map(v=>v*12700),'the icon is the disc, not the disc and its caption');
+  assert.ok(vm.entry.native);
+  const listing=JSON.parse(await readFile(library.index,'utf8'));
+  assert.deepEqual(listing.entries.filter(e=>e.shapeIds.length<2).map(e=>e.id),[],'no entry lists a disc alone');
+
+  // The diagnostic: entries with fewer shapes than their region holds, and entries that list a disc alone.
+  const check=await pptxTool('icon-index',[library.path,library.catalog,'--check']);
+  assert.deepEqual(check,{entries:4,short:[{id:vm.entry.id,label:'Virtual Machine',listed:2,region:3,left:[{id:named.vm_caption,text:'Caption'}]}],discOnly:[]});
+  // Without --check the indexer's output is the index itself.
+  assert.deepEqual(await pptxTool('icon-index',[library.path,library.catalog]),listing);
+
+  // The native copy, through compose and render, carries the letters and the bar on the disc.
+  const comp={version:1,title:'Icons',slides:[{id:'icon_slide',title:'A lettered icon',sources:['brief:test'],canvas:{type:'stack',direction:'row',children:[{type:'icon',id:'vm_icon',icon:vm.entry.id},{type:'box',id:'side_box',text:'Beside it',weight:3}]}}]};
+  const deck=join(dir,'deck.pptx');await emitNativePptx({...await compileComposition(comp,contract),brand:contract,output:deck,base:dir});
+  const group=iconGroup(await part(deck,'ppt/slides/harnessSlide1.xml'),'vm_icon');
+  assert.ok(group,'the icon is a group in the deck');
+  assert.match(group,/<a:prstGeom prst="ellipse">.*<p:grpSp>.*<a:t>VM<\/a:t>.*<\/p:sp><p:sp>.*<a:prstGeom prst="rect">/s,'the copy draws the disc, then the lettering and the bar');
+  // The standalone copy draws the letters too.
+  const single=join(dir,'vm.pptx');await pptxTool('icon-copy',[JSON.stringify({source:library.path,index:library.index,ident:vm.entry.id,output:single})]);
+  assert.match(await part(single,'ppt/slides/slide1.xml'),/<a:t>VM<\/a:t>/);
+});
+
 test('an icon whose library slide repeats one of its shape IDs is refused by name rather than copied wrong',async t=>{
   const dir=await temporary(t),{contract,library,icons}=await iconBrand(dir),[database,gateway]=icons,repeated=join(dir,'repeated.pptx'),catalog=join(dir,'repeated-catalog.json');
   // Give the gateway's disc the database disc's ID, then index and hash the changed library as a brand would.
