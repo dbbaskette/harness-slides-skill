@@ -46,6 +46,7 @@ const known=[
   [/Rendered review changed|Present requires|Rendered slides must map|Rendered coverage differs/,'rendered-review-stale'],
   [/Review revision changed|Assess the current creative review revision/,'review-stale'],
   [/Critique needs a judgment|Critique must|Use slide-specific evidence|Answer teaching-treatment|Provide revision, slide numbers/,'input-invalid'],
+  [/Prepare native review first|Prepare and mark are separate|Prepare structured creative review first|Unknown creative review slide/,'input-invalid'],
   [/Poppler/,'renderer-unavailable','poppler'],
   [/LibreOffice \(soffice\) is not installed/,'renderer-unavailable','libreoffice'],
   [/gcloud|Google API|Drive /,'provider-failed','google'],

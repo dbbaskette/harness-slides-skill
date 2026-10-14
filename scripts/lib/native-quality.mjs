@@ -70,7 +70,7 @@ const listed=items=>items.length<2?items.join(''):`${items.slice(0,-1).join(', '
 const inside=(a,b)=>a.x<=b.x+.5&&a.y<=b.y+.5&&a.x+a.width>=b.x+b.width-.5&&a.y+a.height>=b.y+b.height-.5;
 // A compiled composition judged against its approved design, with the same criteria as a native deck.
 // screens are compose preview's findings for this build; they are prompts to look, never approval.
-export function auditCompositionReview({scene,structure,report,plan,designRevision,screens=[],binding,builtArtifactDigest,artifactDigest}){
+export function auditCompositionReview({scene,structure,report,plan,designRevision,screens=[],binding,builtArtifactDigest,artifactDigest,renderer='local'}){
   if(scene.slides.length!==plan.slides.length||scene.slides.some((s,i)=>s.id!==plan.slides[i].id))throw new Error('The compiled slides differ from the approved design');
   const findings=[],prompts=[],templated=new Set((structure.layouts??[]).filter(l=>l.layout!=='@subtitled').map(l=>l.slide)),direct=new Set(plan.slides.filter(s=>s.intent.visual.family==='text').map(s=>s.id));
   for(const f of screens){const {metrics:_,...finding}=f,category=findingCategory(f.code);findings.push({...finding,category:category==='visual-teaching'&&direct.has(f.slide)?'direct-text':category});}
@@ -104,7 +104,7 @@ export function auditCompositionReview({scene,structure,report,plan,designRevisi
   const groups=[...new Set(findings.filter(f=>f.code==='similar-geometry').map(f=>JSON.stringify(f.relatedSlides)))].map(g=>JSON.parse(g));
   const quality={schema:1,policy:3,kind:'composition',sceneDigest:digest(scene),structureDigest:digest(structure),designRevision,build:binding,assets,builtArtifactDigest,artifactDigest,
     bindings:plan.slides.map(s=>({planId:s.id,slide:s.id})),prompts,findings,deckReview:{groups,questions:['What does each visual make easier to understand than the same words in a list?','Which repeated geometry supports comparison, and which different relationship needs recomposition?']},
-    limitations:['Screens and prose-card prompts point at slides to look at; they do not judge comprehension.','The rendered deck is a LibreOffice render; verify fidelity in the target editor.']};
+    limitations:['Screens and prose-card prompts point at slides to look at; they do not judge comprehension.',renderer==='google'?'The rendered deck is a Google Slides import of the reviewed PPTX, exported to PDF; verify fidelity in the target editor.':'The rendered deck is a LibreOffice render; verify fidelity in the target editor.']};
   quality.revision=digest(quality);return quality;
 }
 // The review in five categories: prompts from the build, judgements from the assessment, and the slides approved as direct text.

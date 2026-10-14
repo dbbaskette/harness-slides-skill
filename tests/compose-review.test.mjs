@@ -3,30 +3,32 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {execFile} from 'node:child_process';
-import {readFile,writeFile} from 'node:fs/promises';
+import {readFile,writeFile,mkdir} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {proposeDesign,respondDesign,presentDesign,designStatus} from '../scripts/lib/design-session.mjs';
 import {compileCompositionFile} from '../scripts/lib/compose-file.mjs';
 import {prepareReview,markReview,assessReview,inspectReview,verifyReview} from '../scripts/lib/slide-review.mjs';
+import * as reviewLib from '../scripts/lib/slide-review.mjs';
 import {problemsOf} from '../scripts/lib/refusals.mjs';
 import {temporary} from './fixtures.mjs';
 
 const cli=fileURLToPath(new URL('../scripts/harness-slides.mjs',import.meta.url)),fixture=fileURLToPath(new URL('fixtures/visual-contract/',import.meta.url));
 const read=async name=>JSON.parse(await readFile(join(fixture,name),'utf8'));
-const run=args=>new Promise(done=>execFile(process.execPath,[cli,...args],{timeout:120000},(error,stdout,stderr)=>done({code:error?error.code??1:0,stdout,stderr})));
+const run=(args,env)=>new Promise(done=>execFile(process.execPath,[cli,...args],{timeout:120000,...(env?{env:{...process.env,...env}}:{})},(error,stdout,stderr)=>done({code:error?error.code??1:0,stdout,stderr})));
 const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a1ZkAAAAASUVORK5CYII=','base64');
 // Synthetic pixels stand in for LibreOffice: these tests cover state and judgement, not layout.
 const pixels=(count)=>async({output,selected})=>{for(const n of selected)await writeFile(join(output,`page-${n}.png`),Buffer.concat([png,Buffer.from(`slide ${n}`)]));return {count,image:n=>join(output,`page-${n}.png`)};};
 const codeOf=async promise=>{try{await promise;}catch(error){return problemsOf(error)[0].code;}assert.fail('expected a refusal');};
 
-async function approve(project,plan){
+async function approve(project,plan,reply={}){
   const proposed=await proposeDesign({project,plan,mode:'batch'});
-  return respondDesign({project,reply:{questionId:proposed.question.id,planRevision:proposed.revision,decision:'approve',feedback:'Approve the whole plan'}});
+  return respondDesign({project,reply:{questionId:proposed.question.id,planRevision:proposed.revision,decision:'approve',feedback:'Approve the whole plan',...reply}});
 }
 // The contract proposal, approved, and one composition of it compiled against that approval.
-async function built(t,composition='composition.json'){
-  const project=await temporary(t),plan=await read('proposal.json');await approve(project,plan);
+async function built(t,composition='composition.json',reply){
+  const project=await temporary(t),plan=await read('proposal.json');await approve(project,plan,reply);
   const compiled=join(project,'compiled');await compileCompositionFile({file:join(fixture,composition),'design-project':project,output:compiled});
   const options={compiled,output:join(project,'review'),designProject:project,signature:async()=>'fixture',render:pixels(plan.slides.length)};
   return {project,plan,compiled,options};
@@ -173,4 +175,158 @@ test('an icon placed by asset ID counts as its approved candidate, and the promp
   const placed=audit([{object:'arch_icon',slide:slide.id,asset:'icon_kubernetes',kind:'icon',ref:'fi-0000aaaa-s001-l001',sha256:'e'.repeat(64)}]);
   assert.deepEqual(missing(placed),[]);
   assert.deepEqual(placed.prompts[0].assetObjects,[{object:'arch_icon',icon:'fi-0000aaaa-s001-l001',asset:'icon_kubernetes'}]);
+});
+
+// Stand-ins for Drive and Poppler: they record each call and write what the real tools would. No test reaches Google.
+const sha=data=>createHash('sha256').update(data).digest('hex');
+function googleRoute(pages,{importFails,exportFails,noPoppler}={}){
+  const calls=[],uploads=[];
+  const drive={
+    importDeck:async({file,name})=>{calls.push(['import',name]);if(importFails)throw new Error('Google API request failed (403): the Drive upload was refused');uploads.push(sha(await readFile(file)));return {id:'drive_review_1',url:'https://docs.google.com/presentation/d/drive_review_1/edit'};},
+    updateDeck:async({fileId,file})=>{calls.push(['update',fileId]);uploads.push(sha(await readFile(file)));return {id:fileId,url:`https://docs.google.com/presentation/d/${fileId}/edit`};},
+    exportPdf:async({fileId,output})=>{calls.push(['pdf',fileId]);if(exportFails)throw new Error('Drive did not return a PDF; no output was saved.');await writeFile(output,'%PDF-1.7 stand-in');return {output};}};
+  const run=async(command,args)=>{
+    calls.push([command,args[0]]);
+    if(noPoppler&&/pdf/.test(command))throw Object.assign(new Error(`spawn ${command} ENOENT`),{code:'ENOENT'});
+    if(args[0]==='-v')return {stdout:'',stderr:`${command} version 24.02.0`};
+    if(command==='pdfinfo')return {stdout:`Title: deck\nPages:          ${pages}\n`};
+    if(command==='pdftoppm'){await writeFile(`${args.at(-1)}.png`,Buffer.concat([png,Buffer.from(`google page ${args[1]}`)]));return {stdout:''};}
+    throw Object.assign(new Error(`spawn ${command} ENOENT`),{code:'ENOENT'});
+  };
+  return {calls,uploads,deps:{drive,run}};
+}
+const googleOptions=(f,route,more={})=>({...f.options,render:undefined,signature:undefined,renderer:'google',...route.deps,...more});
+const problemOf=async promise=>{try{await promise;}catch(error){return problemsOf(error)[0];}assert.fail('expected a refusal');};
+
+test('review --compiled renders through Google Drive, binding the receipts to the exact deck it uploaded',async t=>{
+  const f=await built(t),route=googleRoute(f.plan.slides.length),first=await prepareReview(googleOptions(f,route));
+  const r=await record(f),deck=await readFile(join(f.options.output,'deck.pptx'));
+  // The bytes Google drew are the bytes the review hashes; Poppler was checked before anything was uploaded.
+  assert.deepEqual(route.uploads,[r.source.sha256]);assert.equal(sha(deck),r.source.sha256);
+  assert.ok(route.calls.findIndex(c=>c[0]==='import')>route.calls.findIndex(c=>c[0]==='pdftoppm'&&c[1]==='-v'));
+  assert.deepEqual(route.calls.find(c=>c[0]==='import'),['import',`Preview: ${f.plan.title}`]);
+  assert.match(r.renderer,/Google Slides/);assert.match(first.renderer,/Google Slides/);
+  assert.deepEqual([first.fileId,r.remote.fileId,r.remote.provider],['drive_review_1','drive_review_1','google']);assert.match(first.next,/--file-id drive_review_1/);
+  for(const s of r.slides)assert.equal(sha(await readFile(join(f.options.output,s.image))),s.imageSha256);
+  assert.ok(r.creativeQuality.limitations.some(l=>/Google Slides/.test(l)));
+  await markReview({output:f.options.output,revision:first.revision,numbers:[1,2,3],note:'SCRIPTED FIXTURE Google pixels inspected'});
+  const done=await assessReview({output:f.options.output,revision:first.revision,assessment:assessment(r.creativeQuality)});assert.equal(done.readyForUserReview,true);
+  assert.equal((await presentDesign({project:f.project,review:f.options.output,revision:first.revision})).question.phase,'rendered');
+  // An unchanged build keeps its deck, pictures and receipts: nothing is uploaded again.
+  const again=await prepareReview(googleOptions(f,route));assert.equal(again.revision,first.revision);assert.equal(again.readyForUserReview,true);
+  assert.equal(route.calls.filter(c=>['import','update'].includes(c[0])).length,1);
+  // A refresh with --file-id replaces that Drive file's content instead of creating another.
+  const refreshed=googleRoute(f.plan.slides.length);await prepareReview(googleOptions(f,refreshed,{refresh:true,fileId:'drive_review_1'}));
+  assert.deepEqual(refreshed.calls.filter(c=>['import','update'].includes(c[0])),[['update','drive_review_1']]);
+});
+
+test('a Google review names a missing Poppler before uploading, and a Drive failure as provider-failed with the file to reuse',async t=>{
+  const f=await built(t);
+  const missing=googleRoute(3,{noPoppler:true}),problem=await problemOf(prepareReview(googleOptions(f,missing)));
+  assert.deepEqual([problem.code,problem.provider],['renderer-unavailable','poppler']);assert.ok(!missing.calls.some(c=>c[0]==='import'));
+  const refused=await problemOf(prepareReview(googleOptions(f,googleRoute(3,{importFails:true}),{output:join(f.project,'review-2')})));
+  assert.deepEqual([refused.code,refused.provider],['provider-failed','google']);
+  const stranded=await problemOf(prepareReview(googleOptions(f,googleRoute(3,{exportFails:true}),{output:join(f.project,'review-3')})));
+  assert.deepEqual([stranded.code,stranded.provider],['provider-failed','google']);assert.match(stranded.detail,/--file-id drive_review_1/);
+  // On the command line: --renderer is checked, and Poppler is checked before Google is reached.
+  const bad=await run(['review','--compiled',f.compiled,'--output',join(f.project,'cli-1'),'--design-project',f.project,'--renderer','paper','--json']);
+  assert.equal(JSON.parse(bad.stdout).problems[0].code,'input-invalid');
+  const orphan=await run(['review','--compiled',f.compiled,'--output',join(f.project,'cli-2'),'--design-project',f.project,'--file-id','drive_review_1','--json']);
+  assert.equal(JSON.parse(orphan.stdout).problems[0].code,'input-invalid');
+  const cli=await run(['review','--compiled',f.compiled,'--output',join(f.project,'cli-3'),'--design-project',f.project,'--renderer','google','--json'],{HARNESS_PDFINFO:join(f.project,'no-pdfinfo'),HARNESS_PDFTOPPM:join(f.project,'no-pdftoppm')});
+  assert.deepEqual([JSON.parse(cli.stdout).problems[0].code,JSON.parse(cli.stdout).problems[0].provider],['renderer-unavailable','poppler']);
+  // Without LibreOffice the local render names the Google route as the other way.
+  const local=await run(['review','--compiled',f.compiled,'--output',join(f.project,'cli-4'),'--design-project',f.project,'--soffice',join(f.project,'no-soffice'),'--json']);
+  assert.match(JSON.parse(local.stdout).problems[0].next,/--renderer google/);
+});
+
+test('one call returns every slide\'s packet: its picture, plan ID, criteria, prompts and findings',async t=>{
+  const f=await built(t,'composition-prose-cards.json'),prepared=await prepareReview(f.options),r=await record(f);
+  assert.equal(typeof reviewLib.reviewPackets,'function');
+  const packets=await reviewLib.reviewPackets({output:f.options.output});
+  assert.equal(packets.revision,prepared.revision);assert.deepEqual(packets.assessmentBinding,prepared.assessmentBinding);assert.equal(packets.designRevision,r.designRevision);
+  assert.deepEqual(packets.designReview,prepared.designReview);assert.equal(packets.contactSheet,join(f.options.output,'contact-sheet.html'));
+  assert.deepEqual(packets.slides.map(s=>s.planId),f.plan.slides.map(s=>s.id));
+  for(const [i,s] of packets.slides.entries()){
+    assert.deepEqual([s.number,s.id,s.image,s.imageSha256,s.mark],[i+1,r.designBinding[i].nativeId,join(f.options.output,r.slides[i].image),r.slides[i].imageSha256,null]);
+    const one=await inspectReview({output:f.options.output,slide:s.planId});assert.deepEqual(s.packet,one.slide);assert.deepEqual(s.findings,one.findings);
+  }
+  assert.ok(packets.slides.find(s=>s.planId==='reconcile_loop').packet.criteria.some(c=>c.id==='teaching-treatment'));
+  await markReview({output:f.options.output,revision:prepared.revision,numbers:[2],note:'SCRIPTED FIXTURE pixels inspected'});
+  assert.equal((await reviewLib.reviewPackets({output:f.options.output})).slides[1].mark.status,'reviewed');
+  const cli=await run(['review','--output',f.options.output,'--packets','--json']);assert.equal(cli.code,0,cli.stdout);
+  assert.deepEqual(JSON.parse(cli.stdout).slides.map(s=>s.planId),f.plan.slides.map(s=>s.id));
+  const both=await run(['review','--output',f.options.output,'--packets','--slide','reconcile_loop','--json']);assert.equal(JSON.parse(both.stdout).problems[0].code,'input-invalid');
+});
+
+test('asking for a review that was never prepared, or mixing prepare with another operation, is input-invalid with the next step',async t=>{
+  const project=await temporary(t),empty=join(project,'empty');await mkdir(empty);
+  for(const args of [['review','--output',empty,'--slide','reconcile_loop','--json'],['review','--output',empty,'--mark','1','--revision','r','--note','n','--compiled',project,'--json']]){
+    const value=JSON.parse((await run(args)).stdout),[p]=value.problems;
+    assert.equal(p.code,'input-invalid',p.detail);assert.equal(p.recoverable,true);
+  }
+  const [never]=JSON.parse((await run(['review','--output',empty,'--slide','reconcile_loop','--json'])).stdout).problems;
+  assert.match(never.detail,/Prepare native review first/);assert.match(never.next,/review --compiled/);
+  const [mixed]=JSON.parse((await run(['review','--output',empty,'--mark','1','--revision','r','--note','n','--compiled',project,'--json'])).stdout).problems;
+  assert.match(mixed.detail,/Prepare and mark are separate operations/);assert.match(mixed.next,/separate/);
+  assert.equal(await codeOf(inspectReview({output:empty,slide:'x'})),'input-invalid');
+});
+
+test('an assessment may leave out sources and takes each slide\'s own; sources that are not the slide\'s are refused',async t=>{
+  const f=await built(t),prepared=await prepareReview(f.options),q=(await record(f)).creativeQuality;
+  const bare=assessment(q);for(const s of bare.slides)for(const c of s.checks)delete c.sources;
+  const stray=assessment(q,(p,c)=>p.slide==='reconcile_loop'&&c.id==='explanatory-value'?{criterion:c.id,status:'pass',reason:'SCRIPTED FIXTURE the loop is drawn',objects:p.objects,sources:['brief:elsewhere']}:null);
+  const refused=await problemOf(assessReview({output:f.options.output,revision:prepared.revision,assessment:stray}));
+  assert.equal(refused.code,'input-invalid');for(const words of [/reconcile_loop/,/explanatory-value/,/brief:elsewhere/])assert.match(refused.detail,words);
+  await markReview({output:f.options.output,revision:prepared.revision,numbers:[1,2,3],note:'SCRIPTED FIXTURE pixels inspected'});
+  const done=await assessReview({output:f.options.output,revision:prepared.revision,assessment:bare});assert.equal(done.readyForUserReview,true);
+  const kept=(await record(f)).creativeAssessment;
+  for(const s of kept.slides)for(const c of s.checks)assert.deepEqual(c.sources,q.prompts.find(p=>p.slide===s.id).sources);
+  await verifyReview(f.options.output);
+});
+
+test('design present --accept-findings puts the deck to the person with its findings listed, and only their answer records it',async t=>{
+  const f=await built(t),prepared=await prepareReview(f.options),q=(await record(f)).creativeQuality,output=f.options.output;
+  await markReview({output,revision:prepared.revision,numbers:[1,2,3],note:'SCRIPTED FIXTURE pixels inspected'});
+  // Before an assessment there is nothing to accept.
+  assert.equal(await codeOf(presentDesign({project:f.project,review:output,revision:prepared.revision,acceptFindings:true})),'rendered-review-stale');
+  const issue=(p,c)=>p.slide==='operator_architecture'&&c.id==='explanatory-value'?{criterion:c.id,status:'issue',reason:'SCRIPTED FIXTURE the operator is not set apart from the cluster it watches',objects:p.objects,sources:p.sources}:null;
+  const judged=await assessReview({output,revision:prepared.revision,assessment:assessment(q,issue)});assert.equal(judged.readyForUserReview,false);
+  const plain=await problemOf(presentDesign({project:f.project,review:output,revision:prepared.revision}));
+  assert.equal(plain.code,'rendered-review-stale');assert.match(plain.next,/--accept-findings/);
+  const shown=await presentDesign({project:f.project,review:output,revision:prepared.revision,acceptFindings:true});
+  assert.equal(shown.question.phase,'rendered');assert.equal(shown.renderedAcceptance,false);assert.equal(shown.status,'awaiting rendered user review');
+  const listed=[['operator_architecture','explanatory-value','issue','visual-teaching']];
+  assert.deepEqual(shown.renderedFindings.map(x=>[x.slide,x.criterion,x.status,x.category]),listed);
+  assert.deepEqual(shown.question.findings.map(x=>[x.slide,x.criterion,x.status,x.category]),listed);
+  assert.match(shown.question.prompt,/1 unresolved finding/);assert.match(shown.question.findings[0].detail,/not set apart/);
+  // Presented again unchanged: the same question.
+  assert.equal((await presentDesign({project:f.project,review:output,revision:prepared.revision,acceptFindings:true})).question.id,shown.question.id);
+  const answered=await respondDesign({project:f.project,reply:{questionId:shown.question.id,planRevision:shown.revision,decision:'approve',feedback:'Ship it as it is; the operator slide can wait for the next run.'}});
+  assert.equal(answered.renderedAcceptance,true);assert.equal(answered.status,'rendered user review approved');assert.deepEqual(answered.renderedFindings.map(x=>x.criterion),['explanatory-value']);
+  const session=JSON.parse(await readFile(join(f.project,'.harness-slides/design/session.json'),'utf8')),response=session.responses.at(-1);
+  assert.equal(response.phase,'rendered');assert.match(response.feedback,/Ship it/);assert.deepEqual(response.acceptedFindings.map(x=>x.criterion),['explanatory-value']);
+  assert.equal((await designStatus(f.project)).renderedAcceptance,true);
+  // The accepted findings are bound: a changed assessment makes the presentation stale.
+  await assessReview({output,revision:prepared.revision,assessment:assessment(q)});
+  assert.equal(await codeOf(designStatus(f.project)),'rendered-review-stale');
+  // On the command line.
+  await assessReview({output,revision:prepared.revision,assessment:assessment(q,issue)});
+  const cli=await run(['design','present','--project',f.project,'--output',output,'--revision',prepared.revision,'--accept-findings','--json']);assert.equal(cli.code,0,cli.stdout);
+  assert.deepEqual(JSON.parse(cli.stdout).renderedFindings.map(x=>x.criterion),['explanatory-value']);
+});
+
+test('a waived rendered checkpoint does not cover findings: a person still answers',async t=>{
+  const f=await built(t,'composition.json',{decision:'autonomous',waiveRendered:true,feedback:'Build it all; I do not need to see the render.'}),prepared=await prepareReview(f.options),q=(await record(f)).creativeQuality,output=f.options.output;
+  await markReview({output,revision:prepared.revision,numbers:[1,2,3],note:'SCRIPTED FIXTURE pixels inspected'});
+  await assessReview({output,revision:prepared.revision,assessment:assessment(q)});
+  assert.equal((await presentDesign({project:f.project,review:output,revision:prepared.revision})).renderedAcceptance,true);
+  await assessReview({output,revision:prepared.revision,assessment:assessment(q,(p,c)=>p.slide==='reconcile_loop'&&c.id==='approved-design'?{criterion:c.id,status:'uncertain',reason:'SCRIPTED FIXTURE the loop arrow may not read as returning',objects:p.objects,sources:p.sources}:null)});
+  const shown=await presentDesign({project:f.project,review:output,revision:prepared.revision,acceptFindings:true});
+  assert.equal(shown.renderedAcceptance,false);assert.equal(shown.question.phase,'rendered');assert.deepEqual(shown.renderedFindings.map(x=>x.category),['design-deviation']);
+  // Asked one slide at a time, approving the rest would accept a finding the person was not shown.
+  const guided=await proposeDesign({project:f.project,plan:f.plan,expected:shown.revision,mode:'guided'});
+  assert.deepEqual([guided.question.slides,guided.question.findings],[['operator_architecture'],undefined]);
+  const skipped=await problemOf(respondDesign({project:f.project,reply:{questionId:guided.question.id,planRevision:guided.revision,decision:'approve-remaining',feedback:'Approve the rest too.'}}));
+  assert.equal(skipped.code,'invalid-response');assert.match(skipped.detail,/reconcile_loop/);
 });
