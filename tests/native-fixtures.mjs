@@ -124,3 +124,19 @@ export function iconComposition(id) {
     {id:'styles_slide',title:'Each icon style keeps its drawing',sources:['brief:test'],
       canvas:{type:'grid',columns:3,children:[card('solid',id.Database,'Solid',{color:'accentAqua'}),card('ring',id.Gateway,'Outline',{color:'headingPrimary',style:'outline'}),card('bare',id.Queue,'Plain',{color:'headingPrimary',style:'plain'})]}}]};
 }
+
+// A brand with three chart colors, so a pie can have three slices, and a deck with one bar, one line and one pie chart.
+export async function chartBrand(dir,options) {
+  const c=await brand(dir,options);c.design.slides.chart={seriesRoles:['headingPrimary','accentAqua','inkSecondary'],axisFontPt:16};
+  c.revision=contractRevision(c);return c;
+}
+export function chartComposition() {
+  const slide=(id,title,canvas,extra={})=>({id,title,sources:['brief:test'],brief:{relation:'quantity'},canvas,...extra});
+  return {version:1,title:'Bookings',slides:[
+    slide('bar_slide','Bookings grew in every region',{type:'chart',id:'bookings_chart',kind:'bar',title:'Bookings by region',units:'$M',source:'Finance close, Q3 2026',
+      data:{categories:['North','South','West'],series:[{name:'2025',values:[12.5,9,7]},{name:'2026',values:[15,11.25,8]}]}},{notes:'Every region grew.'}),
+    slide('line_slide','Weekly active teams doubled in four months',{type:'chart',id:'teams_chart',kind:'line',units:'Teams',
+      data:{categories:['June','July','August','September'],series:[{name:'Active teams',values:[300,420,515,640]}]}},{source:'Product analytics'}),
+    slide('pie_slide','Half of new bookings are self-serve',{type:'chart',id:'channel_chart',kind:'pie',title:'Bookings by channel',
+      data:{categories:['Self-serve','Partner','Direct'],series:[{name:'Share',values:[50,30,20]}]}})]};
+}

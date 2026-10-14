@@ -28,7 +28,7 @@ export async function renderPptxScene(scene,output,{base=process.cwd(),brand}={}
         slide.addImage({...box,w:dimensions.width/72,h:dimensions.height/72,path,altText:e.alt,sizing:{type:e.fit??'contain',w:box.w,h:box.h}});
       } else {
         const kind=({bar:pptx.ChartType.bar,line:pptx.ChartType.line,pie:pptx.ChartType.pie})[e.chartType];
-        slide.addChart(kind,structuredClone(e.series),{...box,showTitle:false,showLegend:e.series.length>1,catAxisLabelFontFace:t.font,valAxisLabelFontFace:t.font,catAxisLabelFontSize:e.labelSize??14,valAxisLabelFontSize:e.labelSize??14,showValue:true,valAxisMinVal:e.chartType==='bar'?(()=>{const values=e.series.flatMap(s=>s.values),lo=Math.min(0,...values),hi=Math.max(0,...values);return lo<0?lo-Math.max(1,(hi-lo)*.15):0;})():undefined,varyColors:false,chartColors:e.colors?e.colors.map(hex):[hex('accent'),'777777','AAAAAA']});
+        slide.addChart(kind,structuredClone(e.series),{...box,showTitle:Boolean(e.title),...(e.title?{title:e.title,titleFontFace:t.font,titleFontSize:e.labelSize??14}:{}),...(e.units?{showValAxisTitle:true,valAxisTitle:e.units,valAxisTitleFontFace:t.font,valAxisTitleFontSize:e.labelSize??14}:{}),showLegend:e.series.length>1,catAxisLabelFontFace:t.font,valAxisLabelFontFace:t.font,catAxisLabelFontSize:e.labelSize??14,valAxisLabelFontSize:e.labelSize??14,showValue:true,valAxisMinVal:e.chartType==='bar'?(()=>{const values=e.series.flatMap(s=>s.values),lo=Math.min(0,...values),hi=Math.max(0,...values);return lo<0?lo-Math.max(1,(hi-lo)*.15):0;})():undefined,varyColors:false,chartColors:e.colors?e.colors.map(hex):[hex('accent'),'777777','AAAAAA']});
       }
     }
   }

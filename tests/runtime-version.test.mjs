@@ -13,7 +13,7 @@ test('workspace restore still accepts its existing --version ID after adding --v
 
 test('version reports the capabilities of the executing runtime as a stable, sorted list of names',async()=>{
   const record=JSON.parse((await exec(process.execPath,[cli,'version'])).stdout);
-  assert.deepEqual(record.capabilities,['assets','canonical-digests','compose-review','compose-section','design-batch','design-schema-2','json-refusals','relative-records']);
+  assert.deepEqual(record.capabilities,['assets','canonical-digests','compose-review','compose-section','design-batch','design-schema-2','json-refusals','native-charts','relative-records']);
   // Every name is documented in the integration contract, which is how callers learn what each one means.
   const contract=await readFile(new URL('../docs/specs/2026-10-14-design-integration-contract.md',import.meta.url),'utf8');
   for(const name of record.capabilities)assert.match(contract,new RegExp(`\\| \`${name}\` \\|`),`${name} is not documented`);

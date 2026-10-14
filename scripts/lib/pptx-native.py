@@ -12,6 +12,7 @@ media are copied byte for byte.
 """
 import hashlib
 import importlib.util
+import io
 import json
 import posixpath
 import re
@@ -42,6 +43,11 @@ SITES = {
 }
 ROUTES = {'elbow': 'bentConnector', 'curve': 'curvedConnector'}
 IMAGE_TYPES = {'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'gif': 'image/gif'}
+CHART_NS = 'http://schemas.openxmlformats.org/drawingml/2006/chart'
+CHART_TYPE = 'application/vnd.openxmlformats-officedocument.drawingml.chart+xml'
+XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+SHEET_NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
+SHEET_CT = 'application/vnd.openxmlformats-officedocument.spreadsheetml'
 
 
 def TAG(name):
@@ -143,6 +149,159 @@ def non_visual(tag, number, name, extra='', inner='', descr=''):
             f'<p:cNv{tag}Pr{extra}>{inner}</p:cNv{tag}Pr><p:nvPr/></p:nv{tag}Pr>')
 
 
+def column(index):
+    """Spreadsheet column letters for a zero-based index: 0 is A, 26 is AA."""
+    letters, index = '', index + 1
+    while index:
+        index, rest = divmod(index - 1, 26)
+        letters = chr(65 + rest) + letters
+    return letters
+
+
+def number(value):
+    """A chart or cell value as text: whole numbers without a decimal point, others in their shortest exact form."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value != value or value in (float('inf'), float('-inf')):
+        raise ValueError(f'chart values are numbers, not {value!r}')
+    return str(int(value)) if float(value).is_integer() and abs(value) < 1e15 else repr(float(value))
+
+
+def workbook(categories, series):
+    """A minimal workbook holding a chart's data: categories down column A, one column per series, names in row 1.
+
+    PowerPoint opens it when the chart's data is edited. It is written with the standard library only.
+    """
+    strings, index, uses = [], {}, 0
+
+    def shared(value):
+        nonlocal uses
+        uses += 1
+        if value not in index:
+            index[value] = len(strings)
+            strings.append(value)
+        return index[value]
+
+    rows = ['<row r="1">' + ''.join(f'<c r="{column(i + 1)}1" t="s"><v>{shared(s["name"])}</v></c>' for i, s in enumerate(series)) + '</row>']
+    for r, category in enumerate(categories, 2):
+        cells = f'<c r="A{r}" t="s"><v>{shared(category)}</v></c>'
+        cells += ''.join(f'<c r="{column(i + 1)}{r}"><v>{number(s["values"][r - 2])}</v></c>' for i, s in enumerate(series))
+        rows.append(f'<row r="{r}">{cells}</row>')
+    parts = {
+        '[Content_Types].xml': (f'{HEAD}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+                                '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+                                '<Default Extension="xml" ContentType="application/xml"/>'
+                                f'<Override PartName="/xl/workbook.xml" ContentType="{SHEET_CT}.sheet.main+xml"/>'
+                                f'<Override PartName="/xl/worksheets/sheet1.xml" ContentType="{SHEET_CT}.worksheet+xml"/>'
+                                f'<Override PartName="/xl/styles.xml" ContentType="{SHEET_CT}.styles+xml"/>'
+                                f'<Override PartName="/xl/sharedStrings.xml" ContentType="{SHEET_CT}.sharedStrings+xml"/></Types>'),
+        '_rels/.rels': rels_xml([('rId1', f'{REL}/officeDocument', 'xl/workbook.xml')]),
+        'xl/workbook.xml': (f'{HEAD}<workbook xmlns="{SHEET_NS}" xmlns:r="{REL}"><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>'),
+        'xl/_rels/workbook.xml.rels': rels_xml([('rId1', f'{REL}/worksheet', 'worksheets/sheet1.xml'), ('rId2', f'{REL}/styles', 'styles.xml'),
+                                                ('rId3', f'{REL}/sharedStrings', 'sharedStrings.xml')]),
+        'xl/worksheets/sheet1.xml': (f'{HEAD}<worksheet xmlns="{SHEET_NS}"><dimension ref="A1:{column(len(series))}{len(categories) + 1}"/>'
+                                     f'<sheetData>{"".join(rows)}</sheetData></worksheet>'),
+        'xl/sharedStrings.xml': (f'{HEAD}<sst xmlns="{SHEET_NS}" count="{uses}" uniqueCount="{len(strings)}">'
+                                 + ''.join(f'<si><t xml:space="preserve">{text(value)}</t></si>' for value in strings) + '</sst>'),
+        'xl/styles.xml': (f'{HEAD}<styleSheet xmlns="{SHEET_NS}"><fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>'
+                          '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>'
+                          '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
+                          '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+                          '<cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>'
+                          '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>'),
+    }
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as book:
+        for name, value in parts.items():
+            # A fixed date keeps the workbook's bytes the same for the same data.
+            book.writestr(zipfile.ZipInfo(name, (1980, 1, 1, 0, 0, 0)), value.encode('utf-8'), zipfile.ZIP_DEFLATED)
+    return buffer.getvalue()
+
+
+def chart_xml(e, font):
+    """A DrawingML chart part: a bar, line or pie chart whose cached values match its workbook, in the given colors and font."""
+    kind, series = e['chartType'], e['series']
+    categories = series[0]['labels']
+    if any(s['labels'] != categories for s in series):
+        raise ValueError(f'{e["id"]}: every series of a chart must share its category labels')
+    if kind not in ('bar', 'line', 'pie'):
+        raise ValueError(f'{e["id"]}: unsupported chart type {kind}')
+    colors = [c.lstrip('#').upper() for c in e.get('colors') or ['000000']]
+    size, ink, last = int(round(e.get('labelSize', 14) * 100)), e.get('ink', '#000000'), len(categories) + 1
+    face = f'<a:latin typeface={quoteattr(font)}/><a:cs typeface={quoteattr(font)}/>'
+
+    def look(sz, bold=False):
+        return f'sz="{sz}" b="{1 if bold else 0}">{fill(ink)}{face}'
+
+    def props(sz=size, bold=False):
+        return f'<c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr {look(sz, bold)}</a:defRPr></a:pPr><a:endParaRPr lang="en-US"/></a:p></c:txPr>'
+
+    def title(value, sz, bold, body='<a:bodyPr/>'):
+        return (f'<c:title><c:tx><c:rich>{body}<a:lstStyle/><a:p><a:pPr><a:defRPr {look(sz, bold)}</a:defRPr></a:pPr>'
+                f'<a:r><a:rPr lang="en-US" {look(sz, bold)}</a:rPr><a:t>{text(value)}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>')
+
+    def labels(position, value=True, category=False, percent=False):
+        leaders = '<c:showLeaderLines val="1"/>' if percent else ''
+        return (f'<c:dLbls><c:spPr><a:noFill/><a:ln><a:noFill/></a:ln></c:spPr>{props()}<c:dLblPos val="{position}"/><c:showLegendKey val="0"/>'
+                f'<c:showVal val="{int(value)}"/><c:showCatName val="{int(category)}"/><c:showSerName val="0"/><c:showPercent val="{int(percent)}"/>'
+                f'<c:showBubbleSize val="0"/>{leaders}</c:dLbls>')
+
+    def points(values, convert):
+        return f'<c:ptCount val="{len(values)}"/>' + ''.join(f'<c:pt idx="{i}"><c:v>{convert(v)}</c:v></c:pt>' for i, v in enumerate(values))
+
+    def data(i, s):
+        col = column(i + 1)
+        if len(s['values']) != len(categories):
+            raise ValueError(f'{e["id"]}: series {s["name"]} needs one value per category')
+        name = (f'<c:tx><c:strRef><c:f>Sheet1!${col}$1</c:f><c:strCache><c:ptCount val="1"/><c:pt idx="0"><c:v>{text(s["name"])}</c:v></c:pt>'
+                '</c:strCache></c:strRef></c:tx>')
+        cats = f'<c:cat><c:strRef><c:f>Sheet1!$A$2:$A${last}</c:f><c:strCache>{points(categories, text)}</c:strCache></c:strRef></c:cat>'
+        vals = (f'<c:val><c:numRef><c:f>Sheet1!${col}$2:${col}${last}</c:f><c:numCache><c:formatCode>General</c:formatCode>'
+                f'{points(s["values"], number)}</c:numCache></c:numRef></c:val>')
+        return name, cats, vals
+
+    color = lambda i: colors[i % len(colors)]
+    many = len(series) > 1
+    sers = []
+    for i, s in enumerate(series):
+        name, cats, vals = data(i, s)
+        head = f'<c:idx val="{i}"/><c:order val="{i}"/>{name}'
+        if kind == 'bar':
+            sers.append(f'<c:ser>{head}<c:spPr>{fill("#" + color(i))}<a:ln><a:noFill/></a:ln></c:spPr><c:invertIfNegative val="0"/>{labels("outEnd")}{cats}{vals}</c:ser>')
+        elif kind == 'line':
+            line = f'<a:ln w="{emu(2.25)}" cap="rnd">{fill("#" + color(i))}<a:round/></a:ln>'
+            marker = f'<c:marker><c:symbol val="circle"/><c:size val="6"/><c:spPr>{fill("#" + color(i))}<a:ln><a:noFill/></a:ln></c:spPr></c:marker>'
+            sers.append(f'<c:ser>{head}<c:spPr>{line}</c:spPr>{marker}{"" if many else labels("t")}{cats}{vals}<c:smooth val="0"/></c:ser>')
+        else:
+            # Each slice takes its own color, with a hairline of the background between slices.
+            edge = f'<a:ln w="19050">{fill(e.get("bodyFill", "#FFFFFF"))}</a:ln>'
+            slices = ''.join(f'<c:dPt><c:idx val="{k}"/><c:bubble3D val="0"/><c:spPr>{fill("#" + color(k))}{edge}</c:spPr></c:dPt>' for k in range(len(categories)))
+            sers.append(f'<c:ser>{head}<c:spPr>{edge}</c:spPr>{slices}{labels("outEnd", value=False, category=True, percent=True)}{cats}{vals}</c:ser>')
+    axes = '<c:axId val="500001"/><c:axId val="500002"/>'
+    if kind == 'bar':
+        body = f'<c:barChart><c:barDir val="col"/><c:grouping val="clustered"/><c:varyColors val="0"/>{"".join(sers)}<c:gapWidth val="60"/>{axes}</c:barChart>'
+    elif kind == 'line':
+        body = f'<c:lineChart><c:grouping val="standard"/><c:varyColors val="0"/>{"".join(sers)}<c:marker val="1"/>{axes}</c:lineChart>'
+    else:
+        body = f'<c:pieChart><c:varyColors val="1"/>{"".join(sers)}<c:firstSliceAng val="0"/></c:pieChart>'
+    rule = fill(e.get('ruleColor', '#BBBBBB'))
+    if kind != 'pie':
+        units = title(e['units'], size, False, '<a:bodyPr rot="-5400000" vert="horz"/>') if e.get('units') else ''
+        body += ('<c:catAx><c:axId val="500001"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="b"/>'
+                 '<c:numFmt formatCode="General" sourceLinked="1"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="low"/>'
+                 f'<c:spPr><a:ln w="9525">{rule}</a:ln></c:spPr>{props()}<c:crossAx val="500002"/><c:crosses val="autoZero"/><c:auto val="1"/>'
+                 '<c:lblAlgn val="ctr"/><c:lblOffset val="100"/><c:noMultiLvlLbl val="0"/></c:catAx>'
+                 '<c:valAx><c:axId val="500002"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="l"/>'
+                 f'<c:majorGridlines><c:spPr><a:ln w="6350">{rule}</a:ln></c:spPr></c:majorGridlines>{units}'
+                 '<c:numFmt formatCode="General" sourceLinked="1"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/>'
+                 f'<c:spPr><a:ln><a:noFill/></a:ln></c:spPr>{props()}<c:crossAx val="500001"/><c:crosses val="autoZero"/><c:crossBetween val="between"/></c:valAx>')
+    heading = title(e['title'], int(round(size * 1.15)), True) if e.get('title') else ''
+    legend = f'<c:legend><c:legendPos val="b"/><c:overlay val="0"/>{props()}</c:legend>' if many and kind != 'pie' else ''
+    none = '<c:spPr><a:noFill/><a:ln><a:noFill/></a:ln></c:spPr>'
+    return (f'{HEAD}<c:chartSpace xmlns:c="{CHART_NS}" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="{REL}">'
+            f'<c:date1904 val="0"/><c:lang val="en-US"/><c:roundedCorners val="0"/><c:chart>{heading}<c:autoTitleDeleted val="{0 if heading else 1}"/>'
+            f'<c:plotArea><c:layout/>{body}{none}</c:plotArea>{legend}<c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/></c:chart>{none}{props()}'
+            '<c:externalData r:id="rId1"><c:autoUpdate val="0"/></c:externalData></c:chartSpace>')
+
+
 class IconLibrary:
     """The brand's icon deck and index, opened once per emit and checked against its recorded hash."""
 
@@ -166,15 +325,17 @@ class IconLibrary:
 
 
 class Slide:
-    def __init__(self, spec, plan, title_type, library=None, subtitles=(), slots=()):
+    def __init__(self, spec, plan, title_type, library=None, subtitles=(), slots=(), charts=None):
         self.spec, self.plan, self.title_type, self.library = spec, plan, title_type, library
+        # Chart parts written for the whole deck, shared between slides so each gets its own number.
+        self.charts = charts if charts is not None else []
         # Element IDs that fill the layout's subtitle placeholders, paired with each placeholder's idx.
         self.placeholders = dict(zip(spec.get('placeholders', []), subtitles))
         # Image IDs that fill the layout's picture placeholders, paired with each slot's idx and size.
         self.slots = dict(zip(spec.get('pictures', []), slots))
         self.numbers, self.next = {}, 2
         self.rels, self.media = [], {}
-        self.report = {'id': spec['id'], 'titlePlaceholder': False, 'attached': [], 'unattached': [], 'groups': [], 'icons': []}
+        self.report = {'id': spec['id'], 'titlePlaceholder': False, 'attached': [], 'unattached': [], 'groups': [], 'icons': [], 'charts': []}
         self.elements = {e['id']: e for e in spec['elements']}
         for e in spec['elements']:
             self.number(e['id'])
@@ -300,6 +461,22 @@ class Slide:
                 f'<p:xfrm><a:off x="{emu(e["x"])}" y="{emu(e["y"])}"/><a:ext cx="{emu(e["width"])}" cy="{emu(e["height"])}"/></p:xfrm>'
                 '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table">'
                 f'<a:tbl><a:tblPr firstRow="1"/><a:tblGrid>{grid}</a:tblGrid>{body}</a:tbl></a:graphicData></a:graphic></p:graphicFrame>')
+
+    def chart(self, e):
+        """A native chart: a graphic frame pointing at a chart part, which keeps its data in an embedded workbook."""
+        series = e['series']
+        xml = chart_xml(e, self.plan['font'])
+        number_ = len(self.charts) + 1
+        part, book = f'ppt/charts/harnessChart{number_}.xml', f'ppt/embeddings/harnessChart{number_}.xlsx'
+        self.charts.append({'part': part, 'xml': xml, 'workbook': book, 'data': workbook(series[0]['labels'], series)})
+        rel = self.relate(f'{REL}/chart', f'../charts/harnessChart{number_}.xml')
+        kind = e['chartType'].capitalize()
+        about = f'{kind} chart: {e["title"]}' if e.get('title') else f'{kind} chart of {", ".join(s["name"] for s in series)}'
+        self.report['charts'].append({'id': e['id'], 'kind': e['chartType'], 'part': part, 'workbook': book, 'series': len(series), 'categories': len(series[0]['labels'])})
+        return (f'<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="{self.numbers[e["id"]]}" name={quoteattr(e["id"])} descr={quoteattr(about)}/>'
+                '<p:cNvGraphicFramePr><a:graphicFrameLocks noGrp="1"/></p:cNvGraphicFramePr><p:nvPr/></p:nvGraphicFramePr>'
+                f'<p:xfrm><a:off x="{emu(e["x"])}" y="{emu(e["y"])}"/><a:ext cx="{emu(e["width"])}" cy="{emu(e["height"])}"/></p:xfrm>'
+                f'<a:graphic><a:graphicData uri="{CHART_NS}"><c:chart xmlns:c="{CHART_NS}" r:id="{rel}"/></a:graphicData></a:graphic></p:graphicFrame>')
 
     def embed(self, e):
         with open(e['path'], 'rb') as stream:
@@ -447,6 +624,8 @@ class Slide:
             return self.icon(e)
         if e['type'] == 'table':
             return self.table(e)
+        if e['type'] == 'chart':
+            return self.chart(e)
         raise ValueError(f'{e["id"]}: the native emitter does not write {e["type"]} objects yet; use pptx render')
 
     def grouped(self):
@@ -627,7 +806,7 @@ def emit(template, plan_path, output, layout_part=None):
         unique = [items[0] for items in by_name.values() if len(items) == 1 or any(i['default'] for i in items)]
         return {'layouts': [{k: v for k, v in item.items() if k not in ('part', 'frame', 'bodies', 'slots')} for item in unique], 'default': next(i['name'] for i in layouts if i['default'])}
     notes_master = next((n for n in sorted(parts) if re.fullmatch(r'ppt/notesMasters/notesMaster\d+\.xml', n)), None)
-    ids, new_rels, overrides, report = [], [], [], []
+    ids, new_rels, overrides, report, charts = [], [], [], [], []
     library = IconLibrary(plan['iconLibrary']['path'], plan['iconLibrary']['index']) if plan.get('iconLibrary') else None
     for index, spec in enumerate(plan['slides'], 1):
         if spec.get('layout') == '@subtitled':
@@ -647,7 +826,8 @@ def emit(template, plan_path, output, layout_part=None):
             raise ValueError(f'{spec["id"]}: layout {chosen["name"]} has {len(chosen["subtitles"])} subtitle placeholders; remove the extra text')
         if len(spec.get('pictures', [])) > len(chosen['slots']):
             raise ValueError(f'{spec["id"]}: layout {chosen["name"]} has no picture slot; remove the picture')
-        slide = Slide(spec, plan, chosen['title'], library, chosen['subtitles'], chosen['slots'])
+        slide = Slide(spec, plan, chosen['title'], library, chosen['subtitles'], chosen['slots'], charts)
+        written = len(charts)
         slide.relate(f'{REL}/slideLayout', posixpath.relpath(chosen['part'], 'ppt/slides'))
         slide.report['layout'] = chosen['name']
         xml = slide.xml()
@@ -666,6 +846,12 @@ def emit(template, plan_path, output, layout_part=None):
         parts[rels_path(part)] = rels_xml(slide.rels).encode('utf-8')
         for name, data in slide.media.items():
             parts[f'ppt/media/{name}'] = data
+        # Each chart part, its relationship to its workbook, and the workbook itself.
+        for chart in charts[written:]:
+            parts[chart['part']] = chart['xml'].encode('utf-8')
+            parts[rels_path(chart['part'])] = rels_xml([('rId1', f'{REL}/package', posixpath.relpath(chart['workbook'], 'ppt/charts'))]).encode('utf-8')
+            parts[chart['workbook']] = chart['data']
+            overrides.append((chart['part'], CHART_TYPE))
         number = max(used | {0}) + 1
         used.add(number)
         ids.append(f'<p:sldId id="{255 + index}" r:id="rId{number}"/>')
@@ -712,6 +898,8 @@ def emit(template, plan_path, output, layout_part=None):
     extensions = {n.rsplit('.', 1)[-1].lower() for n in parts if n.startswith('ppt/media/harness-')}
     defaults = ''.join(f'<Default Extension="{x}" ContentType="{IMAGE_TYPES[x]}"/>' for x in sorted(extensions)
                        if not re.search(rf'<Default\b[^>]*Extension="{x}"', types, flags=re.I))
+    if charts and not re.search(r'<Default\b[^>]*Extension="xlsx"', types, flags=re.I):
+        defaults += f'<Default Extension="xlsx" ContentType="{XLSX_TYPE}"/>'
     added = ''.join(f'<Override PartName="/{name}" ContentType="{kind}"/>' for name, kind in overrides)
     parts['[Content_Types].xml'] = before('[Content_Types].xml', types, '</Types>', defaults + added).encode('utf-8')
 

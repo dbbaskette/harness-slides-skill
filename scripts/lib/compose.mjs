@@ -16,6 +16,7 @@ const fields={
   icon:['icon','color','style'],
   badge:['text','fill'],
   table:['rows','widths'],
+  chart:['kind','data','title','units','source'],
   rule:[],
   metric:['value','label'],
   spacer:[],
@@ -36,7 +37,7 @@ function axisBetween(canvas,from,to) {
   if(x.n.type==='grid'){const row=i=>Math.floor(i/x.n.columns),column=i=>i%x.n.columns;return row(x.i)===row(y.i)?true:column(x.i)===column(y.i)?false:undefined;}
   return undefined;
 }
-const iconStyles=['solid','outline','plain'],boxStyles=['solid','outline','bar'];
+const iconStyles=['solid','outline','plain'],boxStyles=['solid','outline','bar'],chartKinds=['bar','line','pie'];
 // A metric is shorthand for a number in the metric role over its label, so the number is never left without its context.
 const expand=n=>{
   if(!n||typeof n!=='object'||Array.isArray(n))return n;
@@ -54,7 +55,7 @@ const drawn={
   membership:[f=>f.members,'Put the members inside a box'],
   contrast:[f=>f.pair,'Place the things compared side by side'],
   parallel:[f=>f.peers,'Place the peers in a grid, a row or a column of like nodes'],
-  quantity:[f=>f.metric,'Show the number with the metric text role'],
+  quantity:[f=>f.metric||f.chart,'Show the number with the metric text role or a chart'],
 };
 const luminance=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255).map(v=>v<=.03928?v/12.92:((v+.055)/1.055)**2.4).reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);
 export const contrastRatio=(a,b)=>{const [hi,lo]=[luminance(a),luminance(b)].sort((x,y)=>y-x);return (hi+.05)/(lo+.05);};
@@ -64,7 +65,7 @@ export const composeContract=`Composition v1 (AI-owned; describe structure, neve
 A slide with layout uses that template layout's own placeholders (cover, section break, closing) and has no canvas; run compose layouts for the names.
 A content slide's furniture is set on the slide, not drawn in the canvas: subtitle is one line under the title, in the template's own subtitle line; caveat is a ruled strip at the foot, with an optional one-word label such as Limit or Verify; source is a line beneath it. The canvas gets the room that is left.
 NODE containers: {type:stack,direction:row|column,gap?,align?,children:[NODE]} | {type:grid,columns:1-6,gap?,children:[NODE]} | {type:free,children:[NODE with at:{x,y,width,height} as 0-1 fractions]} | {type:ring,children:[3-8 NODE],hub?:NODE}.
-NODE leaves: {type:icon,id,icon:STABLE ICON ID from the brand's icon search,color?,style?:solid|outline|plain} | {type:box,id,text?|children?,shape?:rect|ellipse|roundRect|diamond|hexagon|chevron|can,style?:solid|outline|bar,fill?,color?,textRole?,align?,gap?} | {type:metric,id,value,label} | {type:badge,id,text,fill?} | {type:rule} | {type:table,id,rows:[[header cells],[cells]...],widths?:[relative]} | {type:text,id,text,textRole?,color?,align?} | {type:image,id,src,alt,fit?} (or asset:ID from assets status in place of src, alt defaulting to the recorded alt) | {type:spacer}.
+NODE leaves: {type:icon,id,icon:STABLE ICON ID from the brand's icon search,color?,style?:solid|outline|plain} | {type:box,id,text?|children?,shape?:rect|ellipse|roundRect|diamond|hexagon|chevron|can,style?:solid|outline|bar,fill?,color?,textRole?,align?,gap?} | {type:metric,id,value,label} | {type:badge,id,text,fill?} | {type:rule} | {type:table,id,rows:[[header cells],[cells]...],widths?:[relative]} | {type:chart,id,kind:bar|line|pie,data:{categories,series:[{name,values}]},title?,units?,source?} | {type:text,id,text,textRole?,color?,align?} | {type:image,id,src,alt,fit?} (or asset:ID from assets status in place of src, alt defaulting to the recorded alt) | {type:spacer}.
 sources name what a slide rests on: a document section, a finding, or one ID such as request or author_knowledge when it comes from the brief or general knowledge.
 Any node may set weight (relative share, above 0 up to 10, default 1). A node never goes below the size its content needs; when that overrides a weight you set, compile and preview report it as weight-overridden. An empty box has no minimum, so use empty boxes for bars drawn to scale.
 An icon keeps the library's own colors unless you set color (a brand color role) or style: solid is a light icon on a colored disc, outline a colored icon in a ring, plain a colored icon with no container, drawn a little larger. On a filled card use plain or outline with a color that reads on the fill.
@@ -76,13 +77,14 @@ EDGE: {id,from:NODE id,to:NODE id,label?,arrow?:boolean,color?,route?:straight|e
 A straight edge between nodes that are not level runs at a slant. route elbow turns it into right angles, which reads better for a fan-out or a tree; route curve bends it. ring places its children around a circle in order, the first at the top, going clockwise; an elbow or curve edge between two of them turns once around the outside, which draws a cycle. Use hub for what sits at the center.
 Text may sit over an image only inside a filled box, which keeps it readable whatever the picture shows; place the image and the box in a free container. A template layout with a picture slot takes picture:{src,alt} or picture:{asset}, cropped to fill the slot.
 table is a native, editable table in the brand's table style: the first row is the header, and each row is as tall as its tallest cell. Keep cells short; a table is for comparing values, not for holding sentences.
+chart is a native chart whose data stays editable: categories are 2–24 short labels (2–8 for a pie), and each series gives one plain number per category. A bar or line chart takes 1–6 series; a pie takes one, of values zero or more. Series, or a pie's slices, take the brand's chart colors in order, so there are never more of them than the brand has colors. title sits in the chart, units titles the value axis (not on a pie), and source is a caption beneath it; without one the chart cites the slide's source.
 DIRECTION, decided once for the deck: {focal:color role that means "look here",neutral:panel color role,meanings?:{color role:what it stands for in this deck},motif?:text}.
 With a direction, fills come only from the neutral, the meanings and white; boxes default to the neutral. Text, icon and edge colors may be any role except the focal.
 BRIEF, per content slide: {relation:order|dependency|hierarchy|membership|contrast|parallel|overlap|quantity|none,focal?:NODE id,rhythm?:anchor|dense|breathing}.
 The title is the claim. The relation must be drawn: edges, chevrons or a column of steps for order, edges for dependency, edges, nesting or layers for hierarchy, a box holding two or more members for membership, side by side for contrast, a grid, row or column of like nodes for parallel, intersecting shapes for overlap, the metric text role for quantity.
 The focal node is a box or text; the compiler gives it the focal color and no other node, text or edge may use it. Text inside a filled box is given a readable color unless you set one.
 A labelled edge needs room: its label must fit the gap between the two nodes, so put a spacer between them.
-Generated IDs are reserved: <box with style bar>_bar and _text, <metric>_label, <slide>_rule1 and up, <slide>_title, <slide>_subtitle, <slide>_detail, <slide>_caveat, <slide>_caveat_label, <slide>_caveat_rule, <slide>_source, <box with children>_group, <labelled edge>_label.
+Generated IDs are reserved: <box with style bar>_bar and _text, <metric>_label, <chart with source>_source, <slide>_rule1 and up, <slide>_title, <slide>_subtitle, <slide>_detail, <slide>_caveat, <slide>_caveat_label, <slide>_caveat_rule, <slide>_source, <box with children>_group, <labelled edge>_label.
 A card's align has no effect when it holds a box, grid or image, because those fill the spare space.
 IDs match [a-zA-Z_][a-zA-Z0-9_-]{4,40} and are unique across the deck.
 Nest at most 8 levels. Run compose contract --brand brand-contract.json for the brand's content area, gap, padding and line sizes.
@@ -124,14 +126,40 @@ export function validateComposition(comp,contract,{collect}={}) {
     claim(s.id,'slide');claim(`${s.id}_title`,s.id);
     attempt(()=>{if(!str(s.title))fail(s.id,'provide a slide title');});
     attempt(()=>{if(!Array.isArray(s.sources)||!s.sources.length||s.sources.some(x=>!str(x)))fail(s.id,'provide source references: one or more IDs naming what the slide rests on, such as request or author_knowledge');});
-    const local=new Set(),fills=new Set(),leaves=new Set(),facts={edges:0,chevrons:0,members:false,pair:false,peers:false,nested:false,layers:false,metric:false},brief=s.brief,focalId=brief?.focal;let nodes=0,rules=0;
+    const local=new Set(),fills=new Set(),leaves=new Set(),facts={edges:0,chevrons:0,members:false,pair:false,peers:false,nested:false,layers:false,metric:false,chart:false},brief=s.brief,focalId=brief?.focal;let nodes=0,rules=0;
+    // A chart is checked from its kind and shape down to its numbers; the first problem found is the one reported for it.
+    const checkChart=(n,where)=>{
+      const label=v=>typeof v==='string'&&v.trim()&&v.length<=60,pie=n.kind==='pie';
+      if(!chartKinds.includes(n.kind))fail(where,'kind is bar, line or pie');
+      for(const key of ['title','units','source'])if(n[key]!==undefined&&!str(n[key]))fail(where,`provide chart ${key} text or omit it`);
+      if(pie&&n.units!==undefined)fail(where,'a pie shows shares; put the units in its title');
+      const data=n.data;
+      if(!data||typeof data!=='object'||Array.isArray(data)||Object.keys(data).some(k=>!['categories','series'].includes(k)))fail(where,'data is {categories,series}: the category labels, and one or more {name,values} series');
+      const cats=data.categories,most=pie?8:24,series=data.series;
+      if(!Array.isArray(cats)||cats.length<2||cats.length>most||cats.some(c=>!label(c)))fail(where,`a ${n.kind} chart has 2–${most} categories, each a short label`);
+      if(new Set(cats.map(c=>c.trim())).size!==cats.length)fail(where,'categories must differ');
+      if(!Array.isArray(series)||!series.length||series.length>6)fail(where,'a chart has 1–6 series');
+      if(series.some(x=>!x||typeof x!=='object'||Array.isArray(x)||Object.keys(x).some(k=>!['name','values'].includes(k))||!label(x.name)||!Array.isArray(x.values)))fail(where,'each series is {name,values}: a short name and one number per category');
+      if(new Set(series.map(x=>x.name.trim())).size!==series.length)fail(where,'series names must differ');
+      for(const x of series) {
+        if(x.values.some(v=>typeof v!=='number'||!Number.isFinite(v)||Math.abs(v)>=1e15))fail(where,`series ${x.name}: values are plain numbers such as 12.5, not text, and below 1e15`);
+        if(x.values.length!==cats.length)fail(where,`series ${x.name} has ${x.values.length} values for ${cats.length} categories; give one number per category`);
+      }
+      if(pie&&series.length!==1)fail(where,'a pie has one series; use a bar chart to compare several');
+      if(pie&&(series[0].values.some(v=>v<0)||!series[0].values.some(v=>v>0)))fail(where,"a pie's values are zero or more, with a total above zero");
+      // Each series, or each slice, takes its own brand chart color. Colors are never repeated or tinted to stretch the palette.
+      const palette=d.slides.chart.seriesRoles,wanted=pie?cats.length:series.length;
+      if(wanted>palette.length)fail(where,`the brand has ${palette.length} chart colors (${palette.join(', ')}), so a ${pie?`pie holds at most ${palette.length} slices`:`${n.kind} chart holds at most ${palette.length} series`}; combine the smallest into one, or split the chart`);
+      if(n.source!==undefined)claim(`${n.id}_source`,where);
+      facts.chart=true;
+    };
     const inspect=(n,depth,inFree)=>{
       const where=`${s.id}/${n?.id??n?.type}`;
       if(!n||typeof n!=='object'||!fields[n.type])fail(where,'unknown node type');
       if(depth>8)fail(where,'nest at most 8 levels');
       if(Object.keys(n).some(k=>!common.includes(k)&&!fields[n.type].includes(k)))fail(where,'unsupported node field; never silently drop content');
       if(++nodes>80)fail(s.id,'use at most 80 nodes per slide');
-      const needsId=['box','text','image','icon','badge','table'].includes(n.type)||n.group;
+      const needsId=['box','text','image','icon','badge','table','chart'].includes(n.type)||n.group;
       if(n.type==='metric')fail(where,'a metric needs an id, a value and a label, and nothing else');
       if(n.type==='rule'&&n.id===undefined)claim(`${s.id}_rule${++rules}`,where);
       if(n.type==='table') {
@@ -148,6 +176,7 @@ export function validateComposition(comp,contract,{collect}={}) {
         if(dir&&n.fill!==undefined&&(n.fill===dir.focal||!allowedFills.includes(n.fill)))fail(where,`fill ${n.fill} is not in the deck direction (${allowedFills.join(', ')})`);
       }
       if(needsId||n.id!==undefined){claim(n.id,where);local.add(n.id);}
+      if(n.type==='chart')checkChart(n,where);
       if(n.group!==undefined&&typeof n.group!=='boolean')fail(where,'group must be boolean');
       if(n.weight!==undefined&&(!Number.isFinite(n.weight)||n.weight<=0||n.weight>10))fail(where,'weight must be above 0 and at most 10; weights are relative shares, so 9.5 and 0.5 give 95% and 5%');
       if(inFree){const a=n.at;if(!a||['x','y','width','height'].some(k=>!Number.isFinite(a[k])||a[k]<0||a[k]>1)||a.width<=0||a.height<=0||a.x+a.width>1.0001||a.y+a.height>1.0001)fail(where,'free children need at:{x,y,width,height} within 0–1');}
@@ -305,6 +334,10 @@ export async function compileComposition(comp,contract,{fonts}={}) {
   // A table is set in the brand's table style; each row is as tall as its tallest cell.
   const tableStyle={size:sl.table?.fontPt??roles.bodyReference?.size??18,pad:sl.table?.paddingPt??8};
   const tableWidths=(n,width)=>{const w=n.widths??n.rows[0].map(()=>1),total=w.reduce((a,v)=>a+v,0);return w.map(v=>width*v/total);};
+  // A chart needs room for its axis labels and title; a source beneath it is a caption line.
+  const chartLabel=sl.chart?.axisFontPt??roles.caption.size;
+  const chartCaption=(n,width)=>n.source===undefined?0:measure.height(n.source,roles.caption,width)+inset/4;
+  const chartNeed=(n,width)=>chartLabel*(n.title?7.5:6)+chartCaption(n,width);
   const tableRows=(n,width)=>{const widths=tableWidths(n,width);return n.rows.map((row,r)=>Math.max(...row.map((cell,c)=>measure.height(cell||' ',{size:tableStyle.size,bold:r===0},Math.max(8,widths[c]-tableStyle.pad*2+7.2))-7.2+tableStyle.pad*2)));};
   const gapOf=n=>gapSize[n.gap??'normal'];
   // In a row an icon takes its own width, as text takes its own height in a column; a weight on it opts back into sharing.
@@ -322,6 +355,7 @@ export async function compileComposition(comp,contract,{fonts}={}) {
     if(n.type==='spacer'||n.type==='free'||n.type==='ring')return 0;
     if(n.type==='image')return inset*4;
     if(n.type==='table')return tableRows(n,width).reduce((a,h)=>a+h,0);
+    if(n.type==='chart')return chartNeed(n,width);
     if(n.type==='icon')return iconSize;
     if(n.type==='badge')return badgeSize;
     if(n.type==='rule')return ruleSpace;
@@ -418,6 +452,15 @@ export async function compileComposition(comp,contract,{fonts}={}) {
         widths[widths.length-1]=round(rect.width-widths.slice(0,-1).reduce((a,v)=>a+v,0));
         put({id:n.id,type:'table',x:round(rect.x),y:round(rect.y),width:round(rect.width),height:round(heights.reduce((a,v)=>a+v,0)),rows:n.rows,fontSize:tableStyle.size,padding:tableStyle.pad,columnWidths:widths,rowHeights:heights,
           color:colors.inkDeep,headerFill:colors[t.headerFillRole]??colors.canvasSecondary,headerColor:colors[t.headerTextRole]??colors.inkDeep,bodyFill:colors.canvasPrimary??'#FFFFFF'});return;
+      }
+      if(n.type==='chart') {
+        // Like a table, a chart stays out of any group. Its colors are the brand's chart colors in order.
+        const caption=chartCaption(n,rect.width),cap=roles.caption,height=rect.height-caption;
+        put({id:n.id,type:'chart',x:round(rect.x),y:round(rect.y),width:round(rect.width),height:round(height),chartType:n.kind,
+          series:n.data.series.map(x=>({name:x.name,labels:[...n.data.categories],values:[...x.values]})),source:n.source??s.source??s.sources.join(', '),
+          colors:sl.chart.seriesRoles.map(role=>colors[role]),labelSize:chartLabel,...(n.title!==undefined?{title:n.title}:{}),...(n.units!==undefined?{units:n.units}:{})});
+        if(caption)put({id:`${n.id}_source`,type:'text',x:round(rect.x),y:round(rect.y+rect.height-caption+inset/4),width:round(rect.width),height:round(caption-inset/4),text:n.source,fontSize:cap.size,bold:cap.bold,color:colors[cap.colorRole]});
+        return;
       }
       if(n.type==='rule') {
         // A thin line across a column, or down a row, centred in the little room it takes.

@@ -110,8 +110,8 @@ test('images are embedded with alt text, fitted for contain and cropped for cove
 
 test('unsupported scene objects and a missing template are refused by name',async t=>{
   const dir=await temporary(t),c=await brand(dir),{scene,structure}=await compileComposition(flow(),c);
-  const chart=structuredClone(scene);chart.slides[0].elements.push({id:'data_chart',type:'chart',x:48,y:300,width:400,height:80,chartType:'bar',series:[{name:'a',labels:['x'],values:[1]}],source:'s'});
-  await assert.rejects(()=>emitNativePptx({scene:chart,structure,brand:c,output:join(dir,'t.pptx')}),/data_chart: the native emitter does not write chart objects yet/);
+  const linked=structuredClone(scene);linked.slides[0].elements.push({id:'linked_text',type:'text',x:48,y:300,width:400,height:80,text:'More',href:'https://example.com/more'});
+  await assert.rejects(()=>emitNativePptx({scene:linked,structure,brand:c,output:join(dir,'t.pptx')}),/linked_text: the native emitter does not write hyperlinks yet/);
   const plain=structuredClone(c);delete plain.design.nativeTemplate;plain.revision=contractRevision(plain);
   await assert.rejects(()=>emitNativePptx({scene,structure,brand:plain,output:join(dir,'p.pptx')}),/needs a brand contract with a native template/);
   await emitNativePptx({scene,structure,brand:c,output:join(dir,'once.pptx')});

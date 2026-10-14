@@ -39,13 +39,14 @@ export async function emitNativePptx({scene,structure={groups:[],connectors:[]},
   for(const s of scene.slides) {
     const elements=[];
     for(const e of s.elements) {
-      if(e.type==='chart')throw new Error(`${e.id}: the native emitter does not write chart objects yet; use pptx render`);
       if(e.href)throw new Error(`${e.id}: the native emitter does not write hyperlinks yet; use pptx render`);
       const out={...e};
       if(e.type==='text'||e.type==='shape'&&e.text!==undefined){out.fontSize=e.fontSize??(e.role==='title'?theme.titleSize:theme.bodySize);out.color=hex(e.color??'text');}
       if(e.fill)out.fill=hex(e.fill);
       if(e.stroke)out.stroke=hex(e.stroke);
       if(e.type==='line')out.color=hex(e.color??'accent');
+      // A chart is written with its own embedded workbook. A linked Sheets chart belongs to Google and is not carried into PPTX.
+      if(e.type==='chart'){delete out.sheetsChart;out.colors=(e.colors??['accent','#777777','#AAAAAA']).map(hex);out.ink=hex('text');out.ruleColor=hex('muted');out.labelSize=e.labelSize??14;}
       if(e.type==='table'){out.color=hex(e.color??'text');out.headerColor=hex(e.headerColor??e.color??'text');out.headerFill=hex(e.headerFill??'muted');out.bodyFill=hex(e.bodyFill??'background');out.fontSize=e.fontSize??theme.bodySize;out.ruleColor=hex('muted');}
       if(e.type==='image') {
         if(/^https?:/.test(e.src))throw new Error('Download authorized images to the workspace before PPTX rendering; no remote fetch during build');

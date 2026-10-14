@@ -8,7 +8,8 @@ section-scoped check is milestone 2 (issue #47), the
 milestone 4 (issue #50). [Paths in records](#paths-in-records) are relative to the
 project since issue #57. Since issue #59, digests that stand for the same content
 [ignore key order](#key-order), and `version` reports
-[capabilities](#detecting-support).
+[capabilities](#detecting-support). Compositions draw
+[native charts](#native-charts) since issue #40.
 
 ## Why
 
@@ -54,7 +55,7 @@ versions, and do not provoke a refusal to find out.
 ```json
 {"package":"harness-slides","runtimeVersion":"0.13.1","runtime":"/…/harness-slides",
  "capabilities":["assets","canonical-digests","compose-review","compose-section",
-   "design-batch","design-schema-2","json-refusals","relative-records"]}
+   "design-batch","design-schema-2","json-refusals","native-charts","relative-records"]}
 ```
 
 The list is sorted. A name is added with its feature and never renamed, removed
@@ -69,6 +70,7 @@ or reused. A runtime without `capabilities` (0.13.1 and earlier) has none of the
 | `design-batch` | `design propose --mode batch` and [the whole-plan question](#the-whole-plan-question) |
 | `design-schema-2` | [Proposal schema 2](#proposal-schema-2): `copy`, `objectives`, `qualifications`, `notes` and `asset.candidates`, and the `asset-unresolved` fallback |
 | `json-refusals` | `--json` [refusals](#refusals) on the commands that list it |
+| `native-charts` | A `chart` node in a composition, written by the native template emitter as an editable chart with its own embedded workbook. See [native charts](#native-charts) |
 | `relative-records` | [Paths in records](#paths-in-records) relative to the project, so a project can move |
 
 ## Proposal schema 2
@@ -420,6 +422,45 @@ Without `--json` the same refusal is the same sentence on stderr as before.
 | `input-missing`, `input-invalid` | A missing or unreadable input file, `--section` without `--design-project`, a malformed review assessment, or a `review` given the wrong combination of sources |
 | `unclassified` | Anything else; not recoverable until a person has looked |
 
+## Native charts
+
+A composition places a chart as a leaf node:
+
+```json
+{"type":"chart","id":"bookings_chart","kind":"bar","title":"Bookings by region","units":"$M",
+ "source":"Finance close, Q3 2026",
+ "data":{"categories":["North","South","West"],
+         "series":[{"name":"2025","values":[12.5,9,7]},{"name":"2026","values":[15,11.25,8]}]}}
+```
+
+| Field | Rule |
+| --- | --- |
+| `kind` | `bar` (clustered columns), `line` or `pie` |
+| `data.categories` | 2–24 distinct labels of up to 60 characters; 2–8 for a pie |
+| `data.series` | 1–6 `{name, values}` with distinct names; `values` holds one finite number per category, each below 10^15 in size. A pie has exactly one series, of values zero or more with a total above zero |
+| Colors | Series in order take the brand's `slides.chart.seriesRoles`; a pie's slices do. More series, or slices, than the brand has chart colors is refused. Colors are not repeated or tinted |
+| `title` | Optional. The chart's own title, in the chart |
+| `units` | Optional. The value axis title. Refused on a pie, which has no value axis |
+| `source` | Optional. A caption line under the chart, `<id>_source`, and the chart's recorded evidence. Without it the chart records the slide's `source` line, or else its source IDs |
+
+A chart shares space like an image and needs at least six lines of its label size
+(seven and a half with a title), plus its caption. It is never grouped, as a
+table is not. It draws the `quantity` relation. Each problem is a compile error
+against `slide/node`, and with `--json` a `composition-invalid` refusal that
+names the slide.
+
+The native template emitter writes, for each chart, a graphic frame on the slide
+named after the node, a chart part `ppt/charts/harnessChartN.xml`, its
+relationship to `ppt/embeddings/harnessChartN.xlsx`, and the content types. The
+workbook holds the categories in column A and one column per series, names in
+row 1. The chart's formulas name those cells, and its caches hold the same
+values, so it draws without opening the workbook, and editing its data in
+PowerPoint opens the same numbers. The workbook is written with Python's
+standard library. A brand without a native template gets the chart from the
+generated deck, as before. Whether a chart survives a Google import has not been
+checked yet; see
+[the manual check](../verification/2026-10-14-native-charts-google-import.md).
+
 ## Combinations that do not work today
 
 - A bound composition compiled without `--section` must list every slide in the
@@ -465,6 +506,14 @@ Without `--json` the same refusal is the same sentence on stderr as before.
   `assets status --design-project` does.
 - An image generated before the manifest existed is recorded when `images
   download` is run again with its project and ID.
+- A chart's colors are the brand's chart colors. The deck direction does not
+  govern them, so a chart may use the focal color.
+- A chart cannot be placed inside a group. A card whose children are a chart
+  between two other nodes is refused at render, as one holding a table is.
+- A composition chart has not been through a Google import. Until
+  [the manual check](../verification/2026-10-14-native-charts-google-import.md)
+  is run, `compose preview` with the Google renderer shows what the importer
+  makes of it, and nothing more is promised.
 - A session record whose revision predates [canonical digests](#key-order) is
   refused if a tool rewrites it with its keys in another order. Its revision stays
   order-dependent until a changed proposal replaces it.
@@ -472,8 +521,8 @@ Without `--json` the same refusal is the same sentence on stderr as before.
 ## Not in this change
 
 - Version and release. Live guidance does not describe schema 2, batch mode,
-  `--json`, `--section`, `--design-project` on `compose preview`, the asset manifest
-  or `review --compiled` yet. New
+  `--json`, `--section`, `--design-project` on `compose preview`, the asset manifest,
+  `review --compiled` or the `chart` node yet. New
   tasks fetch guidance from `main` while the released runtime is 0.13.1. Those
   lines go with the release that raises `minimumRuntime` (issue #51). See
   [guidance for the release](#guidance-for-the-release).
@@ -596,3 +645,45 @@ release that raises `minimumRuntime` (issue #51), and not before:
   exact built artifact.", add:
 
   > For a bound composition, use the `review --compiled` output directory.
+
+## Guidance for the release: native charts
+
+Installs still running 0.13.1 refuse a `chart` node as an unknown node type, and
+their guidance rightly says compositions have no charts. These lines go into
+guidance with the release that raises `minimumRuntime` (issue #51), and not
+before. Apply them once
+[the Google import check](../verification/2026-10-14-native-charts-google-import.md)
+has been run, and add to the last paragraph whatever it finds the importer loses.
+
+- `references/compositions.md`, in the node table, after the `table` row:
+
+  > | `chart` | A native bar, line or pie chart in the brand's chart colors, its data editable |
+
+- `references/compositions.md`, after the paragraph on `table` that ends "a
+  table compares values and is not a place for sentences.":
+
+  > A `chart` takes `kind` (`bar`, `line` or `pie`) and `data`: `categories`,
+  > 2 to 24 short labels, and `series`, each a `name` with one number per
+  > category. A pie has one series and at most eight slices. Each series, or
+  > each slice of a pie, takes the next brand chart color, and `compile`
+  > refuses more than the brand has. `title` sits in the chart, `units` titles
+  > the value axis and `source` is a caption under it. Use a chart when the
+  > shape of the numbers is the point. For one number use a `metric`; for a few
+  > exact values, a `table`.
+
+- `references/compositions.md`, replace "Native charts and hyperlinks are not
+  available in compositions yet. Show a few numbers as bars drawn to scale or as
+  a table. A deck that needs a real chart is built with [another
+  method](authoring.md); the methods cannot yet be mixed in one build." with:
+
+  > Hyperlinks are not available in compositions yet. A chart is written as a
+  > native chart with its own workbook, so its data can be edited in
+  > PowerPoint.
+
+- `references/content-components.md`, replace "Prefer
+  [compositions](compositions.md) for new slides. Use these typed components
+  for charts, which compositions do not yet express." with:
+
+  > Prefer [compositions](compositions.md) for new slides, charts included. Use
+  > these typed components for a deck already built with them, or for a chart
+  > linked to Google Sheets.
