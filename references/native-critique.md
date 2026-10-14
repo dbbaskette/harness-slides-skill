@@ -58,6 +58,9 @@ learner cannot see or why the cards teach it. Boxes alone are not the
 defect. A direct-text slide approved for its reason passes without
 graphics.
 
+In a composition review a check may leave out `sources`: it takes its
+slide's. Sources that are given must be the slide's.
+
 Judge visual finish within `focal-hierarchy`, `reading-order` and `technical-fit`,
 not just the presence of actors and readable text. At thumbnail size, identify
 what attracts attention first and whether the intended focal element dominates.

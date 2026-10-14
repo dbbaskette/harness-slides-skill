@@ -318,10 +318,13 @@ does not change brand colors or what a slide says.
 When the deck is bound to an approved design, review the build against it
 as well: `review --compiled NEW_DIR --output REVIEW --design-project CONTENT`.
 It renders `REVIEW/deck.pptx` and asks, for each slide, whether the visual
-teaches what the design approved. Inspect each image and mark it, answer
-every criterion with `review --assessment`, then `design present` the
-review. Deliver `REVIEW/deck.pptx`. The independent `compose critique`
-still applies.
+teaches what the design approved. `review --output REVIEW --packets`
+returns every slide's picture and criteria in one call. Inspect each image
+and mark it, answer every criterion with `review --assessment`, then
+`design present` the review. Without LibreOffice, add `--renderer google`
+to `review --compiled`: it renders through Google Drive, and the reviewed
+deck is still `REVIEW/deck.pptx`. Deliver `REVIEW/deck.pptx`. The
+independent `compose critique` still applies.
 
 That is the final review for a composed deck. Note what was found and fixed in
 `presentation-brief.md`, with the deck hash the preview returns. Then show the
