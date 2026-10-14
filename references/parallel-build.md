@@ -40,7 +40,9 @@ back, at the quality of a one-line sketch.
 
    `parts.json` is `{"title":"…","direction":{…},"parts":["cover.json","section-1.json",…]}`.
    A part whose direction differs, or that reuses another part's IDs, is refused.
-   Then compile, preview the whole deck and do the final review in
+   Then compile, adding `--design-project CONTENT` when the slides carry
+   `intent` approved through `design propose`; the merged deck must then hold
+   every approved slide, in order. Preview the whole deck and do the final review in
    [compositions](compositions.md). Rhythm, a layout echoed across a section
    boundary and one concept drawn two ways only show up here, on the contact
    sheet. Have the deck critiqued and name its three weakest slides. Fix small

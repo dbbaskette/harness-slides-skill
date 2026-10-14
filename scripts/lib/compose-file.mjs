@@ -16,8 +16,10 @@ function requested(comp) {
 const lines=error=>error.message.split('\n').filter(line=>!/^\d+ problems to fix:$/.test(line));
 
 // Without --output this only checks: every structure, fit, icon and layout problem comes back from one run and nothing is written.
-export async function compileCompositionFile({file,brand,output,fonts,'design-project':designProject}) {
+// With --design-project the approved design is checked too, written or not; --section accepts a contiguous run of approved slides.
+export async function compileCompositionFile({file,brand,output,fonts,'design-project':designProject,section}) {
   if(!file)throw new Error('Provide --file composition.json, and a new --output directory to write the build');
+  if(section&&!designProject)throw refuse('--section needs --design-project: a section is checked against the approved design',{code:'input-invalid'});
   const bytes=await readFile(file),brandBytes=brand?await readFile(brand):null;
   const contract=brandBytes?JSON.parse(brandBytes):await neutralBrandContract();
   await checkBrandSources(contract);
@@ -29,9 +31,10 @@ export async function compileCompositionFile({file,brand,output,fonts,'design-pr
   if(problems.length)throw refuseAll(problems.length===1?problems[0]:`${problems.length} problems to fix:\n${problems.join('\n')}`,compositionProblems(problems,comp));
   const {scene,structure,report}=compiled;
   const summary={slides:scene.slides.length,brandRevision:contract.revision,measurement:report.measurement,groups:structure.groups.length,connectors:structure.connectors.length,icons:structure.icons.length,room:Object.fromEntries(report.room.map(r=>[r.slide,`${r.needs} of ${r.has}`])),...(structure.adjusted?.length?{weightOverridden:structure.adjusted}:{}),...(structure.reading?.length?{readingSizeInLiveDeck:structure.reading.map(r=>`${r.slide}: ${r.nodes.length} items at ${r.size}pt`)}:{})};
+  const approved=designProject||output?await requireSceneDesign(scene,designProject,undefined,{section}):null;
+  if(approved)summary.design={revision:approved.revision,scope:approved.scope,slides:approved.slides};
   if(!output)return {status:'fits; nothing written. Add a new --output directory to write the build',...summary};
-  const approved=await requireSceneDesign(scene,designProject);
-  if(approved)report.designRevision=approved.revision;
+  if(approved){report.designRevision=approved.revision;report.designScope=approved.scope;}
   const assets=[];
   for(const s of scene.slides)for(const e of s.elements)if(e.type==='image'&&!/^https:\/\//.test(e.src)) {
     const path=resolve(dirname(resolve(file)),e.src),image=await readFile(path).catch(error=>{throw error.code==='ENOENT'?refuse(`${s.id}/${e.id}: image ${e.src} is missing (${path})`,{code:'asset-missing',slide:s.id,asset:e.id}):error;});

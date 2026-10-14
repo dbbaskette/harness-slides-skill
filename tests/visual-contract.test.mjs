@@ -5,6 +5,8 @@ import {readFile,writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {proposeDesign,respondDesign,designStatus,getApprovedDesign,validateDesignProposal,renderCopy} from '../scripts/lib/design-session.mjs';
+import {previewComposition} from '../scripts/lib/compose-preview.mjs';
+import {encodePng} from '../scripts/lib/contact-sheet.mjs';
 import {temporary} from './fixtures.mjs';
 import {proposal as schema1} from './design-fixtures.mjs';
 const cli=fileURLToPath(new URL('../scripts/harness-slides.mjs',import.meta.url)),fixture=fileURLToPath(new URL('fixtures/visual-contract/',import.meta.url)).replace(/\/$/,'');
@@ -141,4 +143,61 @@ test('the CLI takes --mode on propose only',async t=>{
   const project=await temporary(t),file=join(project,'p.json');await writeFile(file,JSON.stringify(schema1(2)));
   assert.equal((await ok(['design','propose','--project',project,'--file',file,'--mode','batch'])).question.slides.length,2);
   const r=await run(['design','status','--project',project,'--mode','batch']);assert.equal(r.code,1);assert.match(r.stderr,/--mode is not valid/);
+});
+
+// A section is a run of neighbouring approved slides, written by one author and declared with --section.
+const sectionFile=async(dir,name,ids,edit=()=>{})=>{const comp=await read('composition.json');comp.slides=ids.map(id=>typeof id==='string'?comp.slides.find(s=>s.id===id):id);edit(comp);const file=join(dir,name);await writeFile(file,JSON.stringify(comp));return file;};
+const tiny=encodePng({width:16,height:9,rgb:Buffer.alloc(16*9*3,200)});
+// Stand-ins for Drive and Poppler that write the files the real tools would, for a render of `pages` slides.
+const renderFakes=pages=>({drive:{importDeck:async()=>({id:'drive_file_1',url:'https://docs.google.com/presentation/d/drive_file_1/edit'}),exportPdf:async({output})=>{await writeFile(output,'%PDF-1.7 fake');return {output};}},
+  run:async(command,args)=>{if(args[0]==='-v')return {stdout:''};if(command==='pdfinfo')return {stdout:`Pages:          ${pages}\n`};await writeFile(args.at(-1)+'.png',tiny);return {stdout:''};}});
+
+test('a declared section compiles and previews against the approved design, and the merged deck compiles as a whole',async t=>{
+  const project=await temporary(t);await given('approved',project);const revision=(await designStatus(project)).revision;
+  const first=await sectionFile(project,'section-1.json',['operator_architecture']),second=await sectionFile(project,'section-2.json',['reconcile_loop','knowledge_check']);
+  const checked=await ok(['compose','compile','--file',second,'--design-project',project,'--section','--json']);
+  assert.deepEqual(checked.design,{revision,scope:'section',slides:['reconcile_loop','knowledge_check']});
+  const compiled=join(project,'compiled-2');await ok(['compose','compile','--file',second,'--design-project',project,'--section','--output',compiled]);
+  const report=JSON.parse(await readFile(join(compiled,'compose-report.json'),'utf8'));assert.equal(report.designRevision,revision);assert.equal(report.designScope,'section');
+  const preview=await previewComposition({file:compiled,output:join(project,'preview-2'),'design-project':project,section:true},renderFakes(2));
+  assert.deepEqual(preview.slides.map(s=>s.id),['reconcile_loop','knowledge_check']);assert.deepEqual(preview.design,{revision,scope:'section',slides:['reconcile_loop','knowledge_check']});
+  // Undeclared, the same section is a deck with a missing slide: a section never passes as the whole deck.
+  let value=blocked(await run(['compose','compile','--file',second,'--design-project',project,'--json']));
+  assert.deepEqual(value.problems.map(p=>[p.code,p.slide]),[['design-mismatch','operator_architecture']]);assert.match(value.problems[0].detail,/missing/);
+  value=blocked(await run(['compose','preview','--file',compiled,'--output',join(project,'preview-deck'),'--design-project',project,'--json']));
+  assert.deepEqual(value.problems.map(p=>[p.code,p.slide]),[['design-mismatch','operator_architecture']]);assert.equal(value.designRevision,revision);
+  // The lead merges the sections and compiles the whole deck without --section.
+  const parts=join(project,'parts.json'),comp=await read('composition.json');await writeFile(parts,JSON.stringify({title:comp.title,direction:comp.direction,parts:[first,second]}));
+  const merged=join(project,'merged.json');await ok(['compose','merge','--file',parts,'--output',merged]);
+  const deck=await ok(['compose','compile','--file',merged,'--design-project',project,'--output',join(project,'compiled-deck')]);assert.equal(deck.slides,3);assert.equal(deck.design.scope,'deck');
+  const whole=await previewComposition({file:join(project,'compiled-deck'),output:join(project,'preview-deck'),'design-project':project},renderFakes(3));assert.equal(whole.design.scope,'deck');
+});
+
+test('a section is refused, naming the slide, when a slide is missing, extra, out of order, retitled or carries a changed intent',async t=>{
+  const project=await temporary(t);await given('approved',project);const plan=await read('proposal.json'),intent=id=>structuredClone(plan.slides.find(s=>s.id===id).intent);
+  const refused=async(name,ids,edit,args=[])=>blocked(await run(['compose','compile','--file',await sectionFile(project,name,ids,edit),'--design-project',project,'--section','--json',...args])).problems.map(p=>[p.code,p.slide,p.detail]);
+  const [missing]=await refused('missing.json',['operator_architecture','knowledge_check']);assert.deepEqual(missing.slice(0,2),['design-mismatch','reconcile_loop']);assert.match(missing[2],/missing/);
+  const extra=async comp=>{const s=structuredClone(comp.slides[1]);s.id='extra_slide';s.title='A slide nobody approved';comp.slides[1]=s;};
+  const [added]=await refused('extra.json',['reconcile_loop','knowledge_check'],extra);assert.deepEqual(added.slice(0,2),['design-mismatch','extra_slide']);assert.match(added[2],/not in the approved design/);
+  const [reordered]=await refused('reordered.json',['reconcile_loop','operator_architecture'],undefined,['--output',join(project,'out')]);assert.deepEqual(reordered.slice(0,2),['design-mismatch','operator_architecture']);assert.match(reordered[2],/order/);
+  const [retitled]=await refused('retitled.json',['reconcile_loop'],comp=>{comp.slides[0].title='The controller closes the gap';});assert.deepEqual(retitled.slice(0,2),['design-mismatch','reconcile_loop']);assert.match(retitled[2],/title/i);
+  const changed=await refused('intent.json',['reconcile_loop','knowledge_check'],comp=>{for(const s of comp.slides)s.intent=intent(s.id);comp.slides[0].intent.takeaway='A controller runs once when a resource is created.';comp.slides[1].intent.visual.family='diagram';});
+  assert.deepEqual(changed.map(p=>p.slice(0,2)),[['design-mismatch','reconcile_loop'],['design-mismatch','knowledge_check']]);assert.match(changed[0][2],/intent/);
+  // The approved intent, unchanged, passes.
+  const kept=await ok(['compose','compile','--file',await sectionFile(project,'kept.json',['reconcile_loop'],comp=>{comp.slides[0].intent=intent('reconcile_loop');}),'--design-project',project,'--section']);assert.equal(kept.design.scope,'section');
+});
+
+test('compose compile with --design-project checks the design even without --output, and --section needs --design-project',async t=>{
+  const project=await temporary(t);await given('proposed',project);
+  let value=blocked(await run(['compose','compile','--file',join(fixture,'composition.json'),'--design-project',project,'--json']));
+  assert.deepEqual(value.problems.map(p=>p.code),['design-awaiting-approval','design-awaiting-approval','design-awaiting-approval']);
+  const approved=await temporary(t);await given('approved',approved);
+  value=blocked(await run(['compose','compile','--file',join(fixture,'refusals/composition-reordered.json'),'--design-project',approved,'--json']));
+  assert.deepEqual(value.problems.map(p=>[p.code,p.slide]),[['design-mismatch','reconcile_loop']]);
+  const checked=await ok(['compose','compile','--file',join(fixture,'composition.json'),'--design-project',approved]);assert.equal(checked.design.scope,'deck');assert.match(checked.status,/nothing written/);
+  // Without a design project nothing has changed: a plain check is a fit check.
+  assert.equal((await ok(['compose','compile','--file',join(fixture,'refusals/composition-reordered.json')])).slides,3);
+  for(const args of [['compose','compile','--file',join(fixture,'composition.json'),'--section','--json'],['compose','preview','--file',approved,'--output',join(approved,'p'),'--section','--json']]){
+    value=blocked(await run(args));assert.equal(value.problems[0].code,'input-invalid');assert.match(value.problems[0].detail,/--section needs --design-project/);
+  }
 });
