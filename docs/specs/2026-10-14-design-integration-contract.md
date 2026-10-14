@@ -1,6 +1,7 @@
 # Design integration contract
 
-Status: released in 0.14.0 (issue #51). Written 2026-10-14 for
+Status: released in 0.14.0 (issue #51); the composition review gaps of issue #67
+were released in 0.14.1. Written 2026-10-14 for
 Training Studio's visual teaching plan, milestone 1 (issue #46). The
 section-scoped check is milestone 2 (issue #47), the
 [asset manifest](#the-asset-manifest) was added for milestone 3 (issue #49), and the
@@ -12,7 +13,7 @@ project since issue #57. Since issue #59, digests that stand for the same conten
 [native charts](#native-charts) since issue #40. Since issue #64, asset checks read
 every candidate of the stored plan, a design can name a brand icon by
 [library ID](#icons-by-library-id), and a composition can place an icon by asset ID.
-Since issue #67 (for 0.14.1), the composition review can
+Since issue #67 (released in 0.14.1), the composition review can
 [render through Google](#rendering-through-google), returns
 [every slide's packet in one call](#every-packet-in-one-call), fills an assessment's
 [sources from the slide](#sources-from-the-slide), and `design present` can put a deck
@@ -57,12 +58,13 @@ exercises the same contract, and Training Studio copies it.
 ## Detecting support
 
 The 0.13.1 release and the `main` builds that led to 0.14.0 all report version
-0.13.1, so a version number cannot tell a caller what a runtime supports. To detect support, read
+0.13.1, and the `main` builds that led to 0.14.1 report 0.14.0, so a version
+number cannot tell a caller what a runtime supports. To detect support, read
 `capabilities` from `harness-slides version` and look for a name. Do not compare
 versions, and do not provoke a refusal to find out.
 
 ```json
-{"package":"harness-slides","runtimeVersion":"0.14.0","runtime":"/…/harness-slides",
+{"package":"harness-slides","runtimeVersion":"0.14.1","runtime":"/…/harness-slides",
  "capabilities":["assets","assets-approved-candidates","canonical-digests","compose-icon-assets",
    "compose-review","compose-section","design-batch","design-icon-ids","design-present-findings",
    "design-schema-2","json-refusals","native-charts","relative-records","review-google-renderer",
@@ -679,9 +681,9 @@ checked yet; see
   [guidance for the release](#guidance-for-the-release) and the sections after it
   to live guidance, with a short note on schema 2, batch mode and `--json` in
   `references/design-records.md`.
-- Issue #67 adds runtime behaviour for 0.14.1 but no version bump. Its guidance
-  lines wait in [guidance for 0.14.1](#guidance-for-0141-composition-review-gaps)
-  until a release raises `minimumRuntime` to 0.14.1.
+- Release 0.14.1 raised `minimumRuntime` to 0.14.1 and applied the lines in
+  [guidance for 0.14.1](#guidance-for-0141-composition-review-gaps) (issue #67)
+  to live guidance.
 
 ## Guidance for the release
 
@@ -867,10 +869,10 @@ that the Google import is unchecked; replace that sentence with its findings.
 
 ## Guidance for 0.14.1: composition review gaps
 
-Live guidance on `main` requires only 0.14.0, which has no `--renderer` on
+These lines need runtime behaviour after 0.14.0, which has no `--renderer` on
 `review`, no `--packets`, no `sources` from the slide and no
-`design present --accept-findings`. These lines go into guidance with the release
-that raises `minimumRuntime` to 0.14.1 (issue #67), and not before:
+`design present --accept-findings`. They were applied in 0.14.1 (issue #67),
+which raised `minimumRuntime` to 0.14.1:
 
 - `references/compositions.md`, in "Deliver", replace "Inspect each image and
   mark it, answer every criterion with `review --assessment`, then

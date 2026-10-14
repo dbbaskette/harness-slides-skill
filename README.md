@@ -35,7 +35,7 @@ PowerPoint inspection also needs **Python 3.9 or newer**.
 Run these commands in your terminal:
 
 ```sh
-git clone --branch v0.14.0 --depth 1 https://github.com/dbbaskette/harness-slides-skill.git
+git clone --branch v0.14.1 --depth 1 https://github.com/dbbaskette/harness-slides-skill.git
 cd harness-slides-skill
 bash scripts/Install-Harness-Slides.sh
 ```
@@ -48,8 +48,8 @@ skills. To preview the changes first, add `--dry-run` to the installer command.
 
 ## Know which version you are using
 
-The current published release is [v0.14.0](https://github.com/dbbaskette/harness-slides-skill/releases/tag/v0.14.0).
-The skill reports “Using Harness Slides v0.14.0” when starting or resuming work.
+The current published release is [v0.14.1](https://github.com/dbbaskette/harness-slides-skill/releases/tag/v0.14.1).
+The skill reports “Using Harness Slides v0.14.1” when starting or resuming work.
 A resumed deck may use its older saved runtime and will report that version.
 Guidance can refresh independently; its revision does not replace the runtime version.
 
@@ -267,15 +267,15 @@ representative guidance-start response. Bootstrap activation is shown separately
 | Bootstrap + current guidance entry | 1,513 |
 | Scoped PPTX edit + final review | 3,296 |
 | Scoped Google edit + final review | 3,883 |
-| New PPTX deck from native template + review | 7,363 |
-| New Google deck from native template + review | 8,390 |
+| New PPTX deck from native template + review | 7,446 |
+| New Google deck from native template + review | 8,473 |
 | Draft stage only: outline + contract | 4,662 |
-| New composed deck: draft, then build | 12,110 |
-| Parallel build, lead | 10,980 |
-| Parallel build, each worker | 9,306 |
-| New PPTX scene + contract + review | 6,539 |
-| New Google scene + contract + review | 7,678 |
-| Content-led PPTX + selected component + review | 8,528 |
+| New composed deck: draft, then build | 12,170 |
+| Parallel build, lead | 11,040 |
+| Parallel build, each worker | 9,366 |
+| New PPTX scene + contract + review | 6,593 |
+| New Google scene + contract + review | 7,732 |
+| Content-led PPTX + selected component + review | 8,582 |
 | Font screening + structured critique + review | 3,728 |
 | Optional image guidance + download result | 2,922 |
 

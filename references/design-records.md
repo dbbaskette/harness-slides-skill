@@ -66,6 +66,10 @@ node scripts/harness-slides.mjs design present --project CONTENT --output REVIEW
 
 Use the returned rendered-review question through the same host interface and wait.
 Record approval or revisions with `design respond`. For a workspace, use its `build/review` directory so readiness binds the acceptance
-to that exact built artifact. For a bound composition, use the `review --compiled` output directory. User acceptance is distinct from
+to that exact built artifact. For a bound composition, use the `review --compiled` output directory.
+When the person is to decide on a deck whose review still lists findings,
+run `design present --accept-findings`. The question lists the findings.
+Show them with the slides, and record the person's answer with
+`design respond`. Never answer it for them. User acceptance is distinct from
 pixel coverage and creative critique. An explicit prior waiver is reported as waived,
 not user-reviewed. Changed render hashes invalidate acceptance.
