@@ -12,7 +12,7 @@ const fields={
   ring:['children','hub','group'],
   box:['text','shape','fill','color','textRole','align','children','gap','style'],
   text:['text','textRole','color','align'],
-  image:['src','alt','fit'],
+  image:['src','asset','alt','fit'],
   icon:['icon','color','style'],
   badge:['text','fill'],
   table:['rows','widths'],
@@ -64,7 +64,7 @@ export const composeContract=`Composition v1 (AI-owned; describe structure, neve
 A slide with layout uses that template layout's own placeholders (cover, section break, closing) and has no canvas; run compose layouts for the names.
 A content slide's furniture is set on the slide, not drawn in the canvas: subtitle is one line under the title, in the template's own subtitle line; caveat is a ruled strip at the foot, with an optional one-word label such as Limit or Verify; source is a line beneath it. The canvas gets the room that is left.
 NODE containers: {type:stack,direction:row|column,gap?,align?,children:[NODE]} | {type:grid,columns:1-6,gap?,children:[NODE]} | {type:free,children:[NODE with at:{x,y,width,height} as 0-1 fractions]} | {type:ring,children:[3-8 NODE],hub?:NODE}.
-NODE leaves: {type:icon,id,icon:STABLE ICON ID from the brand's icon search,color?,style?:solid|outline|plain} | {type:box,id,text?|children?,shape?:rect|ellipse|roundRect|diamond|hexagon|chevron|can,style?:solid|outline|bar,fill?,color?,textRole?,align?,gap?} | {type:metric,id,value,label} | {type:badge,id,text,fill?} | {type:rule} | {type:table,id,rows:[[header cells],[cells]...],widths?:[relative]} | {type:text,id,text,textRole?,color?,align?} | {type:image,id,src,alt,fit?} | {type:spacer}.
+NODE leaves: {type:icon,id,icon:STABLE ICON ID from the brand's icon search,color?,style?:solid|outline|plain} | {type:box,id,text?|children?,shape?:rect|ellipse|roundRect|diamond|hexagon|chevron|can,style?:solid|outline|bar,fill?,color?,textRole?,align?,gap?} | {type:metric,id,value,label} | {type:badge,id,text,fill?} | {type:rule} | {type:table,id,rows:[[header cells],[cells]...],widths?:[relative]} | {type:text,id,text,textRole?,color?,align?} | {type:image,id,src,alt,fit?} (or asset:ID from assets status in place of src, alt defaulting to the recorded alt) | {type:spacer}.
 sources name what a slide rests on: a document section, a finding, or one ID such as request or author_knowledge when it comes from the brief or general knowledge.
 Any node may set weight (relative share, above 0 up to 10, default 1). A node never goes below the size its content needs; when that overrides a weight you set, compile and preview report it as weight-overridden. An empty box has no minimum, so use empty boxes for bars drawn to scale.
 An icon keeps the library's own colors unless you set color (a brand color role) or style: solid is a light icon on a colored disc, outline a colored icon in a ring, plain a colored icon with no container, drawn a little larger. On a filled card use plain or outline with a color that reads on the fill.
@@ -74,7 +74,7 @@ A card's content sits inside its shape's text area, so a diamond, ellipse or hex
 gap: none|tight|normal|wide. align: start|center|end|stretch. In a row, stretch (the default) makes every child fill the row's height; start, center or end gives each child the height its content needs. On a text, or a box with text, align sets the text left, centered or right. In a row an icon takes its own width unless you give it a weight. On a box with children, align (start|center|end) places its content vertically. fill/color: a brand color role name. textRole: a brand typography role name.
 EDGE: {id,from:NODE id,to:NODE id,label?,arrow?:boolean,color?,route?:straight|elbow|curve}. An edge attaches to a box of any shape and to an icon with a disc or a ring; an edge to a text or a plain icon is drawn but cannot stay attached when a node moves.
 A straight edge between nodes that are not level runs at a slant. route elbow turns it into right angles, which reads better for a fan-out or a tree; route curve bends it. ring places its children around a circle in order, the first at the top, going clockwise; an elbow or curve edge between two of them turns once around the outside, which draws a cycle. Use hub for what sits at the center.
-Text may sit over an image only inside a filled box, which keeps it readable whatever the picture shows; place the image and the box in a free container. A template layout with a picture slot takes picture:{src,alt}, cropped to fill the slot.
+Text may sit over an image only inside a filled box, which keeps it readable whatever the picture shows; place the image and the box in a free container. A template layout with a picture slot takes picture:{src,alt} or picture:{asset}, cropped to fill the slot.
 table is a native, editable table in the brand's table style: the first row is the header, and each row is as tall as its tallest cell. Keep cells short; a table is for comparing values, not for holding sentences.
 DIRECTION, decided once for the deck: {focal:color role that means "look here",neutral:panel color role,meanings?:{color role:what it stands for in this deck},motif?:text}.
 With a direction, fills come only from the neutral, the meanings and white; boxes default to the neutral. Text, icon and edge colors may be any role except the focal.
@@ -185,7 +185,7 @@ export function validateComposition(comp,contract,{collect}={}) {
       if(['stack','grid','free','ring'].includes(n.type)&&Array.isArray(n.children)&&n.children.filter(k=>['box','text','stack','grid'].includes(k?.type)).length>1){const column=n.type==='stack'&&n.direction==='column'||n.type==='grid'&&n.columns===1;if(n.children.filter(k=>['box','stack','grid'].includes(k?.type)).length>1)facts.peers=true;if(column){if(n.children.filter(k=>k?.type==='box').length>1)facts.layers=true;}else facts.pair=true;}
       if(n.type==='icon'&&(!str(n.icon)||n.icon.length>80||!/^[\w.-]+$/.test(n.icon)))fail(where,'icon needs a stable icon ID from the brand icon search');
       if(n.type==='icon'&&n.style!==undefined&&!iconStyles.includes(n.style))fail(where,`style must be one of ${iconStyles.join('|')}`);
-      if(n.type==='image'){if(!str(n.src)||!str(n.alt))fail(where,'image needs src and alt');if(!['contain','cover'].includes(n.fit??'contain'))fail(where,'fit must be contain|cover');}
+      if(n.type==='image'){if(n.asset!==undefined&&n.src!==undefined)fail(where,'image takes src or asset, not both');if(n.asset!==undefined)fail(where,`image asset ${n.asset} resolves through the project's asset manifest; compile it with compose compile --asset-project DIR`);if(!str(n.src)||!str(n.alt))fail(where,'image needs src and alt');if(!['contain','cover'].includes(n.fit??'contain'))fail(where,'fit must be contain|cover');}
       const kids=n.children;
       if(['stack','grid','free','ring'].includes(n.type)||kids!==undefined) {
         if(!Array.isArray(kids)||!kids.length||kids.length>12)fail(where,'provide 1–12 children');
@@ -203,7 +203,7 @@ export function validateComposition(comp,contract,{collect}={}) {
       if(s.canvas!==undefined||s.connect!==undefined||s.caveat!==undefined||s.source!==undefined)fail(s.id,'a slide with a template layout has no canvas, edges, caveat or source; put content on a standard slide');
       for(const key of ['subtitle','detail'])if(s[key]!==undefined){if(!str(s[key]))fail(s.id,`provide ${key} text or omit it`);claim(`${s.id}_${key}`,s.id);}
       if(s.detail!==undefined&&s.subtitle===undefined)fail(s.id,'detail needs a subtitle before it');
-      if(s.picture!==undefined){if(!s.picture||typeof s.picture!=='object'||Array.isArray(s.picture)||!str(s.picture.src)||!str(s.picture.alt)||Object.keys(s.picture).some(k=>!['src','alt'].includes(k)))fail(s.id,'picture is {src,alt}: the image for the layout\'s picture slot and what it shows');claim(`${s.id}_picture`,s.id);}
+      if(s.picture!==undefined){if(s.picture?.asset!==undefined&&s.picture.src===undefined)fail(s.id,`picture asset ${s.picture.asset} resolves through the project's asset manifest; compile it with compose compile --asset-project DIR`);if(!s.picture||typeof s.picture!=='object'||Array.isArray(s.picture)||!str(s.picture.src)||!str(s.picture.alt)||Object.keys(s.picture).some(k=>!['src','alt'].includes(k)))fail(s.id,'picture is {src,alt}: the image for the layout\'s picture slot and what it shows');claim(`${s.id}_picture`,s.id);}
       if(brief!==undefined&&(!brief||typeof brief!=='object'||Object.keys(brief).some(k=>k!=='rhythm')||!rhythms.includes(brief.rhythm)))fail(s.id,'a template layout slide takes only brief.rhythm (anchor|dense|breathing)');
       summary.push({id:s.id,nodes:0,fills:[],edges:0,layout:s.layout});continue;
     }
