@@ -5,7 +5,7 @@ import {compileComposition} from './compose.mjs';
 import {checkBrandSources,neutralBrandContract} from './brand-contract.mjs';
 import {requireSceneDesign} from './design-session.mjs';
 import {digest,hash} from './common.mjs';
-import {refuseAll,compositionProblems} from './refusals.mjs';
+import {refuse,refuseAll,compositionProblems} from './refusals.mjs';
 import {resolveCompositionAssets,placeImages,verifyBuiltAssets} from './assets.mjs';
 
 // What the composition asks of the brand's icon library and template, read straight from the file so it can be checked even when a slide does not compile.
