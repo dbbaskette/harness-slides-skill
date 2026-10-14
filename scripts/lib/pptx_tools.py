@@ -22,6 +22,8 @@ for prefix in ('p', 'a', 'r', 'c'):
 RELNS = 'http://schemas.openxmlformats.org/package/2006/relationships'
 CT = 'http://schemas.openxmlformats.org/package/2006/content-types'
 EMU = 914400
+# The drawn shapes an icon can be made of. The indexer maps icons to these only, and the copier selects among the same.
+ICON_KINDS = ('sp', 'grpSp', 'pic')
 
 
 def load(file):
@@ -135,7 +137,7 @@ def icon_index(file, catalog):
             selected = []
             for shape in tree:
                 b = box(shape)
-                if shape.tag.rsplit('}', 1)[-1] not in ('sp', 'grpSp', 'pic') or not b:
+                if shape.tag.rsplit('}', 1)[-1] not in ICON_KINDS or not b:
                     continue
                 if any((t.text or '').strip() for t in shape.findall('.//a:t', NS)):
                     continue
@@ -162,8 +164,13 @@ def icon_index(file, catalog):
 def native_group(pkg, entry):
     part = f"ppt/slides/slide{entry['slide']}.xml"
     tree = pkg.xml(part).find('p:cSld/p:spTree', NS)
-    shapes = [copy.deepcopy(s) for s in tree if shape_id(s) in entry['shapeIds']]
+    # A label table or other frame may share an ID with an icon shape; it was never indexed as part of the icon.
+    drawn = [s for s in tree if s.tag.rsplit('}', 1)[-1] in ICON_KINDS]
+    shapes = [copy.deepcopy(s) for s in drawn if shape_id(s) in entry['shapeIds']]
     if not shapes or len(shapes) != len(entry['shapeIds']):
+        repeated = sorted({i for i in entry['shapeIds'] if sum(shape_id(s) == i for s in drawn) > 1})
+        if repeated:
+            raise ValueError(f"Icon {entry['id']}: library slide {entry['slide']} has more than one shape with ID {', '.join(repeated)}; give each shape its own ID and rebuild the index")
         raise ValueError('Mapped icon shapes are missing')
     # Native copy supports self-contained geometry. Relationships require a fuller importer.
     if not entry['native'] or any(k.startswith('{' + NS['r'] + '}') for s in shapes for node in s.iter() for k in node.attrib):

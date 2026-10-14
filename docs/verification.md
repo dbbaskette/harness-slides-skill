@@ -23,6 +23,8 @@ Google API behavior is tested with synthetic transport fixtures. No live Google
 account was used by this implementation's tests. Organizational OAuth/Slides
 availability and import fidelity still require verification on the user's
 authorized working copy; offline or mocked results do not establish those.
+The [native icon import procedure](verification/2026-10-14-native-icons-google-import.md)
+covers whether icons and editable diagrams survive Google import. It has not been run yet.
 
 PowerPoint composition uses native templates and keeps chart dependencies.
 Automizer cleanup is disabled because it removed a required chart relation in

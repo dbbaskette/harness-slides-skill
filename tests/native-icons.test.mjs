@@ -1,0 +1,110 @@
+// End to end: a composition with library icons and an editable diagram, through compose compile and compose render,
+// keeps each icon's vector geometry and identity and every diagram shape as a native, attached, editable object.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile,writeFile} from 'node:fs/promises';
+import {join} from 'node:path';
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
+import {fileURLToPath} from 'node:url';
+import {temporary} from './fixtures.mjs';
+import {iconBrand,iconComposition,part,audit,geometry} from './native-fixtures.mjs';
+import {pptxTool} from '../scripts/lib/presentation-tools.mjs';
+import {contractRevision} from '../scripts/lib/brand-contract.mjs';
+import {hash} from '../scripts/lib/common.mjs';
+import {compileComposition} from '../scripts/lib/compose.mjs';
+import {emitNativePptx} from '../scripts/lib/pptx-native.mjs';
+
+const exec=promisify(execFile),cli=fileURLToPath(new URL('../scripts/harness-slides.mjs',import.meta.url)),emu=pt=>Math.round(pt*12700);
+const run=async(...args)=>JSON.parse((await exec('node',[cli,...args],{maxBuffer:16*1024*1024})).stdout);
+const numbers=xml=>[...xml.matchAll(/<p:cNvPr id="(\d+)" name="([^"]*)"/g)].reduce((all,[,id,name])=>({...all,[name]:id}),{});
+// An icon group holds only shapes, so its first close tag ends it. Copied library groups repeat their namespace declarations.
+const iconGroup=(xml,id)=>xml.match(new RegExp(`<p:grpSp(?: [^>]*)?><p:nvGrpSpPr><p:cNvPr id="\\d+" name="${id}"[^>]*>.*?</p:grpSp>`,'s'))?.[0];
+const frame=(xml,tag)=>{const m=xml.match(new RegExp(`<a:${tag} (?:x|cx)="(-?\\d+)" (?:y|cy)="(-?\\d+)" ?/>`));return m&&[Number(m[1]),Number(m[2])];};
+
+test('icons and an editable diagram compile to native PPTX with their geometry, identities and connections intact',async t=>{
+  const dir=await temporary(t),{contract,icons}=await iconBrand(dir),byLabel=Object.fromEntries(icons.map(i=>[i.label,i]));
+  const id=Object.fromEntries(icons.map(i=>[i.label,i.entry.id])),library=await part(contract.design.slides.icon.library.path,'ppt/slides/slide1.xml');
+  for(const icon of icons)assert.ok(icon.entry?.native,`${icon.label} is indexed as native geometry`);
+  // The label table shares a shape ID with the first icon's disc, as generated decks can. It is not part of the icon and must not be copied.
+  assert.equal(library.match(/<p:graphicFrame>.*?<p:cNvPr id="(\d+)"/s)[1],icons[0].entry.shapeIds[0]);
+  const brandFile=join(dir,'brand.json'),compFile=join(dir,'composition.json'),compiled=join(dir,'compiled'),deck=join(dir,'deck.pptx');
+  await writeFile(brandFile,JSON.stringify(contract));await writeFile(compFile,JSON.stringify(iconComposition(id)));
+
+  const summary=await run('compose','compile','--file',compFile,'--brand',brandFile,'--output',compiled);
+  assert.equal(summary.slides,2);assert.equal(summary.icons,6);assert.equal(summary.connectors,2);
+  const structure=JSON.parse(await readFile(join(compiled,'structure.json'),'utf8')),result=await run('compose','render','--file',compiled,'--output',deck);
+  assert.equal(result.emitter,'native template');assert.equal(result.editable,true);assert.deepEqual(await audit(deck),[]);
+
+  // Identity: every icon node is named in the deck after its composition node, carries the library label as alt text,
+  // and the render report and compiled structure both tie that node to its library icon ID.
+  const placed={client_icon:'Gateway',queue_icon:'Queue',store_icon:'Database',solid_icon:'Database',ring_icon:'Gateway',bare_icon:'Queue'};
+  assert.deepEqual(Object.fromEntries(result.icons.map(i=>[i.id,[i.icon,i.label]])),Object.fromEntries(Object.entries(placed).map(([node,label])=>[node,[id[label],label]])));
+  assert.deepEqual(Object.fromEntries(structure.icons.map(i=>[i.id,i.icon])),Object.fromEntries(Object.entries(placed).map(([node,label])=>[node,id[label]])));
+
+  const slides=[await part(deck,'ppt/slides/harnessSlide1.xml'),await part(deck,'ppt/slides/harnessSlide2.xml')];
+  for(const xml of slides){const ids=[...xml.matchAll(/<p:cNvPr id="(\d+)"/g)].map(m=>m[1]);assert.equal(new Set(ids).size,ids.length,'shape IDs are unique on each slide');}
+  // Nothing is flattened: the deck carries no pictures or media at all.
+  assert.deepEqual((await exec('unzip',['-Z1',deck])).stdout.split('\n').filter(n=>n.startsWith('ppt/media/')),[]);
+  for(const xml of slides)assert.doesNotMatch(xml,/<p:pic>|r:embed=|r:link=/);
+
+  // Geometry: each icon is one group of native shapes whose drawing is the source SVG path, point for point,
+  // whose child frame is the indexed library bounds, and whose outer frame is fitted to the compiled slot.
+  for(const slot of structure.icons) {
+    const xml=slides[slot.slide==='pipeline_slide'?0:1],group=iconGroup(xml,slot.id),icon=byLabel[placed[slot.id]],plain=slot.style==='plain';
+    assert.ok(group,`${slot.id} is a group in the deck`);
+    assert.match(group,new RegExp(`name="${slot.id}" descr="${icon.label}"`));
+    assert.deepEqual(geometry(group),[{w:icon.size,h:icon.size,commands:icon.commands}],`${slot.id} keeps the ${icon.label} drawing`);
+    assert.equal((group.match(/<p:sp>/g)??[]).length,plain?1:2,`${slot.id} has ${plain?'no disc':'its disc'}`);
+    if(!plain)assert.match(group,new RegExp(`name="${slot.id}_part1" ?/>.*?<a:prstGeom prst="ellipse">`,'s'));
+    const drawing=library.match(new RegExp(`name="${icon.name}_drawing".*?</p:sp>`,'s'))[0],copied=group.match(/<p:sp>(?:(?!<\/p:sp>).)*<a:custGeom>.*?<\/p:sp>/s)[0];
+    assert.deepEqual([frame(copied,'off'),frame(copied,'ext')],[frame(drawing,'off'),frame(drawing,'ext')],`${slot.id} keeps the drawing where the library puts it`);
+    const [bx,by,bw,bh]=icon.entry.bounds,keep=plain?.7:1;
+    assert.deepEqual([frame(group,'chOff'),frame(group,'chExt')],[[Math.round(bx+bw*(1-keep)/2),Math.round(by+bh*(1-keep)/2)],[Math.round(bw*keep),Math.round(bh*keep)]]);
+    // The library icons are square, so each fills its square slot exactly.
+    assert.equal(slot.width,slot.height);
+    assert.deepEqual([frame(group,'off'),frame(group,'ext')],[[emu(slot.x),emu(slot.y)],[emu(slot.width),emu(slot.height)]],`${slot.id} fills its slot`);
+  }
+
+  // The diagram: cards are native groups of a shape and its words, and both arrows are connectors attached at each end,
+  // one end on the standalone icon's disc, so they follow when someone moves a node.
+  const [diagram]=slides,named=numbers(diagram),top=(await pptxTool('inspect',[deck])).slides[0].objects;
+  assert.deepEqual(top.map(o=>[o.name,o.type]).filter(([name])=>name!=='pipeline_slide_title'),[['client_card_group','grpSp'],['queue_icon','grpSp'],['store_card_group','grpSp'],['edge_in','cxnSp'],['edge_in_label','sp'],['edge_out','cxnSp']]);
+  for(const [card,words] of [['client','API gateway'],['store','Database']]) {
+    const group=diagram.match(new RegExp(`<p:grpSp><p:nvGrpSpPr><p:cNvPr id="\\d+" name="${card}_card_group"/>.*?name="${card}_text".*?</p:sp>`,'s'))[0];
+    assert.match(group,new RegExp(`<p:sp><p:nvSpPr><p:cNvPr id="\\d+" name="${card}_card"/>`));assert.match(group,new RegExp(`name="${card}_icon"`));
+    assert.match(group,new RegExp(`name="${card}_text".*<a:t>${words}</a:t>`,'s'));
+  }
+  assert.match(diagram,/name="edge_in_label".*<a:t>enqueue<\/a:t>/s);
+  const ends=edge=>{const c=diagram.match(new RegExp(`<p:cxnSp>(?:(?!</p:cxnSp>).)*name="${edge}".*?</p:cxnSp>`,'s'))[0];return [c.match(/<a:stCxn id="(\d+)"/)?.[1],c.match(/<a:endCxn id="(\d+)"/)?.[1]];};
+  assert.deepEqual(ends('edge_in'),[named.client_card,named.queue_icon_part1]);
+  assert.deepEqual(ends('edge_out'),[named.queue_icon_part1,named.store_card]);
+  assert.deepEqual(result.native[0].attached.sort(),['edge_in','edge_out']);assert.deepEqual(result.native[0].unattached,[]);
+  assert.match((await exec('unzip',['-p',deck,'ppt/notesSlides/*.xml'])).stdout,/The queue absorbs bursts\./);
+});
+
+test('an icon whose library slide repeats one of its shape IDs is refused by name rather than copied wrong',async t=>{
+  const dir=await temporary(t),{contract,library,icons}=await iconBrand(dir),[database,gateway]=icons,repeated=join(dir,'repeated.pptx'),catalog=join(dir,'repeated-catalog.json');
+  // Give the gateway's disc the database disc's ID, then index and hash the changed library as a brand would.
+  const script=`import sys,zipfile
+src,dst,find,to=sys.argv[1:]
+with zipfile.ZipFile(src) as a, zipfile.ZipFile(dst,'x',zipfile.ZIP_DEFLATED) as b:
+    for i in a.infolist(): b.writestr(i,a.read(i).replace(find.encode(),to.encode()) if i.filename=='ppt/slides/slide1.xml' else a.read(i))`;
+  await exec('python3',['-c',script,library.path,repeated,`id="${gateway.entry.shapeIds[0]}" name="gateway_disc"`,`id="${database.entry.shapeIds[0]}" name="gateway_disc"`]);
+  await writeFile(catalog,JSON.stringify({source:{sha256:hash(await readFile(repeated))},catalogPages:[{slide:1,labels:icons.map(i=>i.label)}]}));
+  const index=await pptxTool('icon-index',[repeated,catalog]);await writeFile(library.index,JSON.stringify(index));
+  const c=structuredClone(contract);c.design.slides.icon.library.path=repeated;
+  c.sources=c.sources.filter(s=>s.kind!=='icon library');for(const path of [repeated,library.index])c.sources.push({path,kind:'icon library',sha256:hash(await readFile(path))});c.revision=contractRevision(c);
+  const id=index.entries.find(e=>e.label==='Database').id,comp={version:1,title:'Icons',slides:[{id:'icon_slide',title:'An icon',sources:['brief:test'],canvas:{type:'stack',direction:'row',children:[{type:'icon',id:'lead_icon',icon:id},{type:'box',id:'side_box',text:'Beside it',weight:3}]}}]};
+  await assert.rejects(async()=>emitNativePptx({...await compileComposition(comp,c),brand:c,output:join(dir,'deck.pptx'),base:dir}),new RegExp(`Icon ${id}: library slide 1 has more than one shape with ID ${database.entry.shapeIds[0]}; give each shape its own ID and rebuild the index`));
+});
+
+test('the Google import acceptance deck is prepared locally from the same fixtures, with what must survive',async t=>{
+  const dir=await temporary(t),output=join(dir,'acceptance'),script=fileURLToPath(new URL('../scripts/acceptance/native-icons.mjs',import.meta.url));
+  const result=JSON.parse((await exec('node',[script,'prepare',output])).stdout),expected=JSON.parse(await readFile(result.expected,'utf8'));
+  assert.equal(result.slides,2);assert.equal(expected.deckSha256,hash(await readFile(result.deck)));assert.deepEqual(await audit(result.deck),[]);
+  assert.deepEqual(expected.icons.map(i=>[i.slide,i.node,i.label,i.style,i.shapes]),[[1,'client_icon','Gateway','solid',2],[1,'queue_icon','Queue','solid',2],[1,'store_icon','Database','solid',2],[2,'solid_icon','Database','solid',2],[2,'ring_icon','Gateway','outline',2],[2,'bare_icon','Queue','plain',1]]);
+  assert.deepEqual(expected.connectors.map(c=>[c.slide,c.id,c.from,c.to]),[[1,'edge_in','client_card','queue_icon'],[1,'edge_out','queue_icon','store_card']]);
+  assert.deepEqual(expected.attached.map(a=>a.edge).sort(),['edge_in','edge_out']);
+  await assert.rejects(()=>exec('node',[script,'prepare',output]),/EEXIST/);
+});
