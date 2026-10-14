@@ -8,6 +8,8 @@ import {auditSceneQuality} from './slide-quality.mjs';
 import {renderCompositionDir} from './compose-file.mjs';
 import {importDeck,updateDeck,exportPdf,previewPrefix} from '../google-drive-deck.mjs';
 import {hash} from './common.mjs';
+import {requireSceneDesign} from './design-session.mjs';
+import {refuse} from './refusals.mjs';
 import {themeFor,color} from './scene.mjs';
 import {contrastRatio as contrast} from './compose.mjs';
 import {writeContactSheet} from './contact-sheet.mjs';
@@ -127,13 +129,16 @@ export async function recordCritique({file,assessment}) {
   return {critique:join(dir,'critique.json'),reviewer:record.reviewer,critical:record.critical,major:record.major,minor:record.minor,status:record.status,next:blocked?'Do not deliver. Fix each critical finding, preview the deck again and have the new render critiqued.':record.major?'Fix the major findings in one pass, then preview again. Undo any fix that causes a new finding.':'Clear to show the user.'};
 }
 
-export async function previewComposition({file,output,slide,'file-id':fileId,renderer='google',fonts},deps={}) {
+export async function previewComposition({file,output,slide,'file-id':fileId,renderer='google',fonts,'design-project':designProject,section},deps={}) {
   if(!file||!output)throw new Error('Provide --file COMPILED_DIR and a new --output directory');
   if(!['google','local'].includes(renderer))throw new Error('Renderer must be google or local');
+  if(section&&!designProject)throw refuse('--section needs --design-project: a section is checked against the approved design',{code:'input-invalid'});
   const run=deps.run??promisify(execFile),drive={importDeck,updateDeck,exportPdf,...deps.drive};
   const dir=resolve(file),load=async name=>JSON.parse(await readFile(join(dir,name),'utf8')),scene=await load('scene.json'),structure=await load('structure.json');
   const wanted=slide===undefined?null:scene.slides.findIndex(s=>s.id===slide);
   if(wanted===-1)throw new Error(`No slide ${slide}; choose one of ${scene.slides.map(s=>s.id).join(', ')}`);
+  // With --design-project the build is checked against the design approved now, before anything is rendered or uploaded.
+  const approved=designProject?await requireSceneDesign(scene,designProject,undefined,{section}):null;
   const tool=async(command,args,options)=>{try{return await run(command,args,options);}catch(error){throw new Error(error.code==='ENOENT'?'Poppler (pdfinfo, pdftoppm) is required to turn the render into images: brew install poppler':String(error.message).split('\n')[0]);}};
   // Check the image tools before anything is uploaded, so a missing tool cannot strand a Drive file.
   const pdfinfo=process.env.HARNESS_PDFINFO||'pdfinfo',pdftoppm=process.env.HARNESS_PDFTOPPM||'pdftoppm';await tool(pdfinfo,['-v'],{timeout:15000});await tool(pdftoppm,['-v'],{timeout:15000});
@@ -174,7 +179,7 @@ export async function previewComposition({file,output,slide,'file-id':fileId,ren
         slides:slides.map(s=>({number:s.number,id:s.id,title:s.title,image:s.image,...(briefs.get(s.id)?.relation?{relation:briefs.get(s.id).relation}:{}),rhythm:briefs.get(s.id)?.rhythm??'dense'})),
         answer:{deckSha256,reviewer:'independent|author',findings:[{slide:'SLIDE_ID',question:1,severity:'critical|major|minor',note:'What is wrong, in a sentence.',fix:'Optional: what would fix it.'}],weakest:['up to three slide IDs']}},null,2)+'\n',{flag:'wx',mode:0o600});
     }
-    const result={schema:1,output,deck,deckSha256,...review,renderer:renderer==='google'?'Google Slides PDF export':'LibreOffice',emitter:built.emitter,...(remote?{fileId:remote.id,url:remote.url}:{}),slides,
+    const result={schema:1,output,deck,deckSha256,...review,...(approved?{design:{revision:approved.revision,scope:approved.scope,slides:approved.slides}}:{}),renderer:renderer==='google'?'Google Slides PDF export':'LibreOffice',emitter:built.emitter,...(remote?{fileId:remote.id,url:remote.url}:{}),slides,
       status:'rendered and screened; open each image and judge it. Screens are prompts to look, not approval.',next:remote?`Reuse this Drive file for the next preview: --file-id ${remote.id}`:undefined};
     await writeFile(join(output,'preview.json'),JSON.stringify(result,null,2)+'\n',{flag:'wx',mode:0o600});
     return result;

@@ -26,6 +26,12 @@
     {"id": "composition-reordered", "given": "approved",
      "run": ["compose", "compile", "--file", "{fixture}/refusals/composition-reordered.json", "--design-project", "{project}", "--output", "{output}", "--json"],
      "problems": [{"code": "design-mismatch", "slide": "reconcile_loop", "recoverable": true}]},
+    {"id": "composition-reordered-check-only", "given": "approved",
+     "run": ["compose", "compile", "--file", "{fixture}/refusals/composition-reordered.json", "--design-project", "{project}", "--json"],
+     "problems": [{"code": "design-mismatch", "slide": "reconcile_loop", "recoverable": true}]},
+    {"id": "section-missing-slide", "given": "approved",
+     "run": ["compose", "compile", "--file", "{fixture}/refusals/section-missing-slide.json", "--design-project", "{project}", "--section", "--json"],
+     "problems": [{"code": "design-mismatch", "slide": "reconcile_loop", "recoverable": true}]},
     {"id": "image-missing", "given": "empty",
      "run": ["compose", "compile", "--file", "{fixture}/refusals/composition-missing-image.json", "--output", "{output}", "--json"],
      "problems": [{"code": "asset-missing", "slide": "console_view", "asset": "console_screenshot", "recoverable": true}]}
