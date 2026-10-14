@@ -1,8 +1,10 @@
 # Checkpoint records
 
 For typed components, scenes and native-template builds, which check an approved
-proposal before they build and before the final user review. Compositions do not
-use these; they record approval in the presentation brief.
+proposal before they build and before the final user review. Compositions may be
+bound to the same design session: pass `--design-project CONTENT` to `compose compile`
+with `--output`, and list every composed slide in the proposal, in order and with the
+same titles. An unbound composition records approval in the presentation brief.
 
 ## Before construction
 
@@ -24,7 +26,8 @@ explicit selected fallback. `visibleText` is proposed copy, not notes.
 
 The result supplies a revision, current question and selected slide descriptions.
 Response: `{questionId,planRevision,decision,feedback,waiveRendered?}`. `feedback`
-is the actual answer; decisions are approve/revise/batch/approve-remaining/autonomous.
+is the actual answer; when the person approves without writing anything, it is the
+option they chose, word for word. Decisions are approve/revise/batch/approve-remaining/autonomous.
 Only an explicit whole-plan/autonomous answer can waive rendered user review.
 Autonomy does not itself waive that checkpoint or factual/visual verification.
 

@@ -5,6 +5,7 @@ import {compileComposition} from './compose.mjs';
 import {checkBrandSources,neutralBrandContract} from './brand-contract.mjs';
 import {requireSceneDesign} from './design-session.mjs';
 import {digest,hash} from './common.mjs';
+import {refuse,refuseAll,compositionProblems} from './refusals.mjs';
 
 // What the composition asks of the brand's icon library and template, read straight from the file so it can be checked even when a slide does not compile.
 function requested(comp) {
@@ -25,7 +26,7 @@ export async function compileCompositionFile({file,brand,output,fonts,'design-pr
   // Unknown or picture-only icons and unknown layouts are caught now, not when the deck is rendered, and alongside everything else.
   const native=await import('./pptx-native.mjs'),wanted=compiled?.structure??requested(comp);
   for(const check of [native.checkIcons,native.checkLayouts])try{await check(wanted,contract);}catch(error){problems.push(...lines(error));}
-  if(problems.length)throw new Error(problems.length===1?problems[0]:`${problems.length} problems to fix:\n${problems.join('\n')}`);
+  if(problems.length)throw refuseAll(problems.length===1?problems[0]:`${problems.length} problems to fix:\n${problems.join('\n')}`,compositionProblems(problems,comp));
   const {scene,structure,report}=compiled;
   const summary={slides:scene.slides.length,brandRevision:contract.revision,measurement:report.measurement,groups:structure.groups.length,connectors:structure.connectors.length,icons:structure.icons.length,room:Object.fromEntries(report.room.map(r=>[r.slide,`${r.needs} of ${r.has}`])),...(structure.adjusted?.length?{weightOverridden:structure.adjusted}:{}),...(structure.reading?.length?{readingSizeInLiveDeck:structure.reading.map(r=>`${r.slide}: ${r.nodes.length} items at ${r.size}pt`)}:{})};
   if(!output)return {status:'fits; nothing written. Add a new --output directory to write the build',...summary};
@@ -33,8 +34,8 @@ export async function compileCompositionFile({file,brand,output,fonts,'design-pr
   if(approved)report.designRevision=approved.revision;
   const assets=[];
   for(const s of scene.slides)for(const e of s.elements)if(e.type==='image'&&!/^https:\/\//.test(e.src)) {
-    const path=resolve(dirname(resolve(file)),e.src);
-    e.src=path;assets.push({object:e.id,path,sha256:hash(await readFile(path))});
+    const path=resolve(dirname(resolve(file)),e.src),image=await readFile(path).catch(error=>{throw error.code==='ENOENT'?refuse(`${s.id}/${e.id}: image ${e.src} is missing (${path})`,{code:'asset-missing',slide:s.id,asset:e.id}):error;});
+    e.src=path;assets.push({object:e.id,path,sha256:hash(image)});
   }
   report.inputs={composition:{path:resolve(file),sha256:hash(bytes)},brand:brand?{path:resolve(brand),sha256:hash(brandBytes)}:{kind:'neutral defaults',revision:contract.revision},assets};
   report.sceneDigest=digest(scene);report.structureDigest=digest(structure);
