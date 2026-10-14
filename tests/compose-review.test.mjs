@@ -88,7 +88,7 @@ test('a drawn reconciliation loop passes, and a justified direct-text knowledge 
 
 test('receipts are bound to the reviewed deck, the design revision and the build; changed inputs are refused as stale',async t=>{
   const f=await built(t),first=await prepareReview(f.options),deck=join(f.options.output,'deck.pptx');
-  const r=await record(f);assert.equal(r.source.file,deck);assert.equal(r.compiled.dir,f.compiled);assert.equal(r.creativeQuality.designRevision,(await designStatus(f.project)).revision);
+  const r=await record(f);assert.equal(r.source.file,'deck.pptx');assert.equal(r.compiled.dir,'../compiled');assert.equal(r.designProject,'..');assert.equal(r.creativeQuality.designRevision,(await designStatus(f.project)).revision);
   assert.equal(r.creativeQuality.builtArtifactDigest.length,64);
   await markReview({output:f.options.output,revision:first.revision,numbers:[1,2,3],note:'SCRIPTED FIXTURE pixels inspected'});
   await assessReview({output:f.options.output,revision:first.revision,assessment:assessment(r.creativeQuality)});

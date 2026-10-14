@@ -2,7 +2,7 @@
 import {mkdir,lstat,readFile,writeFile,rename,rm,open} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {digest,regularInside} from './common.mjs';
+import {digest,regularInside,recordedPath,recordedLocation} from './common.mjs';
 import {validateSlideDecision} from './slide-decisions.mjs';
 import {refuse,refuseAll} from './refusals.mjs';
 const text=(v)=>typeof v==='string'&&v.trim()&&v.length<=20000;
@@ -58,13 +58,20 @@ async function locked(project,action){
 async function readSession(project){
   const value=JSON.parse(await readFile(await regularInside(project,recordPath),'utf8'));
   if(value.schema!==1||value.tool!=='harness-slides-design'||value.revision!==digest(value.plan))throw new Error('Design state changed outside the checkpoint; recover the proposal');
-  validateDesignProposal(value.plan);return value;
+  validateDesignProposal(value.plan);
+  // The session names files relative to the project. One written before that named its project and kept absolute paths:
+  // those inside it are rebased, so it reads after a move too, and the next write stores them relative.
+  if(typeof value.project==='string'){
+    const old=value.project;delete value.project;
+    if(value.rendered){const rebase=p=>recordedPath(old,p,old);value.rendered.review=rebase(value.rendered.review);value.rendered.images=Object.fromEntries(Object.entries(value.rendered.images).map(([id,p])=>[id,rebase(p)]));}
+  }
+  return value;
 }
 async function save(project,dir,value){
   const target=join(project,recordPath);try{await regularInside(project,recordPath);}catch(e){if(e.code!=='ENOENT')throw e;}
   const temp=join(dir,`${randomUUID()}.tmp`);
   try{await writeFile(temp,JSON.stringify(value,null,2)+'\n',{flag:'wx',mode:0o600});await rename(temp,target);}finally{await rm(temp,{force:true});}
-  return statusOf(value);
+  return statusOf(value,project);
 }
 // Presenter notes are not approved copy: changing them keeps a slide's approval.
 const binding=(session,{notes:_,...s})=>digest([session.plan.title,session.plan.scope,session.plan.slides.map(x=>x.id),s]);
@@ -84,12 +91,12 @@ function questionFor(session){
     options:batch?[whole?'Approve the whole plan':'Approve these designs','Request changes']:phase==='design'?['Approve this design','Change this design','Review remaining designs together']:['Approve these slides','Request revisions','Review remaining slides together'],
     wait:true,rule:'Use an available native question tool; otherwise ask in chat. Async return, defaults and elapsed time are not approval.'};
 }
-function statusOf(session){
+function statusOf(session,project){
   const waiting=pending(session),question=questionFor(session);
-  return {project:session.project,revision:session.revision,mode:session.mode,buildAllowed:!waiting.length&&!session.awaitingRevision,pending:waiting.map(s=>s.id),
+  return {project,revision:session.revision,mode:session.mode,buildAllowed:!waiting.length&&!session.awaitingRevision,pending:waiting.map(s=>s.id),
     status:session.awaitingRevision?'revision requested':waiting.length?'awaiting design approval':!session.rendered?'design approved; build permitted':session.rendered.waived?'rendered user review explicitly waived':session.rendered.approved.length===session.plan.slides.length?'rendered user review approved':'awaiting rendered user review',
-    feedback:session.feedback,question,slides:question?.phase==='design'?session.plan.slides.filter(s=>question.slides.includes(s.id)).map((s,i)=>({number:session.plan.slides.findIndex(x=>x.id===s.id)+1,...s})):question?.slides.map(id=>({id,image:session.rendered.images[id]}))??[],
-    renderedRevision:session.rendered?.revision??null,renderedReview:session.rendered?.review??null,renderedAcceptance:Boolean(session.rendered&&(session.rendered.waived||session.rendered.approved.length===session.plan.slides.length))};
+    feedback:session.feedback,question,slides:question?.phase==='design'?session.plan.slides.filter(s=>question.slides.includes(s.id)).map((s,i)=>({number:session.plan.slides.findIndex(x=>x.id===s.id)+1,...s})):question?.slides.map(id=>({id,image:recordedLocation(project,session.rendered.images[id])}))??[],
+    renderedRevision:session.rendered?.revision??null,renderedReview:session.rendered?recordedLocation(project,session.rendered.review):null,renderedAcceptance:Boolean(session.rendered&&(session.rendered.waived||session.rendered.approved.length===session.plan.slides.length))};
 }
 export async function proposeDesign({project,plan,expected,mode}){
   if(mode!==undefined&&!['guided','batch'].includes(mode))throw refuse('Choose the question mode guided or batch; autonomy is the person\'s answer, not a proposal option',{code:'invalid-proposal'});
@@ -97,7 +104,7 @@ export async function proposeDesign({project,plan,expected,mode}){
     let old;try{old=await readSession(root);}catch(e){if(e.code!=='ENOENT')throw e;}
     if(old&&expected!==old.revision)throw new Error('Design revision changed; use the current expected revision');
     if(!old&&expected)throw new Error('No existing design revision');
-    const revision=digest(plan),session={schema:1,tool:'harness-slides-design',project:root,plan:structuredClone(plan),revision,mode:mode??old?.mode??'guided',approvals:old?.approvals??{},feedback:old?.feedback??[],responses:old?.responses??[],rendered:old?.revision===revision?old.rendered:null,waiveRendered:old?.waiveRendered??false};
+    const revision=digest(plan),session={schema:1,tool:'harness-slides-design',plan:structuredClone(plan),revision,mode:mode??old?.mode??'guided',approvals:old?.approvals??{},feedback:old?.feedback??[],responses:old?.responses??[],rendered:old?.revision===revision?old.rendered:null,waiveRendered:old?.waiveRendered??false};
     // An unchanged resubmission is not a fix or approval of requested revisions.
     if(old?.awaitingRevision&&old.revision===revision)session.awaitingRevision=true;
     if(old?.revision!==revision){session.waiveRendered=false;session.responses.push({kind:'proposal',revision,at:new Date().toISOString()});}
@@ -105,7 +112,7 @@ export async function proposeDesign({project,plan,expected,mode}){
     return save(root,dir,session);
   });
 }
-export async function designStatus(project){const session=await readSession(resolve(project));if(session.rendered){const {verifyReview}=await import('./slide-review.mjs');const record=await verifyReview(session.rendered.review);if(record.revision!==session.rendered.revision||record.creativeQuality?.revision!==session.rendered.qualityRevision||!record.visualReviewComplete||!record.creativeReviewComplete)throw new Error('Rendered review changed; present current output before user approval');}return statusOf(session);}
+export async function designStatus(project){project=resolve(project);const session=await readSession(project);if(session.rendered){const {verifyReview}=await import('./slide-review.mjs');const record=await verifyReview(recordedLocation(project,session.rendered.review));if(record.revision!==session.rendered.revision||record.creativeQuality?.revision!==session.rendered.qualityRevision||!record.visualReviewComplete||!record.creativeReviewComplete)throw new Error('Rendered review changed; present current output before user approval');}return statusOf(session,project);}
 // Where authored slide IDs leave the approved order. A deck starts at the first approved slide and ends at the last;
 // a section starts wherever its first slide is approved and may end early. Null when they follow it.
 function orderProblem(planIds,slideIds,section){
@@ -133,7 +140,7 @@ export async function respondDesign({project,reply}){
   if(!fields(reply,['questionId','planRevision','decision','feedback','waiveRendered'])||!text(reply.feedback)||typeof reply.waiveRendered!=='undefined'&&typeof reply.waiveRendered!=='boolean')throw new Error('Record the actual user response text, questionId, planRevision and decision');
   return locked(project,async(root,dir)=>{
     const session=await readSession(root),question=questionFor(session);
-    if(question?.phase==='rendered'){const {verifyReview}=await import('./slide-review.mjs');const record=await verifyReview(session.rendered.review);if(record.revision!==session.rendered.revision||record.creativeQuality?.revision!==session.rendered.qualityRevision||!record.visualReviewComplete||!record.creativeReviewComplete)throw new Error('Rendered review changed; present current output');}
+    if(question?.phase==='rendered'){const {verifyReview}=await import('./slide-review.mjs');const record=await verifyReview(recordedLocation(root,session.rendered.review));if(record.revision!==session.rendered.revision||record.creativeQuality?.revision!==session.rendered.qualityRevision||!record.visualReviewComplete||!record.creativeReviewComplete)throw new Error('Rendered review changed; present current output');}
     if(!question||reply.questionId!==question.id||reply.planRevision!==session.revision)throw new Error('Question or design revision changed; do not apply a stale/default response');
     if(!['approve','revise','batch','approve-remaining','autonomous'].includes(reply.decision))throw new Error('Unknown design response');
     if(reply.decision==='autonomous'&&question.phase!=='design')throw new Error('Autonomy is chosen before construction; approve or revise rendered output');
@@ -161,10 +168,11 @@ export async function presentDesign({project,review,revision}){
     review=resolve(review);const record=JSON.parse(await readFile(await regularInside(review,'review.json'),'utf8'));
     if(record.revision!==revision||!record.visualReviewComplete||!record.creativeReviewComplete||record.designRevision!==session.revision||!record.designBinding)throw new Error('Present requires current pixel inspection and structured creative review bound to this design');
     const {verifyReview}=await import('./slide-review.mjs');await verifyReview(review,record);if(!record.visualReviewComplete||!record.creativeReviewComplete)throw new Error('Present requires verified pixel and creative receipts');
-    const images={};for(const slide of record.slides){const id=record.designBinding.find(x=>x.nativeId===slide.id)?.planId;if(!id||images[id])throw new Error('Rendered slides must map once to the approved design');images[id]=join(review,slide.image);}
+    const images={};for(const slide of record.slides){const id=record.designBinding.find(x=>x.nativeId===slide.id)?.planId;if(!id||images[id])throw new Error('Rendered slides must map once to the approved design');images[id]=recordedPath(root,join(review,slide.image),root);}
     if(Object.keys(images).length!==session.plan.slides.length)throw new Error('Rendered coverage differs from the approved plan');
-    const renderBinding=digest([revision,record.creativeQuality.revision,images]);
-    if(session.rendered?.binding!==renderBinding)session.rendered={revision,binding:renderBinding,qualityRevision:record.creativeQuality.revision,review,images,approved:[],waived:session.waiveRendered};
+    // The same render presented again keeps its approvals. Compared by content, so a session migrated from absolute paths still matches.
+    const renderBinding=digest([revision,record.creativeQuality.revision,images]),current=session.rendered&&digest([session.rendered.revision,session.rendered.qualityRevision,session.rendered.images]);
+    if(current!==renderBinding)session.rendered={revision,binding:renderBinding,qualityRevision:record.creativeQuality.revision,review:recordedPath(root,review,root),images,approved:[],waived:session.waiveRendered};
     return save(root,dir,session);
   });
 }

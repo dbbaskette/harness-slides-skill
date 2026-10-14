@@ -9,7 +9,7 @@ import { getApprovedDesign, requireSceneDesign } from './design-session.mjs';
 import {auditNativeReview,assessNativeCritique,auditCompositionReview,categorizeReview} from './native-quality.mjs';
 import {refuse} from './refusals.mjs';
 import {verifyBuiltAssets} from './assets.mjs';
-import {digest} from './common.mjs';
+import {digest,recordedPath,recordedLocation} from './common.mjs';
 import { pptxTool } from './presentation-tools.mjs';
 const exec = promisify(execFile);
 const hash = data => createHash('sha256').update(data).digest('hex');
@@ -75,7 +75,16 @@ async function saveImage(output, number, data) {
   }
   return { image, imageSha256: digest };
 }
+// The record names the reviewed deck, the design project, the build and the native snapshot relative to the review folder when
+// they and the folder lie in the design project (or, without one, in the review folder), so the project can move. Writing migrates older records.
+function relativePaths(output, record) {
+  const at = p => recordedLocation(output, p), project = record.designProject ? at(record.designProject) : output, keep = p => recordedPath(output, at(p), project);
+  if (record.source.file) record.source.file = keep(record.source.file);
+  for (const key of ['designProject', 'nativeSnapshot']) if (record[key]) record[key] = keep(record[key]);
+  if (record.compiled) record.compiled.dir = keep(record.compiled.dir);
+}
 async function save(output, record) {
+  relativePaths(output, record);
   record.pending = record.slides.filter(s => s.finalReview?.revision !== record.revision || s.finalReview?.status !== 'reviewed').map(s => s.number);
   record.visualReviewComplete = !record.pending.length;
   record.creativeReviewComplete = Boolean(record.creativeQuality && record.creativeAssessment && assessNativeCritique(record.creativeQuality,record.creativeAssessment).complete);
@@ -145,7 +154,7 @@ export async function prepareReview({ file, previews, compiled, output, designPr
         await verifyBuiltAssets(build.dir);
         file = join(dir, 'deck.pptx');
         let current = null; try { current = hash(await bytes(file)); } catch (error) { if (error.code !== 'ENOENT') throw error; }
-        build.native = previous?.compiled?.binding === build.binding && previous.source?.file === file && current === previous.source.sha256 ? previous.compiled.native : null;
+        build.native = previous?.compiled?.binding === build.binding && recordedLocation(dir, previous.source?.file) === file && current === previous.source.sha256 ? previous.compiled.native : null;
         if (!build.native) {
           const scratch = await mkdtemp(join(tmpdir(), 'harness-compose-review-'));
           try {
@@ -189,7 +198,7 @@ export async function prepareReview({ file, previews, compiled, output, designPr
         revision = hash(JSON.stringify([source, prepared.map(s => [s.id, s.hidden, s.fingerprint])]));
         pages = prepared;
       }
-      const sameSource = previous?.source?.type === source.type && (source.type === 'pptx' ? previous.source.file === source.file : previous.source.presentationId === source.presentationId);
+      const sameSource = previous?.source?.type === source.type && (source.type === 'pptx' ? recordedLocation(dir, previous.source.file) === source.file : previous.source.presentationId === source.presentationId);
       const resultPages = [];
       const changed = [];
       for (const page of pages) {
@@ -252,18 +261,19 @@ export async function markReview({ output, revision, numbers, status = 'reviewed
 }
 
 export async function verifyReview(output,record){
-  if(!record)record=await readRecord(resolve(output));
+  output=resolve(output);const at=p=>recordedLocation(output,p);
+  if(!record)record=await readRecord(output);
   if(!record)throw new Error('Prepare native review first');
-  if(record.source.type==='pptx'&&hash(await bytes(record.source.file))!==record.source.sha256)throw stale('Deck changed after rendering; prepare review again');
+  if(record.source.type==='pptx'&&hash(await bytes(at(record.source.file)))!==record.source.sha256)throw stale('Deck changed after rendering; prepare review again');
   for(const slide of record.slides)if(!/^slide-\d+-[a-f0-9]+\.png$/.test(slide.image)||hash(await bytes(join(output,slide.image)))!==slide.imageSha256)throw stale('Preview changed; prepare review again');
   if(record.creativeReviewRequired){
-    try{await getApprovedDesign(record.designProject,{revision:record.designRevision});}catch(error){if(/Approved design revision changed/.test(error.message))throw stale('Approved design revision changed after this review was prepared; build the current design and prepare review again');throw error;}
+    try{await getApprovedDesign(at(record.designProject),{revision:record.designRevision});}catch(error){if(/Approved design revision changed/.test(error.message))throw stale('Approved design revision changed after this review was prepared; build the current design and prepare review again');throw error;}
     if(record.compiled){
-      let now;try{now=await readBuild(record.compiled.dir);}catch(error){throw stale(`The compiled build changed after this review was prepared (${error.message}); prepare review again`);}
+      let now;try{now=await readBuild(at(record.compiled.dir));}catch(error){throw stale(`The compiled build changed after this review was prepared (${error.message}); prepare review again`);}
       if(now.binding!==record.compiled.binding)throw stale('The compiled build changed after this review was prepared; prepare review again');
-      await verifyBuiltAssets(record.compiled.dir);
+      await verifyBuiltAssets(at(record.compiled.dir));
     }
-    if(record.nativeSnapshot&&digest(JSON.parse(await bytes(record.nativeSnapshot)))!==record.nativeSnapshotDigest)throw stale('Native snapshot changed; prepare current review');
+    if(record.nativeSnapshot&&digest(JSON.parse(await bytes(at(record.nativeSnapshot))))!==record.nativeSnapshotDigest)throw stale('Native snapshot changed; prepare current review');
     if(!record.creativeQuality)throw new Error('Creative report is missing');
     const {revision,...payload}=record.creativeQuality;
     if(revision!==digest(payload)||record.creativeQuality.artifactDigest!==digest(record.slides.map(s=>[s.id,s.imageSha256]))||record.source.type==='pptx'&&record.creativeQuality.builtArtifactDigest!==digest({'deck.pptx':record.source.sha256})||record.compiled&&record.creativeQuality.build!==record.compiled.binding)throw stale('Creative quality binding changed');

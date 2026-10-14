@@ -18,3 +18,14 @@ export async function regularInside(root, file) {
   inside(base, actual);
   return path;
 }
+// Paths a record keeps. Inside a project, a record names a file relative to its own folder, with '/', so the project can move,
+// or be committed and opened elsewhere, and the record names no home folder. A path outside the project, or a record kept
+// outside it, stays absolute: a relative path to a place that does not move with the project breaks whichever side moves.
+const within=(root,path)=>{const rel=relative(root,path);return !isAbsolute(rel)&&rel!=='..'&&!rel.startsWith(`..${sep}`);};
+export function recordedPath(base,target,project){
+  base=resolve(base);target=resolve(target);
+  if(!project||!within(resolve(project),base)||!within(resolve(project),target))return target;
+  return relative(base,target).split(sep).join('/')||'.';
+}
+// The file a record names, resolved against the record's folder. An absolute path, as earlier records kept, is returned as it is.
+export const recordedLocation=(base,path)=>typeof path==='string'?resolve(base,path):path;
