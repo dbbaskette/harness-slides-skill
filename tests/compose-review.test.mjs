@@ -161,3 +161,16 @@ test('a composition review refuses a section build, an unbound build and a missi
   const both=await run(['review','--compiled',f.compiled,'--file',join(f.project,'x.pptx'),'--output',join(f.project,'cli-review-3'),'--design-project',f.project,'--json']);
   assert.equal(JSON.parse(both.stdout).problems[0].code,'input-invalid');
 });
+
+test('an icon placed by asset ID counts as its approved candidate, and the prompt names the asset',async()=>{
+  const {auditCompositionReview}=await import('../scripts/lib/native-quality.mjs'),plan={slides:[(await read('proposal.json')).slides[0]]},slide=plan.slides[0];
+  const scene={slides:[{id:slide.id,title:slide.title,elements:[{id:'arch_title',type:'text',role:'title',text:slide.title,x:0,y:0,width:900,height:60}]}]};
+  const structure={connectors:[],layouts:[],icons:[{slide:slide.id,id:'arch_icon',icon:'fi-0000aaaa-s001-l001'}]};
+  const audit=assets=>auditCompositionReview({scene,structure,report:{inputs:{assets}},plan,designRevision:'r',binding:{},builtArtifactDigest:'b',artifactDigest:'a'});
+  const missing=q=>q.findings.filter(f=>f.code==='approved-candidate-missing').map(f=>f.slide);
+  // The library ID is not the candidate's free-name ref, so without the asset record the icon is not recognised.
+  assert.deepEqual(missing(audit([])),[slide.id]);
+  const placed=audit([{object:'arch_icon',slide:slide.id,asset:'icon_kubernetes',kind:'icon',ref:'fi-0000aaaa-s001-l001',sha256:'e'.repeat(64)}]);
+  assert.deepEqual(missing(placed),[]);
+  assert.deepEqual(placed.prompts[0].assetObjects,[{object:'arch_icon',icon:'fi-0000aaaa-s001-l001',asset:'icon_kubernetes'}]);
+});

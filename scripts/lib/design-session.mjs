@@ -20,7 +20,9 @@ export function renderCopy(copy){
   return lines.join('\n');
 }
 const validCopy=c=>fields(c,['points','focal','caveat','source'])&&Array.isArray(c.points)&&c.points.length<=12&&(c.points.length>0||c.focal!==undefined)&&c.points.every(p=>fields(p,['label','text'])&&(p.label!==undefined||p.text!==undefined)&&[p.label,p.text].every(x=>x===undefined||text(x)))&&['focal','caveat','source'].every(k=>c[k]===undefined||text(c[k]));
-const validCandidates=c=>Array.isArray(c)&&c.length>0&&c.length<=12&&new Set(c.map(x=>x?.assetId)).size===c.length&&c.every(x=>fields(x,['assetId','kind','ref','concept','alt','status'])&&/^[\w.:-]{1,128}$/.test(x.assetId??'')&&kinds.includes(x.kind)&&text(x.ref)&&text(x.concept)&&(x.alt===undefined||text(x.alt))&&['resolved','pending'].includes(x.status));
+// An icon candidate's ref is a free name, or with refType library-id the brand icon library ID, in the form assets icon takes.
+const refOk=x=>x.refType===undefined||x.refType==='name'||x.refType==='library-id'&&x.kind==='icon'&&/^[\w.-]{1,80}$/.test(x.ref);
+const validCandidates=c=>Array.isArray(c)&&c.length>0&&c.length<=12&&new Set(c.map(x=>x?.assetId)).size===c.length&&c.every(x=>fields(x,['assetId','kind','ref','refType','concept','alt','status'])&&/^[\w.:-]{1,128}$/.test(x.assetId??'')&&kinds.includes(x.kind)&&text(x.ref)&&refOk(x)&&text(x.concept)&&(x.alt===undefined||text(x.alt))&&['resolved','pending'].includes(x.status));
 // Returns the plan as stored: a schema-2 slide given copy gains the visibleText rendered from it. Schema 1 is returned unchanged.
 export function validateDesignProposal(plan){
   if(!fields(plan,['schema','title','scope','slides'])||![1,2].includes(plan.schema)||!text(plan.title)||!['new','redesign'].includes(plan.scope)||!Array.isArray(plan.slides)||!plan.slides.length||plan.slides.length>100)throw refuse('Design proposal needs schema:1 or 2, title, scope:new|redesign and 1–100 slides',{code:'invalid-proposal'});
@@ -36,7 +38,7 @@ export function validateDesignProposal(plan){
       if(s.notes!==undefined&&!text(s.notes))throw refuse(`${s.id}: notes are presenter notes, or omitted`,at);
       if(copy&&!validCopy(s.copy))throw refuse(`${s.id}: copy is {points:[{label?,text?}],focal?,caveat?,source?} with at most 12 points and something to show`,at);
       if(copy&&s.visibleText!==undefined&&s.visibleText!==renderCopy(s.copy))throw refuse(`${s.id}: visibleText differs from the text rendered from copy; send copy alone`,{...at,code:'copy-mismatch'});
-      if(s.asset.candidates!==undefined&&!validCandidates(s.asset.candidates))throw refuse(`${s.id}: each asset candidate needs a unique assetId, kind ${kinds.join('|')}, ref, concept, optional alt and status resolved|pending`,at);
+      if(s.asset.candidates!==undefined&&!validCandidates(s.asset.candidates))throw refuse(`${s.id}: each asset candidate needs a unique assetId, kind ${kinds.join('|')}, ref, concept, optional alt and status resolved|pending; refType library-id is for an icon whose ref is a brand icon library ID`,at);
     }
     const visible=copy?renderCopy(s.copy):s.visibleText;
     for(const q of s.qualifications??[])if(!squash(visible).includes(squash(q)))throw refuse(`${s.id}: the qualification "${q}" does not appear in the slide copy`,{...at,code:'copy-qualification-missing'});
@@ -103,9 +105,16 @@ function statusOf(session,project){
     feedback:session.feedback,question,slides:question?.phase==='design'?session.plan.slides.filter(s=>question.slides.includes(s.id)).map((s,i)=>({number:session.plan.slides.findIndex(x=>x.id===s.id)+1,...s})):question?.slides.map(id=>({id,image:recordedLocation(project,session.rendered.images[id])}))??[],
     renderedRevision:session.rendered?.revision??null,renderedReview:session.rendered?recordedLocation(project,session.rendered.review):null,renderedAcceptance:Boolean(session.rendered&&(session.rendered.waived||session.rendered.approved.length===session.plan.slides.length))};
 }
-export async function proposeDesign({project,plan,expected,mode}){
+export async function proposeDesign({project,plan,expected,mode,brand}){
   if(mode!==undefined&&!['guided','batch'].includes(mode))throw refuse('Choose the question mode guided or batch; autonomy is the person\'s answer, not a proposal option',{code:'invalid-proposal'});
-  plan=validateDesignProposal(plan);return locked(project,async(root,dir)=>{
+  plan=validateDesignProposal(plan);
+  // With a brand, each icon candidate named by library ID must be a native icon in the brand's library.
+  if(brand){
+    const contract=JSON.parse(await readFile(brand,'utf8')),{checkBrandSources}=await import('./brand-contract.mjs'),{candidateIconProblems}=await import('./assets.mjs');await checkBrandSources(contract);
+    const problems=await candidateIconProblems(plan.slides,contract);
+    if(problems.length)throw refuseAll(problems.length===1?problems[0].detail:`${problems.length} icon candidates to fix:\n${problems.map(p=>p.detail).join('\n')}`,problems);
+  }
+  return locked(project,async(root,dir)=>{
     let old;try{old=await readSession(root);}catch(e){if(e.code!=='ENOENT')throw e;}
     if(old&&expected!==old.revision)throw new Error('Design revision changed; use the current expected revision');
     if(!old&&expected)throw new Error('No existing design revision');
@@ -198,5 +207,7 @@ export async function requireSceneDesign(scene,project,revision,{section=false}=
   if(problems.length)throw refuseAll(problems.length===1?problems[0].detail:`${problems.length} slides differ from the approved design:\n${problems.map(p=>p.detail).join('\n')}`,problems);
   return {...approved,scope:section?'section':'deck',slides:ids};
 }
+// The stored plan, read-only: the proposal while it waits for approval, the approved plan once it has it.
+export async function designPlan(project){return (await readSession(resolve(project))).plan;}
 // For a refusal: the current revision when the record is readable, otherwise null.
 export async function designRevisionOf(project){try{return (await readSession(resolve(project))).revision;}catch{return null;}}

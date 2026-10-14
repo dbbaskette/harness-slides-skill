@@ -234,3 +234,93 @@ test('the manifest refuses paths that leave the project or pass through a link',
   const m=await manifest(f.project);m.assets[0].path='../incoming/Console view.png';await writeFile(join(f.project,'.harness-slides/assets.json'),JSON.stringify(m));
   const value=blocked(await run(['assets','check','--project',f.project,'--json']));assert.equal(value.problems[0].code,'input-invalid');
 });
+
+// The design's candidates come from its stored plan: the proposal while it waits, the approved plan afterwards.
+test('assets check and status --design-project read every candidate of a pending proposal and of an approved design',async t=>{
+  const f=await place(t),proposal=JSON.parse(await readFile(join(fixture,'proposal.json'),'utf8'));
+  // A candidate on a later slide is outside the first guided question.
+  proposal.slides[1].asset.candidates=[{assetId:'reconcile_diagram',kind:'supplied',ref:'brief:loop',concept:'The reconcile loop',status:'pending'}];
+  const file=join(f.base,'proposal.json');await writeFile(file,JSON.stringify(proposal));
+  const proposed=await ok(['design','propose','--project',f.project,'--file',file]);
+  const pending=async()=>(await ok(['assets','status','--project',f.project,'--design-project',f.project])).candidates.pending.map(c=>[c.slide,c.assetId]);
+  const unresolved=async()=>blocked(await run(['assets','check','--project',f.project,'--design-project',f.project,'--json'])).problems.map(p=>[p.code,p.slide,p.asset]);
+  const all=[['operator_architecture','icon_kubernetes'],['operator_architecture','icon_pod'],['reconcile_loop','reconcile_diagram']];
+  assert.deepEqual(await pending(),all);
+  assert.deepEqual(await unresolved(),all.map(([slide,asset])=>['asset-unresolved',slide,asset]));
+  const {respondDesign}=await import('../scripts/lib/design-session.mjs');
+  const approved=await respondDesign({project:f.project,reply:{questionId:proposed.question.id,planRevision:proposed.revision,decision:'autonomous',feedback:'SCRIPTED TEST FIXTURE: approve this synthetic plan; this is not a production human response.'}});
+  assert.equal(approved.buildAllowed,true);assert.deepEqual(approved.slides,[]);
+  // Approved, the design asks nothing, and its candidates are still checked.
+  assert.deepEqual(await pending(),all);
+  assert.deepEqual(await unresolved(),all.map(([slide,asset])=>['asset-unresolved',slide,asset]));
+  await ok(['assets','icon','kubernetes','--project',f.project,'--id','icon_kubernetes']);await ok(['assets','icon','pod','--project',f.project,'--id','icon_pod']);
+  await ok(['assets','add-supplied',f.shot,'--project',f.project,'--id','reconcile_diagram','--alt','The loop','--source','Author']);
+  const ready=await ok(['assets','check','--project',f.project,'--design-project',f.project]);
+  assert.deepEqual(ready.candidates.resolved.map(c=>c.assetId),['icon_kubernetes','icon_pod','reconcile_diagram']);assert.deepEqual(ready.candidates.pending,[]);
+});
+
+test('a design names a brand icon by library ID; propose and check with --brand refuse an ID the brand lacks, and a free name is unchanged',async t=>{
+  const f=await place(t),brand=await iconBrand(f.base),proposal=JSON.parse(await readFile(join(fixture,'proposal.json'),'utf8')),file=join(f.base,'proposal.json');
+  const [database,pod]=proposal.slides[0].asset.candidates;
+  Object.assign(database,{assetId:'icon_database',ref:'fi-0000aaaa-s001-l001',refType:'library-id'});
+  const propose=async(edit,args=[])=>{edit?.(pod);await writeFile(file,JSON.stringify(proposal));const project=join(f.base,`p-${Math.random()}`);await mkdir(project);return {project,result:await run(['design','propose','--project',project,'--file',file,'--json',...args])};};
+  // An ID the brand lacks is unresolved, and a picture is unavailable, each naming the slide and the candidate.
+  for(const [ref,code,pattern] of [['fi-0000aaaa-s001-l999','asset-unresolved',/not in the brand icon library/],['fi-0000aaaa-s001-l002','icon-unavailable',/picture/]]){
+    const {result}=await propose(c=>Object.assign(c,{ref,refType:'library-id'}),['--brand',brand.file]),value=blocked(result);
+    assert.deepEqual(value.problems.map(p=>[p.code,p.slide,p.asset]),[[code,'operator_architecture','icon_pod']]);assert.match(value.problems[0].detail,pattern);
+  }
+  // A library ID must look like one, brand or not; a free name is never checked against the brand.
+  assert.equal(blocked((await propose(c=>Object.assign(c,{ref:'the pod icon',refType:'library-id'}))).result).problems[0].code,'invalid-proposal');
+  assert.equal(blocked((await propose(c=>Object.assign(c,{ref:'pod',refType:'name-ish'}))).result).problems[0].code,'invalid-proposal');
+  assert.equal((await propose(c=>{c.ref='pod';delete c.refType;},['--brand',brand.file])).result.code,0);
+  // Without --brand an unknown ID is accepted as proposed, and assets check --brand finds it.
+  const {project,result}=await propose(c=>Object.assign(c,{ref:'fi-0000aaaa-s001-l999',refType:'library-id'}));assert.equal(result.code,0,result.stdout);
+  let value=blocked(await run(['assets','check','--project',project,'--design-project',project,'--brand',brand.file,'--json']));
+  assert.deepEqual(value.problems.map(p=>[p.code,p.slide,p.asset]),[['asset-unresolved','operator_architecture','icon_database'],['asset-unresolved','operator_architecture','icon_pod']]);
+  assert.match(value.problems[0].next,/assets icon fi-0000aaaa-s001-l001 --id icon_database --brand/);assert.match(value.problems[1].detail,/icon fi-0000aaaa-s001-l999, which is not in the brand icon library/);
+  // status gives the library ID of each library-ID candidate, so it can be recorded exactly.
+  const status=await ok(['assets','status','--project',project,'--design-project',project]);
+  assert.deepEqual(status.candidates.pending.map(c=>[c.assetId,c.ref??null]),[['icon_database','fi-0000aaaa-s001-l001'],['icon_pod','fi-0000aaaa-s001-l999']]);
+  // A recorded icon must be the one the design names.
+  await ok(['assets','icon','fi-0000aaaa-s001-l001','--project',project,'--id','icon_database','--brand',brand.file]);
+  await ok(['assets','icon','fi-0000aaaa-s001-l001','--project',project,'--id','icon_pod','--brand',brand.file]);
+  value=blocked(await run(['assets','check','--project',project,'--design-project',project,'--brand',brand.file,'--json']));
+  assert.deepEqual(value.problems.map(p=>[p.code,p.slide,p.asset]),[['asset-conflict','operator_architecture','icon_pod']]);assert.match(value.problems[0].detail,/fi-0000aaaa-s001-l999/);
+});
+
+test('a composition places {type:icon,asset} from the manifest and records it in inputs.assets; {type:icon,icon} is unchanged',async t=>{
+  const f=await place(t),brand=await iconBrand(f.base),file=join(f.base,'composition.json');
+  const comp=icon=>({version:1,title:'Icons by asset ID',slides:[{id:'console_view',title:'The database keeps the state',sources:['brief:test'],
+    canvas:{type:'stack',direction:'row',children:[{type:'icon',id:'db_icon',...icon},{type:'text',id:'db_text',text:'The database keeps the state the controller reads.'}]}}]});
+  const attempt=async(icon,extra=['--asset-project',f.project])=>{await writeFile(file,JSON.stringify(comp(icon)));return run(['compose','compile','--file',file,'--brand',brand.file,...extra,'--output',join(f.base,`out-${Math.random()}`),'--json']);};
+  const codes=async(icon,extra)=>blocked(await attempt(icon,extra)).problems.map(p=>[p.code,p.slide,p.asset]);
+  // Not recorded, or no project to look in, is unresolved.
+  assert.deepEqual(await codes({asset:'icon_database'}),[['asset-unresolved','console_view','icon_database']]);
+  assert.match(blocked(await attempt({asset:'icon_database'},[])).problems[0].detail,/--asset-project/);
+  const recorded=await ok(['assets','icon','fi-0000aaaa-s001-l001','--project',f.project,'--id','icon_database','--brand',brand.file]);assert.equal(recorded.checked,true);
+  const output=join(f.base,'compiled');
+  await writeFile(file,JSON.stringify(comp({asset:'icon_database'})));
+  await ok(['compose','compile','--file',file,'--brand',brand.file,'--asset-project',f.project,'--output',output]);
+  const report=JSON.parse(await readFile(join(output,'compose-report.json'),'utf8')),structure=JSON.parse(await readFile(join(output,'structure.json'),'utf8'));
+  const [entry]=(await manifest(f.project)).assets;
+  assert.deepEqual(report.inputs.assets,[{object:'db_icon',slide:'console_view',asset:'icon_database',kind:'icon',ref:'fi-0000aaaa-s001-l001',sha256:entry.sha256}]);
+  assert.deepEqual(structure.icons.map(i=>[i.id,i.icon]),[['db_icon','fi-0000aaaa-s001-l001']]);
+  // Render checks the build's copies; an icon has none, so this brand fails only for its lack of a native template.
+  const render=await run(['compose','render','--file',output,'--output',join(f.base,'deck.pptx')]);assert.equal(render.code,1);assert.match(render.stderr,/need a brand with a native template/);
+  // A recorded image is not an icon; icon and asset together are refused.
+  await ok(['assets','add-supplied',f.shot,'--project',f.project,'--id','console_shot','--alt','Console','--source','Author']);
+  const image=blocked(await attempt({asset:'console_shot'}));assert.deepEqual(image.problems.map(p=>[p.code,p.slide]),[['composition-invalid','console_view']]);assert.match(image.problems[0].detail,/not an icon/);
+  assert.deepEqual((await codes({asset:'icon_database',icon:'fi-0000aaaa-s001-l001'})).map(p=>p[0]),['composition-invalid']);
+  // An icon recorded unchecked is checked against the brand as {icon} is; one changed in the library since it was recorded is refused.
+  await ok(['assets','icon','fi-0000aaaa-s001-l002','--project',f.project,'--id','icon_photo']);
+  assert.deepEqual(await codes({asset:'icon_photo'}),[['icon-unavailable','console_view','fi-0000aaaa-s001-l002']]);
+  const index=JSON.parse(await readFile(brand.index,'utf8'));index.entries[0].label='Data store';await writeFile(brand.index,JSON.stringify(index));
+  const c=brand.contract;c.sources.find(s=>s.path===brand.index).sha256=hash(await readFile(brand.index));c.revision=contractRevision(c);await writeFile(brand.file,JSON.stringify(c));
+  assert.deepEqual(await codes({asset:'icon_database'}),[['asset-hash-changed','console_view','icon_database']]);
+  // The library ID still places the icon directly, and nothing is recorded for it.
+  await writeFile(file,JSON.stringify(comp({icon:'fi-0000aaaa-s001-l001'})));const direct=join(f.base,'direct');
+  await ok(['compose','compile','--file',file,'--brand',brand.file,'--output',direct]);
+  assert.deepEqual(JSON.parse(await readFile(join(direct,'compose-report.json'),'utf8')).inputs.assets,[]);
+  // The pure compiler names the icon asset it cannot resolve on its own.
+  await assert.rejects(compileComposition(comp({asset:'icon_database'}),brand.contract),/db_icon: icon asset icon_database resolves through the project's asset manifest/);
+});

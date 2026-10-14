@@ -6,7 +6,7 @@ import {checkBrandSources,neutralBrandContract} from './brand-contract.mjs';
 import {requireSceneDesign} from './design-session.mjs';
 import {digest,hash,recordedPath} from './common.mjs';
 import {refuse,refuseAll,compositionProblems} from './refusals.mjs';
-import {resolveCompositionAssets,placeImages,verifyBuiltAssets} from './assets.mjs';
+import {resolveCompositionAssets,iconAssetProblems,placeImages,verifyBuiltAssets} from './assets.mjs';
 
 // What the composition asks of the brand's icon library and template, read straight from the file so it can be checked even when a slide does not compile.
 function requested(comp) {
@@ -24,12 +24,14 @@ export async function compileCompositionFile({file,brand,output,fonts,'design-pr
   const bytes=await readFile(file),brandBytes=brand?await readFile(brand):null;
   const contract=brandBytes?JSON.parse(brandBytes):await neutralBrandContract();
   await checkBrandSources(contract);
-  // Images named by asset ID resolve through the project's asset manifest, which is the design project's unless another is named.
-  const {comp,uses,problems}=await resolveCompositionAssets(JSON.parse(bytes),assetProject??designProject);let compiled;
+  // Images and icons named by asset ID resolve through the project's asset manifest, which is the design project's unless another is named.
+  const {comp,uses,icons,unresolved,problems}=await resolveCompositionAssets(JSON.parse(bytes),assetProject??designProject);let compiled;
   try{compiled=await compileComposition(comp,contract,{fonts:fonts?JSON.parse(await readFile(fonts)):undefined});}catch(error){problems.push(...lines(error));}
   // Unknown or picture-only icons and unknown layouts are caught now, not when the deck is rendered, and alongside everything else.
-  const native=await import('./pptx-native.mjs'),wanted=compiled?.structure??requested(comp);
+  // An icon asset that did not resolve has already been reported, so its stand-in is not checked against the library.
+  const native=await import('./pptx-native.mjs'),found=compiled?.structure??requested(comp),wanted={...found,icons:(found.icons??[]).filter(i=>!unresolved.has(i.id))};
   for(const check of [native.checkIcons,native.checkLayouts])try{await check(wanted,contract);}catch(error){problems.push(...lines(error));}
+  problems.push(...await iconAssetProblems(icons,contract));
   if(problems.length)throw refuseAll(problems.length===1?problems[0]:`${problems.length} problems to fix:\n${problems.join('\n')}`,compositionProblems(problems,comp));
   const {scene,structure,report}=compiled;
   const summary={slides:scene.slides.length,brandRevision:contract.revision,measurement:report.measurement,groups:structure.groups.length,connectors:structure.connectors.length,icons:structure.icons.length,room:Object.fromEntries(report.room.map(r=>[r.slide,`${r.needs} of ${r.has}`])),...(structure.adjusted?.length?{weightOverridden:structure.adjusted}:{}),...(structure.reading?.length?{readingSizeInLiveDeck:structure.reading.map(r=>`${r.slide}: ${r.nodes.length} items at ${r.size}pt`)}:{})};
@@ -38,6 +40,8 @@ export async function compileCompositionFile({file,brand,output,fonts,'design-pr
   if(!output)return {status:'fits; nothing written. Add a new --output directory to write the build',...summary};
   if(approved){report.designRevision=approved.revision;report.designScope=approved.scope;}
   const {assets,write}=await placeImages(scene,{base:dirname(resolve(file)),uses});
+  // An icon placed by asset ID is recorded with its library ID and the hash of its index entry; the build needs no copy of it.
+  for(const i of structure.icons){const use=icons.get(i.id);if(use)assets.push({object:i.id,slide:i.slide,asset:use.assetId,kind:'icon',ref:use.ref,sha256:use.sha256});}
   // The composition and brand are named relative to the build when both lie in the project; one from elsewhere stays absolute.
   output=resolve(output);const project=designProject??assetProject,input=path=>recordedPath(output,path,project);
   report.inputs={composition:{path:input(file),sha256:hash(bytes)},brand:brand?{path:input(brand),sha256:hash(brandBytes)}:{kind:'neutral defaults',revision:contract.revision},assets};
