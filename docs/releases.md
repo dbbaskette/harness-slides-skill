@@ -24,6 +24,12 @@ that is missing or invalid, the task is refused as before. A task pinned to a
 revision is never moved to older guidance. Runtimes up to 0.12.0 predate this and
 are still refused.
 
+Guidance is fetched into `.harness-slides/guidance/repository.git` inside the
+project, but that repository is not a cache: a project can arrive with one someone
+else made, and git honours its config, hooks, alternates, replacement refs and
+grafts. Each `start` and `pin` deletes it and fetches into a fresh one, with git's
+system and global config ignored, so only the trusted URL decides what is read.
+
 Users see “Using Harness Slides v0.13.1”. `--version` is an offline human-readable
 check; `version` returns `package`, `runtimeVersion`, resolved `runtime` and
 `capabilities` as JSON. Run it from the returned runtime. `capabilities` names the

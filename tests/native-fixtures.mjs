@@ -84,17 +84,27 @@ export function geometry(xml) {
 
 // A brand with a native template and a vector icon library built from the SVGs in fixtures/native-icons.
 // Each icon is a disc with a custom-geometry drawing on it and its label in a table below, indexed by the real indexer.
+// The last icon is lettered, as some brand icons are: its glyph is a group holding the text 'VM' and a bar, and a
+// caption text box sits under its disc, inside its region but outside the icon.
 export async function iconBrand(dir,options) {
   const {renderPptxScene}=await import('../scripts/lib/pptx-render.mjs'),{pptxTool}=await import('../scripts/lib/presentation-tools.mjs');
   const source=new URL('./fixtures/native-icons/',import.meta.url),catalog=JSON.parse(await readFile(new URL('catalog.json',source),'utf8'));
   const icons=await Promise.all(catalog.files.map(async(file,i)=>{const svg=await readFile(new URL(file,source),'utf8'),[,,,width]=svg.match(/viewBox="(\S+) (\S+) (\S+) (\S+)"/).map(Number);
     return {label:catalog.labels[i],name:file.replace(/\.svg$/,''),size:width*1000,commands:svgCommands(svg.match(/ d="([^"]+)"/)[1])};}));
+  const lettered={label:'Virtual Machine',name:'vm',lettered:true},column=120+120*icons.length,emu=v=>v*12700,labels=[...icons.map(i=>i.label),lettered.label];
   const generated=join(dir,'icon-library-generated.pptx'),path=join(dir,'icon-library.pptx'),index=join(dir,'icon-index.json'),catalogFile=join(dir,'icon-catalog.json');
   await renderPptxScene({version:2,title:'Icons',mode:'new',canvas:{width:960,height:540},slides:[{id:'icon_page',title:'Icons',sources:['brief:test'],elements:[
     ...icons.flatMap((icon,i)=>[{id:`${icon.name}_disc`,type:'shape',shape:'ellipse',x:120+120*i,y:90,width:80,height:80,fill:'#2867B2'},{id:`${icon.name}_drawing`,type:'shape',shape:'rect',x:136+120*i,y:106,width:48,height:48,fill:'#FFFFFF'}]),
-    {id:'icon_labels',type:'table',x:100,y:200,width:120*icons.length,height:40,rows:[icons.map(i=>i.label)]}]}]},generated);
+    {id:'vm_disc',type:'shape',shape:'ellipse',x:column,y:90,width:80,height:80,fill:'#2867B2'},{id:'vm_caption',type:'text',x:column+4,y:174,width:72,height:20,text:'Caption'},
+    {id:'icon_labels',type:'table',x:100,y:200,width:120*labels.length,height:40,rows:[labels]}]}]},generated);
+  // The lettered glyph: a group of a 'VM' text box and a bar, drawn in white on the last disc.
+  const frame=(x,y,w,h)=>`<a:off x="${emu(x)}" y="${emu(y)}"/><a:ext cx="${emu(w)}" cy="${emu(h)}"/>`,white='<a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill>';
+  const glyph=`<p:grpSp><p:nvGrpSpPr><p:cNvPr id="9001" name="vm_glyph"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm>${frame(column+16,106,48,48)}<a:chOff x="${emu(column+16)}" y="${emu(106)}"/><a:chExt cx="${emu(48)}" cy="${emu(48)}"/></a:xfrm></p:grpSpPr>`+
+    `<p:sp><p:nvSpPr><p:cNvPr id="9002" name="vm_letters"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm>${frame(column+16,110,48,22)}</a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr>`+
+    `<p:txBody><a:bodyPr wrap="none" lIns="0" tIns="0" rIns="0" bIns="0" anchor="ctr"/><a:lstStyle/><a:p><a:pPr algn="ctr"/><a:r><a:rPr lang="en-US" sz="1400" b="1">${white}</a:rPr><a:t>VM</a:t></a:r></a:p></p:txBody></p:sp>`+
+    `<p:sp><p:nvSpPr><p:cNvPr id="9003" name="vm_bar"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm>${frame(column+24,138,32,8)}</a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>${white}</p:spPr></p:sp></p:grpSp>`;
   const script=`import sys,zipfile,json,re
-src,dst,shapes=sys.argv[1],sys.argv[2],json.loads(sys.argv[3])
+src,dst,shapes,glyph=sys.argv[1],sys.argv[2],json.loads(sys.argv[3]),sys.argv[4]
 with zipfile.ZipFile(src) as a, zipfile.ZipFile(dst,'x',zipfile.ZIP_DEFLATED) as b:
     for i in a.infolist():
         data=a.read(i)
@@ -103,15 +113,17 @@ with zipfile.ZipFile(src) as a, zipfile.ZipFile(dst,'x',zipfile.ZIP_DEFLATED) as
             for name,geometry in shapes.items():
                 text,count=re.subn(r'(<p:sp>(?:(?!</p:sp>).)*?name="'+name+r'".*?)<a:prstGeom prst="rect">.*?</a:prstGeom>',lambda m:m.group(1)+geometry,text,count=1,flags=re.S)
                 if count!=1: raise SystemExit('no shape '+name)
+            text,count=re.subn(r'</p:spTree>',lambda m:glyph+m.group(0),text,count=1)
+            if count!=1: raise SystemExit('no shape tree')
             data=text.encode()
         b.writestr(i,data)`;
-  await exec('python3',['-c',script,generated,path,JSON.stringify(Object.fromEntries(icons.map(i=>[`${i.name}_drawing`,custGeom(i.commands,i.size)])))]);
-  await writeFile(catalogFile,JSON.stringify({source:{sha256:hash(await readFile(path))},catalogPages:[{slide:1,labels:catalog.labels}]}));
+  await exec('python3',['-c',script,generated,path,JSON.stringify(Object.fromEntries(icons.map(i=>[`${i.name}_drawing`,custGeom(i.commands,i.size)]))),glyph]);
+  await writeFile(catalogFile,JSON.stringify({source:{sha256:hash(await readFile(path))},catalogPages:[{slide:1,labels}]}));
   const listing=await pptxTool('icon-index',[path,catalogFile]);await writeFile(index,JSON.stringify(listing));
   const c=await brand(dir,options);c.design.slides.icon={size:54,library:{path,index}};
   for(const file of [path,index])c.sources.push({path:file,kind:'icon library',sha256:hash(await readFile(file))});
   c.revision=contractRevision(c);
-  return {contract:c,library:{path,index},icons:icons.map(icon=>({...icon,entry:listing.entries.find(e=>e.label===icon.label)}))};
+  return {contract:c,library:{path,index,catalog:catalogFile},icons:[...icons,lettered].map(icon=>({...icon,entry:listing.entries.find(e=>e.label===icon.label)}))};
 }
 
 // A diagram whose cards carry icons and whose arrows meet a standalone icon, then one icon in each style. Takes library IDs by label.
