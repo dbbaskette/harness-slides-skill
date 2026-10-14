@@ -46,11 +46,13 @@ async function cacheFor(project, config, create = false) {
   }
   return cache;
 }
+// Belt and braces: the repository is created fresh by start, so its own config is already this helper's.
+const pinned = ['core.hooksPath=/dev/null', 'core.fsmonitor=false', 'protocol.allow=never', 'protocol.https.allow=always', 'protocol.file.allow=always'].flatMap(setting => ['-c', setting]);
 async function git(repository, ...args) {
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
   Object.assign(env, { GIT_TERMINAL_PROMPT: '0', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' });
   try {
-    return (await exec('git', ['--git-dir=' + repository, '-c', 'core.hooksPath=/dev/null', ...args], { env, timeout: 45000, maxBuffer: 16 * 1024 * 1024, encoding: 'buffer' })).stdout;
+    return (await exec('git', ['--git-dir=' + repository, '--no-replace-objects', ...pinned, ...args], { env, timeout: 45000, maxBuffer: 16 * 1024 * 1024, encoding: 'buffer' })).stdout;
   } catch { throw new Error('Guidance fetch failed. Check Git and network access; existing work can resume its saved task.'); }
 }
 function version(value) {
@@ -128,9 +130,12 @@ export async function start({ project, runtime = root, source, revision } = {}) 
   const lock = await open(join(cache, '.sync-lock'), 'wx', 0o600).catch(error => { if (error.code === 'EEXIST') throw new Error('Another guidance refresh is running; retry after it finishes.'); throw error; });
   let stage;
   try {
+    // The project may have arrived with this repository, and git trusts far more of one than its config: hooks,
+    // alternates, replacement refs, grafts, commit-graphs, commondir. So it is never reused; each start rebuilds it.
     const repository = join(cache, 'repository.git');
-    try { const stat = await lstat(repository); if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error('Unsafe guidance repository.'); }
-    catch (error) { if (error.code !== 'ENOENT') throw error; await git(repository, 'init', '--bare', '--initial-branch=main'); }
+    try { const stat = await lstat(repository); if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error('Unsafe guidance repository.'); await rm(repository, { recursive: true }); }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+    await mkdir(repository, { mode: 0o700 }); await git(repository, 'init', '--quiet', '--bare', '--template=', '--initial-branch=main');
     if (revision !== undefined && !revisionPattern.test(revision)) throw new Error('Invalid saved guidance revision.');
     // source is a library-only seam for local disposable test repositories.
     const trustedSource = source ?? config.repository;
