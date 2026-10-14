@@ -36,7 +36,7 @@ const messages = {
   unsupported_api: 'Use --api interactions or --api generate-content.',
 };
 export class ImagesError extends Error {
-  constructor(code, detail) { super((messages[code] ?? `Image operation failed (${code}).`) + (detail ? ` (${detail})` : '')); this.code = code; }
+  constructor(code, detail) { super((messages[code] ?? `Image operation failed (${code}).`) + (detail ? ` (${detail})` : '')); this.code = code; this.name = 'ImagesError'; }
 }
 
 async function exists(path) { try { await access(path); return true; } catch { return false; } }
@@ -283,7 +283,16 @@ async function apiImages(action, options, deps, state) {
   return publish(job, base, stem);
 }
 
+// A downloaded image joins the project's asset manifest under its request ID, with its sidecar as provenance.
+// A repeat of the same request records nothing new.
 export async function images(action, options = {}, deps = {}) {
+  if (action === 'generate') await (await import('./assets.mjs')).checkGeneratable(options);
+  const result = await provide(action, options, deps);
+  if (['generate', 'download'].includes(action) && result?.status === 'downloaded' && options.project)
+    await (await import('./assets.mjs')).registerGenerated({ project: options.project, result, alt: options.alt, slide: options.slide });
+  return result;
+}
+async function provide(action, options, deps) {
   const provider = options.provider ?? 'gemini-api', state = resolve(options.state ?? defaultState());
   if (provider === 'gemini-api') return apiImages(action, options, deps, state);
   if (provider !== 'gemini-web') throw new ImagesError('unknown_provider');

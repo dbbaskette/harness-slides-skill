@@ -5,7 +5,8 @@ import {compileComposition} from './compose.mjs';
 import {checkBrandSources,neutralBrandContract} from './brand-contract.mjs';
 import {requireSceneDesign} from './design-session.mjs';
 import {digest,hash} from './common.mjs';
-import {refuse,refuseAll,compositionProblems} from './refusals.mjs';
+import {refuseAll,compositionProblems} from './refusals.mjs';
+import {resolveCompositionAssets,placeImages,verifyBuiltAssets} from './assets.mjs';
 
 // What the composition asks of the brand's icon library and template, read straight from the file so it can be checked even when a slide does not compile.
 function requested(comp) {
@@ -16,12 +17,13 @@ function requested(comp) {
 const lines=error=>error.message.split('\n').filter(line=>!/^\d+ problems to fix:$/.test(line));
 
 // Without --output this only checks: every structure, fit, icon and layout problem comes back from one run and nothing is written.
-export async function compileCompositionFile({file,brand,output,fonts,'design-project':designProject}) {
+export async function compileCompositionFile({file,brand,output,fonts,'design-project':designProject,'asset-project':assetProject}) {
   if(!file)throw new Error('Provide --file composition.json, and a new --output directory to write the build');
   const bytes=await readFile(file),brandBytes=brand?await readFile(brand):null;
   const contract=brandBytes?JSON.parse(brandBytes):await neutralBrandContract();
   await checkBrandSources(contract);
-  const comp=JSON.parse(bytes),problems=[];let compiled;
+  // Images named by asset ID resolve through the project's asset manifest, which is the design project's unless another is named.
+  const {comp,uses,problems}=await resolveCompositionAssets(JSON.parse(bytes),assetProject??designProject);let compiled;
   try{compiled=await compileComposition(comp,contract,{fonts:fonts?JSON.parse(await readFile(fonts)):undefined});}catch(error){problems.push(...lines(error));}
   // Unknown or picture-only icons and unknown layouts are caught now, not when the deck is rendered, and alongside everything else.
   const native=await import('./pptx-native.mjs'),wanted=compiled?.structure??requested(comp);
@@ -32,17 +34,14 @@ export async function compileCompositionFile({file,brand,output,fonts,'design-pr
   if(!output)return {status:'fits; nothing written. Add a new --output directory to write the build',...summary};
   const approved=await requireSceneDesign(scene,designProject);
   if(approved)report.designRevision=approved.revision;
-  const assets=[];
-  for(const s of scene.slides)for(const e of s.elements)if(e.type==='image'&&!/^https:\/\//.test(e.src)) {
-    const path=resolve(dirname(resolve(file)),e.src),image=await readFile(path).catch(error=>{throw error.code==='ENOENT'?refuse(`${s.id}/${e.id}: image ${e.src} is missing (${path})`,{code:'asset-missing',slide:s.id,asset:e.id}):error;});
-    e.src=path;assets.push({object:e.id,path,sha256:hash(image)});
-  }
+  const {assets,write}=await placeImages(scene,{base:dirname(resolve(file)),uses});
   report.inputs={composition:{path:resolve(file),sha256:hash(bytes)},brand:brand?{path:resolve(brand),sha256:hash(brandBytes)}:{kind:'neutral defaults',revision:contract.revision},assets};
   report.sceneDigest=digest(scene);report.structureDigest=digest(structure);
   output=resolve(output);await mkdir(output,{mode:0o700});
   try {
     for(const [name,value] of [['scene.json',scene],['structure.json',structure],['compose-report.json',report],['brand-contract.json',contract]])
       await writeFile(join(output,name),JSON.stringify(value,null,2)+'\n',{flag:'wx',mode:0o600});
+    await write(output);
   } catch(error){await rm(output,{recursive:true,force:true});throw error;}
   return {output,sceneDigest:report.sceneDigest,...summary};
 }
@@ -78,6 +77,7 @@ export async function renderCompositionDir({file,output}) {
   if(!file||!output)throw new Error('Provide --file COMPILED_DIR and a new --output deck.pptx');
   const dir=resolve(file),load=async name=>JSON.parse(await readFile(join(dir,name),'utf8'));
   const scene=await load('scene.json'),structure=await load('structure.json'),brand=await load('brand-contract.json');
+  await verifyBuiltAssets(dir);
   if(structure.icons?.length&&!brand.design.nativeTemplate)throw new Error('This composition uses icons, which need a brand with a native template');
   if(structure.layouts?.some(l=>l.layout!=='@subtitled')&&!brand.design.nativeTemplate)throw new Error('This composition uses template layouts, which need a brand with a native template');
   if(brand.design.nativeTemplate)return (await import('./pptx-native.mjs')).emitNativePptx({scene,structure,brand,output,base:dir});

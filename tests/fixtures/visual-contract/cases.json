@@ -28,6 +28,12 @@
      "problems": [{"code": "design-mismatch", "slide": "reconcile_loop", "recoverable": true}]},
     {"id": "image-missing", "given": "empty",
      "run": ["compose", "compile", "--file", "{fixture}/refusals/composition-missing-image.json", "--output", "{output}", "--json"],
-     "problems": [{"code": "asset-missing", "slide": "console_view", "asset": "console_screenshot", "recoverable": true}]}
+     "problems": [{"code": "asset-missing", "slide": "console_view", "asset": "console_screenshot", "recoverable": true}]},
+    {"id": "image-asset-unrecorded", "given": "empty",
+     "run": ["compose", "compile", "--file", "{fixture}/refusals/composition-unknown-asset.json", "--asset-project", "{project}", "--output", "{output}", "--json"],
+     "problems": [{"code": "asset-unresolved", "slide": "console_view", "asset": "console_screenshot", "recoverable": true}]},
+    {"id": "candidates-unrecorded", "given": "proposed",
+     "run": ["assets", "check", "--project", "{project}", "--design-project", "{project}", "--json"],
+     "problems": [{"code": "asset-unresolved", "slide": "operator_architecture", "asset": "icon_kubernetes", "recoverable": true}, {"code": "asset-unresolved", "slide": "operator_architecture", "asset": "icon_pod", "recoverable": true}]}
   ]
 }
