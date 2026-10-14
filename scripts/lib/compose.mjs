@@ -13,7 +13,7 @@ const fields={
   box:['text','shape','fill','color','textRole','align','children','gap','style'],
   text:['text','textRole','color','align'],
   image:['src','asset','alt','fit'],
-  icon:['icon','color','style'],
+  icon:['icon','asset','color','style'],
   badge:['text','fill'],
   table:['rows','widths'],
   chart:['kind','data','title','units','source'],
@@ -65,7 +65,7 @@ export const composeContract=`Composition v1 (AI-owned; describe structure, neve
 A slide with layout uses that template layout's own placeholders (cover, section break, closing) and has no canvas; run compose layouts for the names.
 A content slide's furniture is set on the slide, not drawn in the canvas: subtitle is one line under the title, in the template's own subtitle line; caveat is a ruled strip at the foot, with an optional one-word label such as Limit or Verify; source is a line beneath it. The canvas gets the room that is left.
 NODE containers: {type:stack,direction:row|column,gap?,align?,children:[NODE]} | {type:grid,columns:1-6,gap?,children:[NODE]} | {type:free,children:[NODE with at:{x,y,width,height} as 0-1 fractions]} | {type:ring,children:[3-8 NODE],hub?:NODE}.
-NODE leaves: {type:icon,id,icon:STABLE ICON ID from the brand's icon search,color?,style?:solid|outline|plain} | {type:box,id,text?|children?,shape?:rect|ellipse|roundRect|diamond|hexagon|chevron|can,style?:solid|outline|bar,fill?,color?,textRole?,align?,gap?} | {type:metric,id,value,label} | {type:badge,id,text,fill?} | {type:rule} | {type:table,id,rows:[[header cells],[cells]...],widths?:[relative]} | {type:chart,id,kind:bar|line|pie,data:{categories,series:[{name,values}]},title?,units?,source?} | {type:text,id,text,textRole?,color?,align?} | {type:image,id,src,alt,fit?} (or asset:ID from assets status in place of src, alt defaulting to the recorded alt) | {type:spacer}.
+NODE leaves: {type:icon,id,icon:STABLE ICON ID from the brand's icon search,color?,style?:solid|outline|plain} (or asset:ID of a recorded brand icon in place of icon) | {type:box,id,text?|children?,shape?:rect|ellipse|roundRect|diamond|hexagon|chevron|can,style?:solid|outline|bar,fill?,color?,textRole?,align?,gap?} | {type:metric,id,value,label} | {type:badge,id,text,fill?} | {type:rule} | {type:table,id,rows:[[header cells],[cells]...],widths?:[relative]} | {type:chart,id,kind:bar|line|pie,data:{categories,series:[{name,values}]},title?,units?,source?} | {type:text,id,text,textRole?,color?,align?} | {type:image,id,src,alt,fit?} (or asset:ID from assets status in place of src, alt defaulting to the recorded alt) | {type:spacer}.
 sources name what a slide rests on: a document section, a finding, or one ID such as request or author_knowledge when it comes from the brief or general knowledge.
 Any node may set weight (relative share, above 0 up to 10, default 1). A node never goes below the size its content needs; when that overrides a weight you set, compile and preview report it as weight-overridden. An empty box has no minimum, so use empty boxes for bars drawn to scale.
 An icon keeps the library's own colors unless you set color (a brand color role) or style: solid is a light icon on a colored disc, outline a colored icon in a ring, plain a colored icon with no container, drawn a little larger. On a filled card use plain or outline with a color that reads on the fill.
@@ -212,6 +212,7 @@ export function validateComposition(comp,contract,{collect}={}) {
       if(n.type==='text'&&n.textRole==='metric')facts.metric=true;
       // Two or more comparable siblings: side by side they are a pair, in a single column they are layers.
       if(['stack','grid','free','ring'].includes(n.type)&&Array.isArray(n.children)&&n.children.filter(k=>['box','text','stack','grid'].includes(k?.type)).length>1){const column=n.type==='stack'&&n.direction==='column'||n.type==='grid'&&n.columns===1;if(n.children.filter(k=>['box','stack','grid'].includes(k?.type)).length>1)facts.peers=true;if(column){if(n.children.filter(k=>k?.type==='box').length>1)facts.layers=true;}else facts.pair=true;}
+      if(n.type==='icon'&&n.asset!==undefined){if(n.icon!==undefined)fail(where,'icon takes icon or asset, not both');fail(where,`icon asset ${n.asset} resolves through the project's asset manifest; compile it with compose compile --asset-project DIR`);}
       if(n.type==='icon'&&(!str(n.icon)||n.icon.length>80||!/^[\w.-]+$/.test(n.icon)))fail(where,'icon needs a stable icon ID from the brand icon search');
       if(n.type==='icon'&&n.style!==undefined&&!iconStyles.includes(n.style))fail(where,`style must be one of ${iconStyles.join('|')}`);
       if(n.type==='image'){if(n.asset!==undefined&&n.src!==undefined)fail(where,'image takes src or asset, not both');if(n.asset!==undefined)fail(where,`image asset ${n.asset} resolves through the project's asset manifest; compile it with compose compile --asset-project DIR`);if(!str(n.src)||!str(n.alt))fail(where,'image needs src and alt');if(!['contain','cover'].includes(n.fit??'contain'))fail(where,'fit must be contain|cover');}

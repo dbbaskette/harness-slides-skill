@@ -77,13 +77,14 @@ export function auditCompositionReview({scene,structure,report,plan,designRevisi
   const assets=(report.inputs?.assets??[]).filter(a=>a.asset).map(({object,slide,asset,kind,sha256})=>({object,slide,asset,kind,sha256}));
   for(const [i,slide] of scene.slides.entries()){
     const proposed=plan.slides[i],family=proposed.intent.visual.family,body=slide.elements.filter(e=>e.role!=='title'&&e.text!==slide.title);
-    const edges=structure.connectors.filter(c=>c.slide===slide.id),icons=(structure.icons??[]).filter(c=>c.slide===slide.id),placed=assets.filter(a=>a.slide===slide.id);
+    // An icon placed by asset ID is listed with the assets, but it is drawn as an icon: placed holds the images.
+    const edges=structure.connectors.filter(c=>c.slide===slide.id),icons=(structure.icons??[]).filter(c=>c.slide===slide.id),placed=assets.filter(a=>a.slide===slide.id&&a.kind!=='icon'),iconAsset=id=>assets.find(a=>a.kind==='icon'&&a.slide===slide.id&&a.object===id)?.asset;
     const shapes=body.filter(e=>e.type==='shape'),region=shapes.some(a=>shapes.some(b=>a!==b&&inside(a,b))),pictures=body.some(e=>['image','table','chart'].includes(e.type));
     // The approved asset is a fact about the build: it is there or it is not.
     const missing=['icon','sourced-image','generated-art'].includes(family)&&!(family==='icon'?icons.length:placed.length||body.some(e=>e.type==='image'));
     if(missing)findings.push({slide:slide.id,code:'approved-asset-missing',severity:'error',category:'asset-failure',detail:`The approved visual is ${family}, and the build places none on this slide. Place the approved asset, or propose the change for approval.`});
     const candidates=proposed.asset.disposition==='selected'?proposed.asset.candidates??[]:[];
-    if(!missing&&candidates.length&&!candidates.some(c=>c.kind==='icon'?icons.some(x=>x.icon===c.ref):placed.some(a=>a.asset===c.assetId)))findings.push({slide:slide.id,code:'approved-candidate-missing',severity:'warn',category:'asset-failure',detail:`None of the approved asset candidates (${candidates.map(c=>`${c.assetId}: ${c.concept}`).join('; ')}) is on this slide. Place one, or judge under asset-purpose why the slide teaches without it.`});
+    if(!missing&&candidates.length&&!candidates.some(c=>c.kind==='icon'?icons.some(x=>x.icon===c.ref||iconAsset(x.id)===c.assetId):placed.some(a=>a.asset===c.assetId)))findings.push({slide:slide.id,code:'approved-candidate-missing',severity:'warn',category:'asset-failure',detail:`None of the approved asset candidates (${candidates.map(c=>`${c.assetId}: ${c.concept}`).join('; ')}) is on this slide. Place one, or judge under asset-purpose why the slide teaches without it.`});
     // Prose cards: a mechanism the design describes, built as boxes of sentences with nothing drawn between them. A prompt for the reviewer, never a failure on its own.
     const cards=shapes.filter(e=>(e.text??'').trim().split(/\s+/).length>=3&&!/chevron|homePlate/i.test(e.shape??''));
     const relationship=proposed.intent.relationship.trim(),drawn=['diagram','regions'].includes(family);
@@ -97,7 +98,7 @@ export function auditCompositionReview({scene,structure,report,plan,designRevisi
     const ids=[...new Set([...slide.elements.map(e=>e.id),...edges.map(e=>e.id),...icons.map(e=>e.id)])];
     prompts.push({slide:slide.id,title:slide.title,component:'composition',treatment:direct.has(slide.id)?'direct-text':family,intent:proposed.intent,sources:proposed.sources,objects:ids,
       expectedText:slide.elements.filter(e=>e.text?.trim()).map(e=>({object:e.id,text:e.text})),approvedCopy:proposed.visibleText,approvedComposition:proposed.composition,assetCandidate:proposed.asset,
-      assetObjects:[...placed,...icons.map(c=>({object:c.id,icon:c.icon}))],...(prose?{proseCards:cards.map(e=>e.id)}:{}),
+      assetObjects:[...placed,...icons.map(c=>({object:c.id,icon:c.icon,...(iconAsset(c.id)?{asset:iconAsset(c.id)}:{})}))],...(prose?{proseCards:cards.map(e=>e.id)}:{}),
       criteria:Object.entries(questions).filter(([id])=>id==='repetition-justification'?repeated:id==='teaching-treatment'?prose:true).map(([id,question])=>({id,question}))});
   }
   const groups=[...new Set(findings.filter(f=>f.code==='similar-geometry').map(f=>JSON.stringify(f.relatedSlides)))].map(g=>JSON.parse(g));

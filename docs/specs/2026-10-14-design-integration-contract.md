@@ -9,7 +9,9 @@ milestone 4 (issue #50). [Paths in records](#paths-in-records) are relative to t
 project since issue #57. Since issue #59, digests that stand for the same content
 [ignore key order](#key-order), and `version` reports
 [capabilities](#detecting-support). Compositions draw
-[native charts](#native-charts) since issue #40.
+[native charts](#native-charts) since issue #40. Since issue #64, asset checks read
+every candidate of the stored plan, a design can name a brand icon by
+[library ID](#icons-by-library-id), and a composition can place an icon by asset ID.
 
 ## Why
 
@@ -28,7 +30,7 @@ exercises the same contract, and Training Studio copies it.
 
 | Operation | Command | Notes |
 | --- | --- | --- |
-| Propose a design | `design propose --project DIR --file proposal.json [--expected REV] [--mode guided\|batch]` | Schema 1 or 2. A changed proposal needs `--expected` set to the current revision. |
+| Propose a design | `design propose --project DIR --file proposal.json [--expected REV] [--mode guided\|batch] [--brand brand-contract.json]` | Schema 1 or 2. A changed proposal needs `--expected` set to the current revision. With `--brand`, icon candidates named by [library ID](#icons-by-library-id) are checked against the brand. |
 | Read the current question | `design status --project DIR` | Returns `revision`, `mode`, `pending`, `question` and the slides it asks about. |
 | Record the person's answer | `design respond --project DIR --file reply.json` | `{questionId,planRevision,decision,feedback,waiveRendered?}` |
 | Check before building | `design check --project DIR` | Refuses until every slide is approved. |
@@ -38,8 +40,9 @@ exercises the same contract, and Training Studio copies it.
 | Generate approved artwork | `images generate ... --design-project DIR --slide ID [--alt TEXT]` | Only for an approved slide whose visual family is `generated-art`. The image is recorded in the asset manifest under its `--id`. |
 | Record a supplied image | `assets add-supplied FILE --project DIR --alt TEXT --source TEXT [--restrictions TEXT] [--id ID] [--kind supplied\|screenshot\|chart]` | See [the asset manifest](#the-asset-manifest). |
 | Record a brand icon | `assets icon ICON_ID --project DIR [--id ID] [--alt TEXT] [--brand brand-contract.json]` | With `--brand`, checked against the brand's hashed icon index. |
-| See or check the assets | `assets status\|check --project DIR [--design-project DIR] [--brand brand-contract.json]` | `check` refuses missing or changed files, and design candidates not yet recorded. |
+| See or check the assets | `assets status\|check --project DIR [--design-project DIR] [--brand brand-contract.json]` | `check` refuses missing or changed files, and design candidates not yet recorded, whether the design is waiting for approval or approved. |
 | Place a recorded image | `{type:image,id,asset:ID,alt?,fit?}` or `picture:{asset:ID,alt?}` in a composition, compiled with `--asset-project DIR` | `--asset-project` defaults to `--design-project`. |
+| Place a recorded icon | `{type:icon,id,asset:ID,color?,style?}` in a composition, compiled with `--asset-project DIR` and `--brand` | `--asset-project` defaults to `--design-project`. `{type:icon,id,icon:LIBRARY_ID}` still works. |
 | Preview a composition | `compose preview --file COMPILED --output NEW [--design-project DIR [--section]]` | With `--design-project`, it rechecks the build against the design approved now, before it renders. Without the flag it is not bound to the session, and a refusal reports the design revision of the compiled build. |
 | Review a composition against the design | `review --compiled COMPILED --output REVIEW --design-project DIR` | Renders `REVIEW/deck.pptx` from the build and reviews it. See [design-bound review of a composition](#design-bound-review-of-a-composition). |
 | Rendered user review | `review ... --design-project`, then `design present` | Needs a review record bound to the design; a composition's comes from `review --compiled`. |
@@ -54,8 +57,9 @@ versions, and do not provoke a refusal to find out.
 
 ```json
 {"package":"harness-slides","runtimeVersion":"0.13.1","runtime":"/…/harness-slides",
- "capabilities":["assets","canonical-digests","compose-review","compose-section",
-   "design-batch","design-schema-2","json-refusals","native-charts","relative-records"]}
+ "capabilities":["assets","assets-approved-candidates","canonical-digests","compose-icon-assets",
+   "compose-review","compose-section","design-batch","design-icon-ids","design-schema-2",
+   "json-refusals","native-charts","relative-records"]}
 ```
 
 The list is sorted. A name is added with its feature and never renamed, removed
@@ -64,10 +68,13 @@ or reused. A runtime without `capabilities` (0.13.1 and earlier) has none of the
 | Capability | The runtime supports |
 | --- | --- |
 | `assets` | [The asset manifest](#the-asset-manifest): `assets add-supplied`, `assets icon`, `assets status` and `assets check`, images recorded by `images generate` and `images download`, and asset IDs in a composition compiled with `--asset-project` |
+| `assets-approved-candidates` | `assets status\|check --design-project` reading the candidates of every slide in the stored plan, pending or approved. Without it they see only the slides of the question `design status` is waiting on, and none once the design is approved |
 | `canonical-digests` | Intents, slide approvals and plan revisions that [ignore key order](#key-order) |
+| `compose-icon-assets` | `{type:icon,asset:ID}` in a composition, resolved through the asset manifest and listed in `compose-report.json` `inputs.assets` ([the asset manifest](#the-asset-manifest)) |
 | `compose-review` | `review --compiled COMPILED --design-project DIR`, the [design-bound review of a composition](#design-bound-review-of-a-composition) |
 | `compose-section` | `--section` on `compose compile` and `compose preview` ([sections](#sections)), `--design-project` on `compose preview`, and `compose compile --design-project` checking without `--output` |
 | `design-batch` | `design propose --mode batch` and [the whole-plan question](#the-whole-plan-question) |
+| `design-icon-ids` | `refType: "library-id"` on an icon candidate, and `design propose --brand` and `assets check --brand --design-project` checking it ([icons by library ID](#icons-by-library-id)) |
 | `design-schema-2` | [Proposal schema 2](#proposal-schema-2): `copy`, `objectives`, `qualifications`, `notes` and `asset.candidates`, and the `asset-unresolved` fallback |
 | `json-refusals` | `--json` [refusals](#refusals) on the commands that list it |
 | `native-charts` | A `chart` node in a composition, written by the native template emitter as an editable chart with its own embedded workbook. See [native charts](#native-charts) |
@@ -86,7 +93,7 @@ Schema 2 keeps every schema-1 field and adds optional fields on each slide:
 | `visibleText` | string | Required without `copy`. With `copy` it is rendered for you. If you send it too, it must equal that rendering. |
 | `qualifications` | 1–20 strings | Wording the visible copy must keep. Each must appear in it, ignoring case and runs of spaces. |
 | `notes` | string | Presenter notes. They are not approved copy, so changing them keeps the slide's approval. |
-| `asset.candidates` | 1–12 `{assetId, kind, ref, concept, alt?, status}` | `kind` is `icon`, `supplied`, `generated`, `screenshot` or `chart`. `status` is `resolved` or `pending`. `assetId` is unique on the slide. |
+| `asset.candidates` | 1–12 `{assetId, kind, ref, refType?, concept, alt?, status}` | `kind` is `icon`, `supplied`, `generated`, `screenshot` or `chart`. `status` is `resolved` or `pending`. `assetId` is unique on the slide. `ref` is a free description unless `refType` says otherwise; see [icons by library ID](#icons-by-library-id). |
 
 The rendering of `copy` has one line for each part. The first line is `focal`,
 unless `focal` repeats a point's label. Then comes one line for each point, written
@@ -111,6 +118,34 @@ refusal carries a fallback proposal, a native diagram. That fallback is only a
 proposal and needs the person's approval like any other change. Pending
 candidates are allowed on a selected asset. Generated art, for example, can only
 be generated once its slide is approved.
+
+### Icons by library ID
+
+An icon candidate's `ref` is a free name by default, such as `"kubernetes"`, and
+the caller must find the matching brand icon itself. To name the exact icon, give
+its brand library ID and say so:
+
+```json
+{"assetId":"icon_kubernetes","kind":"icon","ref":"fi-1a2b3c4d-s001-l004","refType":"library-id",
+ "concept":"Kubernetes cluster","status":"pending"}
+```
+
+`refType` is `name` (the default) or `library-id`, and `library-id` is only for
+`kind: icon`. A library ID has the form `assets icon` takes: up to 80 letters,
+digits, `_`, `.` or `-`. A candidate without `refType` is a free name and is never
+checked against a brand, so proposals written before this keep working with or
+without `--brand`.
+
+`design propose --brand brand-contract.json` and `assets check --brand
+brand-contract.json --design-project DIR` check each library-ID candidate against
+the brand's hashed icon index. An ID the library lacks is refused as
+`asset-unresolved`, and one it holds only as a picture or without a drawing as
+`icon-unavailable`. Each problem names the slide, and its `asset` is the
+candidate's `assetId`. Without `--brand`, `design propose` checks only the ID's
+form. `assets check --design-project` also refuses a recorded icon whose `ref`
+is not the candidate's library ID as `asset-conflict`. For a library-ID
+candidate not yet recorded, `next` gives the exact `assets icon ID --id ASSET_ID
+--brand` command, and `assets status` lists the candidate with its `ref`.
 
 ## The asset manifest
 
@@ -151,7 +186,9 @@ a file already in the project again under its ID accepts its current bytes.
 `assets status` lists each asset with a `state` of `ok`, `file-missing`,
 `hash-changed` or `invalid`. With `--design-project` it also sorts the design's
 asset candidates into `resolved` (in the manifest with the same kind) and
-`pending`. `assets check` refuses the same problems:
+`pending`. The candidates come from every slide of the stored plan: the proposal
+while it waits for approval, and the approved plan once it has it. `assets
+check` refuses the same problems:
 
 - a missing file or sidecar as `asset-file-missing`, and a changed one as
   `asset-hash-changed`;
@@ -159,7 +196,9 @@ asset candidates into `resolved` (in the manifest with the same kind) and
   `icon-unavailable`, and a changed index entry as `asset-hash-changed`;
 - with `--design-project`, a candidate not in the manifest as `asset-unresolved`,
   or as `provider-missing` when it is generated art and no image provider key is
-  set; a candidate whose kind differs from the recorded asset as `asset-conflict`.
+  set; a candidate whose kind differs from the recorded asset as `asset-conflict`;
+- with both, an icon candidate named by a [library ID](#icons-by-library-id) the
+  brand lacks or cannot draw, and a recorded icon that is not that ID.
 
 `compose compile` resolves `{type:image,asset}` and `picture:{asset}` through the
 manifest of `--asset-project`, or of `--design-project` when that is not given.
@@ -172,6 +211,18 @@ compiled folder and its previews work after the project moves.
 `{object,slide,asset,kind,path,source,sha256}`; `compose render` and
 `compose preview` refuse a copy that changed. An image given by `src` is
 unchanged: its absolute path and hash are recorded as before.
+
+`{type:icon,id,asset:ID}` places a recorded icon. It takes `asset` in place of
+`icon`, never both, and keeps `color` and `style`. It resolves through the same
+manifest to the icon's recorded library ID, and is then checked against the brand
+like any icon. An asset that is not recorded, or no project to look in, is
+`asset-unresolved`; an asset that is an image is a composition problem; an icon
+the library lacks or cannot draw is `icon-unavailable`; and an icon recorded with
+`--brand` whose index entry has changed since is `asset-hash-changed`. The build
+holds no copy of an icon: it is drawn from the brand library at render.
+`inputs.assets` lists it as `{object,slide,asset,kind:"icon",ref,sha256}`, where
+`ref` is the library ID and `sha256` the recorded hash of its index entry, or
+null. `{type:icon,id,icon:LIBRARY_ID}` works as before and is not listed.
 
 ## The whole-plan question
 
@@ -395,7 +446,7 @@ Without `--json` the same refusal is the same sentence on stderr as before.
 | `invalid-proposal` | A proposal that does not match the schema, or a mode other than guided or batch |
 | `copy-mismatch` | `visibleText` that differs from the text rendered from `copy` |
 | `copy-qualification-missing` | A qualification that does not appear in the visible copy |
-| `asset-unresolved` | An asset the visual depends on that is not selected, carrying `asset` and `fallback`; or an asset ID not in the manifest |
+| `asset-unresolved` | An asset the visual depends on that is not selected, carrying `asset` and `fallback`; an asset ID not in the manifest; or an icon candidate's library ID the brand lacks |
 | `design-missing` | No session in the project, or a creative build without `--design-project` |
 | `design-awaiting-approval` | Construction before approval; one problem for each pending slide |
 | `design-revision-requested` | Construction after the person asked for changes |
@@ -407,12 +458,12 @@ Without `--json` the same refusal is the same sentence on stderr as before.
 | `rendered-review-stale` | A rendered review that changed or does not cover the approved slides |
 | `review-stale` | A review whose deck, images, compiled build or design revision changed after it was prepared, a build compiled against an older design, or a `--mark` or `--assessment` for an older review revision |
 | `composition-invalid` | A structure or fit problem, one per problem, with its slide |
-| `icon-unavailable` | An icon missing from the brand library, or not native geometry; `asset` is the icon ID |
+| `icon-unavailable` | An icon missing from the brand library, or not native geometry; `asset` is the icon ID, or for a design candidate its `assetId` |
 | `layout-unavailable` | A template layout the brand does not have |
 | `asset-missing` | An image file a composition names by `src` that is not there; `asset` is the element ID |
 | `asset-file-missing` | A recorded asset's file or sidecar that is not there; `asset` is the asset ID |
 | `asset-hash-changed` | A recorded asset, sidecar, icon entry or build copy that changed since it was recorded |
-| `asset-conflict` | An asset ID already recorded for a different file, kind or icon |
+| `asset-conflict` | An asset ID already recorded for a different file, kind or icon, or a recorded icon that is not its candidate's library ID |
 | `assets-busy` | Another asset command holds `.harness-slides/assets.lock` |
 | `provider-missing` | An image provider that is not set up: no API key, or no web sign-in; `provider` names it |
 | `renderer-unavailable` | Poppler or LibreOffice is not installed; `provider` is `poppler` or `libreoffice` |
@@ -485,9 +536,12 @@ checked yet; see
   cannot tell whether a drawn diagram is correct. That judgement is the
   assessment's, under `visual-relationship` and `teaching-treatment`.
 - Asset candidates are checked against the manifest only by `assets check
-  --design-project`, not by `design check` or a build. An icon node still names
-  its library ID (`{type:icon,icon}`); a recorded icon gives that ID as `ref`,
-  but a composition cannot place an icon by asset ID.
+  --design-project`, not by `design check` or a build. A build does not compare
+  the icons it places with the approved candidates; the design-bound review
+  prompts when none of them is on its slide.
+- A library-ID candidate is checked against the brand only when `--brand` is
+  given. A free-name `ref` is never matched to a library icon; the caller still
+  finds it.
 - Only `compose compile` resolves asset IDs. A deck plan's `assets` and a scene
   still name files.
 - `objectives` and `qualifications` are checked when proposed and then only kept.
@@ -522,7 +576,8 @@ checked yet; see
 
 - Version and release. Live guidance does not describe schema 2, batch mode,
   `--json`, `--section`, `--design-project` on `compose preview`, the asset manifest,
-  `review --compiled` or the `chart` node yet. New
+  icon candidates by library ID, icons by asset ID, `review --compiled` or the
+  `chart` node yet. New
   tasks fetch guidance from `main` while the released runtime is 0.13.1. Those
   lines go with the release that raises `minimumRuntime` (issue #51). See
   [guidance for the release](#guidance-for-the-release).
@@ -587,6 +642,24 @@ release that raises `minimumRuntime` (issue #51), and not before:
   status` lists. Do not copy image files into a section."
 - `SKILL.md` task table, beside *Custom image generation or image setup*: a row
   "Supplied images, brand icons or generated art a deck uses | [Images](references/images.md)".
+
+## Guidance for the release: exact icons
+
+Installs still running 0.13.1 refuse `refType` on a candidate, `--brand` on
+`design propose` and `asset` on an icon node. These lines go into guidance with
+the release that raises `minimumRuntime` (issue #51), together with the asset
+manifest lines above, and not before:
+
+- `references/design-walkthrough.md`, after the asset manifest line on candidates:
+  "For an icon, search the brand icon library and give the icon's ID as `ref`
+  with `refType: "library-id"`, so the approved icon is exact. Propose with
+  `--brand brand-contract.json` to have each ID checked."
+- `references/compositions.md`, after "Search the brand's icon library for icon
+  IDs.": "An icon recorded in the asset manifest is placed by its asset ID:
+  `{type:icon,id,asset:ID}`, compiled with `--asset-project DIR` when the
+  assets are not in the design project."
+- `references/parallel-build.md`, for workers, after the asset manifest line:
+  "Place a recorded icon as `{type:icon,id,asset:ID}`."
 
 ## Guidance for the release: design-bound composition review
 
