@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile, rename, lstat, open, rm, readdir, copyFile 
 import { join, resolve, basename, extname } from 'node:path';
 import { constants } from 'node:fs';
 import {randomUUID} from 'node:crypto';
-import { hash, digest, json, saveJson, regularInside } from './common.mjs';
+import { hash, digest, json, saveJson, regularInside, recordedPath, recordedLocation } from './common.mjs';
 import { validateScene, renderSceneHtml, sceneFindings, coverage } from './scene.mjs';
 import { compileGoogleScene, applyGoogleScene, snapshotDeck, googleSession } from './google-slides.mjs';
 import {requireSceneDesign,designStatus} from './design-session.mjs';
@@ -19,7 +19,8 @@ export async function loadWorkspace(root) {
   if(!versions.length)throw new Error('Workspace has no scene versions');
   const current=versions.at(-1),scene=await json(await regularInside(root,`versions/${current.id}/scene.json`));
   validateScene(scene);if(digest(scene)!==current.sceneDigest)throw new Error('Scene version changed outside the workspace; preserve it and recover from an intact version');
-  return {root,manifest,current,scene,versions};
+  // The manifest names its design project relative to the workspace when the workspace is inside it; an older one names it absolutely.
+  return {root,manifest,current,scene,versions,designProject:manifest.designProject?recordedLocation(root,manifest.designProject):null};
 }
 export async function history(root) {
   const dir=join(root,'versions'),names=(await readdir(dir)).filter(s=>/^v\d{6}$/.test(s)).sort();
@@ -54,7 +55,7 @@ export async function initWorkspace({root,scene,format='google-slides',template,
   try {
     await mkdir(join(root,'inputs'));await mkdir(join(root,'versions'));
     const manifest={version:1,tool:'harness-slides',qualityPolicy:2,format,requiredSources,brand:brand??null};
-    if(approvedDesign){manifest.designProject=resolve(designProject);manifest.designRevision=approvedDesign.revision;manifest.approvalPolicy=1;}
+    if(approvedDesign){manifest.designProject=recordedPath(root,designProject,designProject);manifest.designRevision=approvedDesign.revision;manifest.approvalPolicy=1;}
     manifest.assets={};
     for(const e of scene.slides.flatMap(s=>s.elements).filter(e=>e.type==='image'&&!/^https:\/\//.test(e.src))) {
       const path=resolve(base,e.src),s=await lstat(path),extension=extname(path).toLowerCase();
@@ -84,11 +85,12 @@ export async function saveScene({root,scene,expectedDigest,note='Scene edit'}) {
       const contents=s=>s.slides.map(p=>({title:p.title,notes:p.notes,sources:p.sources,content:p.elements.filter(e=>e.type==='text'||e.text||e.rows||e.series||e.src).map(e=>e.type==='table'?e.rows:e.type==='chart'?{series:e.series,source:e.source}:e.type==='image'?{src:e.src,alt:e.alt}:e.text)}));
       if(JSON.stringify(contents(scene))!==JSON.stringify(contents(w.scene)))throw new Error('Redesign must retain content; use full rework for content edits');
     }
-    const approved=w.manifest.designProject?await requireSceneDesign(scene,w.manifest.designProject):null;
-    const saved=await version(root,scene,w.current.number+1,note);
-    if(approved&&approved.revision!==w.manifest.designRevision){
+    const approved=w.designProject?await requireSceneDesign(scene,w.designProject):null;
+    const saved=await version(root,scene,w.current.number+1,note),designProject=w.designProject&&recordedPath(root,w.designProject,w.designProject);
+    // A changed design revision is recorded; an absolute design project from an older manifest is made relative.
+    if(approved&&(approved.revision!==w.manifest.designRevision||designProject!==w.manifest.designProject)){
       const temporary=join(root,`.workspace-design-update-${randomUUID()}.json`);
-      try{await writeFile(temporary,JSON.stringify({...w.manifest,designRevision:approved.revision},null,2)+'\n',{flag:'wx',mode:0o600});await rename(temporary,join(root,'workspace.json'));}
+      try{await writeFile(temporary,JSON.stringify({...w.manifest,designProject,designRevision:approved.revision},null,2)+'\n',{flag:'wx',mode:0o600});await rename(temporary,join(root,'workspace.json'));}
       catch(error){await rm(join(root,'versions',saved.id),{recursive:true,force:true});throw error;}
       finally{await rm(temporary,{force:true});}
     }
@@ -103,7 +105,7 @@ export async function restoreVersion({root,id,expectedDigest}) {
 export async function buildWorkspace({root}) {
   root=resolve(root);return lock(root,async()=>{
     const w=await loadWorkspace(root),dir=join(root,'versions',w.current.id,'build');
-    if(w.manifest.designProject)await requireSceneDesign(w.scene,w.manifest.designProject,w.manifest.designRevision);
+    if(w.designProject)await requireSceneDesign(w.scene,w.designProject,w.manifest.designRevision);
     const sourceCoverage=coverage(w.scene,w.manifest.requiredSources);
     if(!sourceCoverage.complete)throw new Error(`Missing required evidence: ${sourceCoverage.missing.join(', ')}`);
     let template,brandContract;
@@ -127,7 +129,7 @@ export async function buildWorkspace({root}) {
   });
 }
 export async function verifiedBuild(root) {
-  const w=await loadWorkspace(root);if(w.manifest.designProject)await requireSceneDesign(w.scene,w.manifest.designProject,w.manifest.designRevision);const dir=join(w.root,'versions',w.current.id,'build'),record=await json(await regularInside(w.root,`versions/${w.current.id}/build/build.json`));
+  const w=await loadWorkspace(root);if(w.designProject)await requireSceneDesign(w.scene,w.designProject,w.manifest.designRevision);const dir=join(w.root,'versions',w.current.id,'build'),record=await json(await regularInside(w.root,`versions/${w.current.id}/build/build.json`));
   if(w.manifest.brandContract){const contract=await json(await regularInside(w.root,w.manifest.brandContract));if(contract.revision!==w.manifest.brandRevision)throw new Error('Pinned brand contract changed');const {checkBrandSources}=await import('./brand-contract.mjs');await checkBrandSources(contract);}
   if(record.sceneDigest!==w.current.sceneDigest||record.version!==w.current.id)throw new Error('Build does not match current scene');
   for(const [name,sha] of Object.entries(record.artifacts))if(!/^[\w.-]+$/.test(name)||hash(await readFile(await regularInside(dir,name)))!==sha)throw new Error('Built artifact changed; build a new version and review it');
@@ -178,6 +180,6 @@ export async function workspaceStatus(root) {
     const quality=await json(await regularInside(checked.dir,'quality-report.json')),saved=await json(await regularInside(checked.dir,'critique.json')),receipt=assessCritique(quality,saved.assessment);
     result.critiqueComplete=receipt.complete;result.critiqueUnresolved=receipt.unresolved;if(!receipt.complete){result.ready=false;result.status='content critique unresolved';}
   }catch(error){result.critiqueComplete=false;if(w.manifest.qualityPolicy===2||w.manifest.designReport||error.code!=='ENOENT'){result.ready=false;result.status='structured content critique required';result.critiqueNext=error.message;}}
-  if(w.manifest.designProject)try{const acceptance=await designStatus(w.manifest.designProject);result.userReview=acceptance.status;result.userAccepted=acceptance.renderedAcceptance&&acceptance.renderedRevision===(await json(await regularInside(w.root,reviewPath))).revision&&acceptance.renderedReview===join(checked.dir,'review');const review=w.manifest.designProject?await verifyReview(join(checked.dir,'review')):await json(await regularInside(w.root,reviewPath));result.creativeReviewComplete=review.creativeReviewComplete;result.critiqueComplete=review.creativeReviewComplete;if(!result.userAccepted||!review.creativeReviewComplete){result.ready=false;result.status=!review.creativeReviewComplete?'creative review required':'awaiting rendered user review';}}catch(error){result.ready=false;result.userReviewNext=error.message;}
+  if(w.manifest.designProject)try{const acceptance=await designStatus(w.designProject);result.userReview=acceptance.status;result.userAccepted=acceptance.renderedAcceptance&&acceptance.renderedRevision===(await json(await regularInside(w.root,reviewPath))).revision&&acceptance.renderedReview===join(checked.dir,'review');const review=w.manifest.designProject?await verifyReview(join(checked.dir,'review')):await json(await regularInside(w.root,reviewPath));result.creativeReviewComplete=review.creativeReviewComplete;result.critiqueComplete=review.creativeReviewComplete;if(!result.userAccepted||!review.creativeReviewComplete){result.ready=false;result.status=!review.creativeReviewComplete?'creative review required':'awaiting rendered user review';}}catch(error){result.ready=false;result.userReviewNext=error.message;}
   return result;
 }

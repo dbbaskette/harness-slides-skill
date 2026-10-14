@@ -4,7 +4,7 @@ import {resolve,dirname,join} from 'node:path';
 import {compileComposition} from './compose.mjs';
 import {checkBrandSources,neutralBrandContract} from './brand-contract.mjs';
 import {requireSceneDesign} from './design-session.mjs';
-import {digest,hash} from './common.mjs';
+import {digest,hash,recordedPath} from './common.mjs';
 import {refuse,refuseAll,compositionProblems} from './refusals.mjs';
 import {resolveCompositionAssets,placeImages,verifyBuiltAssets} from './assets.mjs';
 
@@ -38,9 +38,11 @@ export async function compileCompositionFile({file,brand,output,fonts,'design-pr
   if(!output)return {status:'fits; nothing written. Add a new --output directory to write the build',...summary};
   if(approved){report.designRevision=approved.revision;report.designScope=approved.scope;}
   const {assets,write}=await placeImages(scene,{base:dirname(resolve(file)),uses});
-  report.inputs={composition:{path:resolve(file),sha256:hash(bytes)},brand:brand?{path:resolve(brand),sha256:hash(brandBytes)}:{kind:'neutral defaults',revision:contract.revision},assets};
+  // The composition and brand are named relative to the build when both lie in the project; one from elsewhere stays absolute.
+  output=resolve(output);const project=designProject??assetProject,input=path=>recordedPath(output,path,project);
+  report.inputs={composition:{path:input(file),sha256:hash(bytes)},brand:brand?{path:input(brand),sha256:hash(brandBytes)}:{kind:'neutral defaults',revision:contract.revision},assets};
   report.sceneDigest=digest(scene);report.structureDigest=digest(structure);
-  output=resolve(output);await mkdir(output,{mode:0o700});
+  await mkdir(output,{mode:0o700});
   try {
     for(const [name,value] of [['scene.json',scene],['structure.json',structure],['compose-report.json',report],['brand-contract.json',contract]])
       await writeFile(join(output,name),JSON.stringify(value,null,2)+'\n',{flag:'wx',mode:0o600});

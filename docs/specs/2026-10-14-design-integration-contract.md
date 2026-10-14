@@ -5,7 +5,8 @@ Training Studio's visual teaching plan, milestone 1 (issue #46). The
 section-scoped check is milestone 2 (issue #47), the
 [asset manifest](#the-asset-manifest) was added for milestone 3 (issue #49), and the
 [design-bound review of a composition](#design-bound-review-of-a-composition) for
-milestone 4 (issue #50).
+milestone 4 (issue #50). [Paths in records](#paths-in-records) are relative to the
+project since issue #57.
 
 ## Why
 
@@ -265,7 +266,8 @@ groups prompts and judgements into five categories:
   chart and quote slides are not screened for prose cards.
 
 **Receipts.** The review record keeps
-`compiled: {dir, binding, files, native}`, where `files` holds the hashes of
+`compiled: {dir, binding, files, native}`, where `dir` follows
+[paths in records](#paths-in-records) and `files` holds the hashes of
 `scene.json`, `structure.json`, `compose-report.json` and `brand-contract.json`.
 The creative report keeps the deck hash (`builtArtifactDigest`), the image
 hashes (`artifactDigest`), the design revision, the build binding and each
@@ -273,6 +275,37 @@ placed asset as `{object,slide,asset,kind,sha256}`. Each later `--mark`,
 `--assessment`, `--slide`, `design status` and `design present` checks these
 again. A changed deck, image, build file or design revision is refused as
 `review-stale`. A changed asset copy is refused as `asset-hash-changed`.
+
+## Paths in records
+
+Training Studio commits the design session to a team's repository, so a record
+inside a project must not hold one computer's home folder, and must still work
+after the project moves. A record keeps a path relative to its own folder, with
+`/`, when both the record and the path lie inside the project. Reading resolves
+it against the record's folder.
+
+| Record | Paths | Relative to |
+| --- | --- | --- |
+| `.harness-slides/design/session.json` | `rendered.review`, `rendered.images`. The project itself is not stored; `design status` reports the `--project` it was given, and `renderedReview` and each question image as absolute paths. | the project |
+| `REVIEW/review.json` | `source.file`, `designProject`, `compiled.dir`, `nativeSnapshot` | the review folder, when it is inside the design project (or, without `--design-project`, for files inside the review folder) |
+| `workspace.json` | `designProject` | the workspace, when it is inside the design project |
+| `compose-report.json`, and `deck compile`'s `design-report.json` | `inputs.composition.path` or `inputs.plan.path`, `inputs.brand.path` | the build folder, when the build and the input are inside the design project (`--asset-project` for a composition compiled without one) |
+| `.harness-slides/assets.json` | every path, as before | the project |
+
+A path outside the project stays absolute: a brand contract kept elsewhere, a
+review folder outside the project, or the design project of a workspace outside
+it. A relative path to a place that does not move with the project would break
+whichever side moved. A build without `--design-project` or `--asset-project`
+has no project, so its inputs stay absolute. Measured font paths stay absolute.
+
+A record written before this change still reads. A session kept its project's
+path, so its rendered review and images are found again after a move; the next
+`design propose`, `respond` or `present` writes them relative. Presenting the same
+review again keeps its rendered approvals. A review record is written relative by
+the next `review` prepare, `--mark` or `--assessment`, and a workspace manifest by
+the next `workspace save`. An older review record or workspace manifest still
+names absolute paths until then, so it does not survive a move: prepare the review
+again.
 
 ## Refusals
 
@@ -361,10 +394,12 @@ Without `--json` the same refusal is the same sentence on stderr as before.
 - `--json` is not available on `deck compile`, `workspace`, `pptx` or
   `google`. Their refusals are still stderr sentences.
 - A design lock left by a stopped process is not cleared automatically.
-- The session stores absolute paths: the project, and any rendered review and its
-  images. After the project moves, `design status` and answers to the rendered
-  question fail on a session with a rendered review until the output is presented
-  again.
+- A path outside the project stays absolute (see
+  [paths in records](#paths-in-records)), and so does an image a composition or
+  scene gives by `src`: `scene.json` hands that path to the renderer. Place an
+  image by asset ID to have it copied into the build. A review record or
+  workspace manifest written before relative paths does not survive a move until
+  it is written again.
 - `design status` reports pending slides, but not pending asset candidates;
   `assets status --design-project` does.
 - An image generated before the manifest existed is recorded when `images
