@@ -2,8 +2,10 @@
 
 Status: built on `main` after 0.13.1; not yet released. Written 2026-10-14 for
 Training Studio's visual teaching plan, milestone 1 (issue #46). The
-section-scoped check is milestone 2 (issue #47), and the
-[asset manifest](#the-asset-manifest) was added for milestone 3 (issue #49).
+section-scoped check is milestone 2 (issue #47), the
+[asset manifest](#the-asset-manifest) was added for milestone 3 (issue #49), and the
+[design-bound review of a composition](#design-bound-review-of-a-composition) for
+milestone 4 (issue #50).
 
 ## Why
 
@@ -35,8 +37,9 @@ exercises the same contract, and Training Studio copies it.
 | See or check the assets | `assets status\|check --project DIR [--design-project DIR] [--brand brand-contract.json]` | `check` refuses missing or changed files, and design candidates not yet recorded. |
 | Place a recorded image | `{type:image,id,asset:ID,alt?,fit?}` or `picture:{asset:ID,alt?}` in a composition, compiled with `--asset-project DIR` | `--asset-project` defaults to `--design-project`. |
 | Preview a composition | `compose preview --file COMPILED --output NEW [--design-project DIR [--section]]` | With `--design-project`, it rechecks the build against the design approved now, before it renders. Without the flag it is not bound to the session, and a refusal reports the design revision of the compiled build. |
-| Rendered user review | `review ... --design-project`, then `design present` | Needs a review record bound to the design. See below for compositions. |
-| Read a refusal as data | `--json` on any `design`, `assets` or `images` action, `compose compile` and `compose preview` | See [refusals](#refusals). |
+| Review a composition against the design | `review --compiled COMPILED --output REVIEW --design-project DIR` | Renders `REVIEW/deck.pptx` from the build and reviews it. See [design-bound review of a composition](#design-bound-review-of-a-composition). |
+| Rendered user review | `review ... --design-project`, then `design present` | Needs a review record bound to the design; a composition's comes from `review --compiled`. |
+| Read a refusal as data | `--json` on any `design`, `assets` or `images` action, `compose compile`, `compose preview` and `review` | See [refusals](#refusals). |
 
 ## Proposal schema 2
 
@@ -191,6 +194,86 @@ preview result carry `design: {revision, scope, slides}`. `scope` is `deck` or
 `section`. The lead merges the sections with `compose merge` and compiles the
 merged deck without `--section`.
 
+## Design-bound review of a composition
+
+`review --compiled COMPILED --output REVIEW --design-project DIR` reviews a
+compiled composition against the approved design, on the PPTX path, without
+Google. It is the existing `review`: the same LibreOffice render, pixel marks
+(`--mark`), per-slide packet (`--slide`), assessment (`--assessment`), staleness
+checks and `design present`. Only the source of the creative report is new.
+
+**Why `review` reads the build.** The PPTX review binds its report to the exact
+bytes of the deck it renders. `compose compile` writes no deck, and
+`compose render` is not byte-for-byte repeatable, so a report written at compile
+time could not be bound to the deck that is reviewed. Instead `review` renders the
+build itself into `REVIEW/deck.pptx`, and reuses that deck while the build is
+unchanged, so its receipts carry over. That file is the reviewed deck: deliver it,
+or import it with `drive import`. The creative report reuses the native critique's
+criteria (`visual-relationship`, `explanatory-value`, `asset-purpose`,
+`approved-design`, `approved-asset-missing` and the rest), and takes
+`compose preview`'s screens as prompts. There is no second scorer.
+
+`review --compiled` refuses:
+
+| Build | Code |
+| --- | --- |
+| Compiled without `--design-project` | `design-missing` |
+| A section (`designScope: section`) | `input-invalid`; merge and compile the whole deck |
+| Compiled against an older design revision | `review-stale` |
+| Slides that differ from the current approval | `design-mismatch` |
+| A changed or missing asset copy | `asset-hash-changed`, `asset-file-missing` |
+| No LibreOffice or Poppler on this computer | `renderer-unavailable`, with `provider` `libreoffice` or `poppler` |
+| `--compiled` without `--design-project`, or with `--file`, `--previews`, `--native-snapshot`, `--decisions` or `--quality-report` | `input-invalid` |
+
+**Report.** Each finding carries a `category`. `designReview` in every result
+groups prompts and judgements into five categories:
+
+```json
+{"schema":1,"complete":false,"categories":{
+  "asset-failure":[{"slide":"console_view","kind":"prompt","code":"approved-asset-missing","severity":"error","detail":"…"}],
+  "design-deviation":[{"slide":"reconcile_loop","kind":"prompt","code":"approved-diagram-not-drawn","severity":"warn","detail":"…"}],
+  "visual-teaching":[{"slide":"reconcile_loop","kind":"prompt","code":"prose-cards","severity":"warn","detail":"…","objects":["loop_desired","loop_observe","loop_act"]},
+                     {"slide":"reconcile_loop","kind":"judgement","criterion":"teaching-treatment","status":"issue","detail":"<the reviewer's reason>","objects":["loop_act","loop_observe"]}],
+  "fit-defect":[],
+  "direct-text":[{"slide":"knowledge_check","kind":"treatment","purpose":"…","reason":"…","accepted":true}]}}
+```
+
+- A `prompt` comes from the build and points at something to look at. A
+  `judgement` is a criterion the assessment marked `issue` or `uncertain`. A
+  `treatment` is a slide whose approved visual family is `text`. Its `accepted`
+  value is null before an assessment, then true when every check on the slide passes.
+- Criteria map to categories as follows. `asset-purpose` is an asset failure.
+  `approved-design` is a design deviation. `technical-fit`,
+  `rendered-text-completeness`, `reading-order` and `export-completeness` are fit
+  defects. Every other criterion is visual teaching. A screen that would be a
+  teaching prompt on an approved direct-text slide is filed under `direct-text`.
+- `approved-asset-missing` (`error`) means a slide whose approved family is
+  `icon`, `sourced-image` or `generated-art` places none. Like the native one, it
+  blocks the creative review until the build or the approval changes.
+  `approved-candidate-missing` (`warn`) means a selected asset decision none of
+  whose candidates appears on the slide.
+- **Prose cards.** Some slides teach a mechanism: the approved family is `diagram`
+  or `regions`, or the relationship names a cycle, flow, dependency, ownership,
+  containment or the like. If such a slide is built as two or more boxes of
+  prose, with no edge, enclosing region, image, table or chart, the slide gets a
+  `prose-cards` prompt. The prompt names the relationship and the cards. If the
+  approved family was a diagram, the slide also gets `approved-diagram-not-drawn`.
+  Neither is an error. The slide's prompt gains a `teaching-treatment` criterion,
+  which the assessment must answer for that slide. A pass needs a slide-specific
+  reason, and the judgement must cite at least one of the cards. Boxes and a
+  missing icon are never failures on their own. Direct-text, template, table,
+  chart and quote slides are not screened for prose cards.
+
+**Receipts.** The review record keeps
+`compiled: {dir, binding, files, native}`, where `files` holds the hashes of
+`scene.json`, `structure.json`, `compose-report.json` and `brand-contract.json`.
+The creative report keeps the deck hash (`builtArtifactDigest`), the image
+hashes (`artifactDigest`), the design revision, the build binding and each
+placed asset as `{object,slide,asset,kind,sha256}`. Each later `--mark`,
+`--assessment`, `--slide`, `design status` and `design present` checks these
+again. A changed deck, image, build file or design revision is refused as
+`review-stale`. A changed asset copy is refused as `asset-hash-changed`.
+
 ## Refusals
 
 With `--json`, a refusal is printed on stdout, and the exit status is 1:
@@ -207,7 +290,8 @@ Every problem has every key. `slide`, `asset` and `provider` are null when they 
 not apply. `fallback` appears only when there is one. `recoverable` means the
 caller can fix its input or setup and retry with saved work and approvals intact.
 `designRevision` comes from the session for `design`, from `--design-project` for
-`compose compile`, and from the compiled build's report for `compose preview`.
+`compose compile` and a `review` that prepares, from the compiled build's report for
+`compose preview`, and from the review record for the other `review` operations.
 Without `--json` the same refusal is the same sentence on stderr as before.
 
 | Code | Raised by |
@@ -225,6 +309,7 @@ Without `--json` the same refusal is the same sentence on stderr as before.
 | `design-busy` | A design lock is held. A process stopped mid-write leaves `.harness-slides/design/.lock`; `next` says to remove it when no command is running |
 | `invalid-response` | A reply without the person's words, or with a decision that does not fit the question |
 | `rendered-review-stale` | A rendered review that changed or does not cover the approved slides |
+| `review-stale` | A review whose deck, images, compiled build or design revision changed after it was prepared, a build compiled against an older design, or a `--mark` or `--assessment` for an older review revision |
 | `composition-invalid` | A structure or fit problem, one per problem, with its slide |
 | `icon-unavailable` | An icon missing from the brand library, or not native geometry; `asset` is the icon ID |
 | `layout-unavailable` | A template layout the brand does not have |
@@ -238,7 +323,7 @@ Without `--json` the same refusal is the same sentence on stderr as before.
 | `provider-failed` | A Google access or upload failure during preview (`provider` is `google`), or an image provider that refused or failed (`provider` is `gemini-api` or `gemini-web`; `next` is its own advice) |
 | `render-failed` | A render that produced no PDF or the wrong page count |
 | `output-exists` | An output directory that already exists |
-| `input-missing`, `input-invalid` | A missing or unreadable input file, or `--section` without `--design-project` |
+| `input-missing`, `input-invalid` | A missing or unreadable input file, `--section` without `--design-project`, a malformed review assessment, or a `review` given the wrong combination of sources |
 | `unclassified` | Anything else; not recoverable until a person has looked |
 
 ## Combinations that do not work today
@@ -253,11 +338,17 @@ Without `--json` the same refusal is the same sentence on stderr as before.
   `--design-project`. It does not compare the build's recorded
   `designRevision` with the current one. It checks the slides against the
   design approved now.
-- `compose preview` output is not a review record. `design present` cannot take
-  it, so a composition's rendered user review is recorded in the presentation
-  brief, as before. The creative review that `design present` needs comes from
-  the quality report of a scene build (`deck compile` or a workspace build), or
-  from a native Google snapshot.
+- `compose preview` output is not a review record. `design present` takes the
+  output of `review --compiled` for a composition, or a review of a scene build
+  or a native Google snapshot. `compose critique` stays a separate,
+  independent-reviewer critique of a preview. It is bound to the preview's deck
+  hash, not to the design.
+- `review --compiled` renders with LibreOffice only, not Google. It reviews the
+  whole deck, never a section. It takes no `--fonts`, so its screens measure
+  text with the fonts installed on this computer.
+- The prose-card prompt reads the build's geometry and the approved intent. It
+  cannot tell whether a drawn diagram is correct. That judgement is the
+  assessment's, under `visual-relationship` and `teaching-treatment`.
 - Asset candidates are checked against the manifest only by `assets check
   --design-project`, not by `design check` or a build. An icon node still names
   its library ID (`{type:icon,icon}`); a recorded icon gives that ID as `ref`,
@@ -267,8 +358,8 @@ Without `--json` the same refusal is the same sentence on stderr as before.
 - `objectives` and `qualifications` are checked when proposed and then only kept.
   No build compares a composition's words with the approved copy. `notes` are not
   copied into a composition.
-- `--json` is not available on `deck compile`, `workspace`, `pptx`,
-  `google` or `review`. Their refusals are still stderr sentences.
+- `--json` is not available on `deck compile`, `workspace`, `pptx` or
+  `google`. Their refusals are still stderr sentences.
 - A design lock left by a stopped process is not cleared automatically.
 - The session stores absolute paths: the project, and any rendered review and its
   images. After the project moves, `design status` and answers to the rendered
@@ -282,7 +373,8 @@ Without `--json` the same refusal is the same sentence on stderr as before.
 ## Not in this change
 
 - Version and release. Live guidance does not describe schema 2, batch mode,
-  `--json`, `--section`, `--design-project` on `compose preview` or the asset manifest yet. New
+  `--json`, `--section`, `--design-project` on `compose preview`, the asset manifest
+  or `review --compiled` yet. New
   tasks fetch guidance from `main` while the released runtime is 0.13.1. Those
   lines go with the release that raises `minimumRuntime` (issue #51). See
   [guidance for the release](#guidance-for-the-release).
@@ -347,3 +439,61 @@ release that raises `minimumRuntime` (issue #51), and not before:
   status` lists. Do not copy image files into a section."
 - `SKILL.md` task table, beside *Custom image generation or image setup*: a row
   "Supplied images, brand icons or generated art a deck uses | [Images](references/images.md)".
+
+## Guidance for the release: design-bound composition review
+
+Installs still running 0.13.1 have no `review --compiled`, no `designReview`
+and no `teaching-treatment` criterion. These lines go into guidance with the
+release that raises `minimumRuntime` (issue #51), and not before:
+
+- `references/compositions.md`, in "Deliver", after the `compose critique`
+  paragraph that ends "A reviewer does not change brand colors or what a slide
+  says.":
+
+  > When the deck is bound to an approved design, review the build against it
+  > as well: `review --compiled NEW_DIR --output REVIEW --design-project CONTENT`.
+  > It renders `REVIEW/deck.pptx` and asks, for each slide, whether the visual
+  > teaches what the design approved. Inspect each image and mark it, answer
+  > every criterion with `review --assessment`, then `design present` the
+  > review. Deliver `REVIEW/deck.pptx`. The independent `compose critique`
+  > still applies.
+
+- `references/compositions.md`, in "Deliver", replace "Read [review](review.md)
+  only for a requested PDF export or an editability check." with:
+
+  > Read [review](review.md) for a design-bound review, a requested PDF export
+  > or an editability check.
+
+- `references/review.md`, the table row for Compositions, "Before delivery"
+  column, replace it with:
+
+  > `compose preview` of the whole build, every image opened. With an approved
+  > design, also `review --compiled` and [native critique](native-critique.md)'s
+  > assessment. Nothing else is required unless a PDF export or an
+  > editability check was asked for
+
+- `references/native-critique.md`, after the paragraph that ends "This targets
+  boilerplate, not a claim that string validation proves comprehension.":
+
+  > A composition is reviewed with `review --compiled COMPILED --output REVIEW
+  > --design-project CONTENT`. Its packet is the same, and `designReview` sorts
+  > what needs attention into asset failures, design deviations, visual
+  > teaching problems, fit defects and approved direct text. A `prose-cards`
+  > prompt means a mechanism is drawn as boxes of sentences. Answer its
+  > `teaching-treatment` criterion by citing the cards, and say what the
+  > learner cannot see or why the cards teach it. Boxes alone are not the
+  > defect. A direct-text slide approved for its reason passes without
+  > graphics.
+
+- `references/design-walkthrough.md`, in "Show rendered output and pause
+  again", replace "For compositions these are the images from the final
+  `compose preview`;" with:
+
+  > For compositions these are the images from the final `compose preview`, or
+  > from `review --compiled` when the deck is bound to an approved design;
+
+- `references/design-records.md`, in "After rendering", after "For a workspace,
+  use its `build/review` directory so readiness binds the acceptance to that
+  exact built artifact.", add:
+
+  > For a bound composition, use the `review --compiled` output directory.

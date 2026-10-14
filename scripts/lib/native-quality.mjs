@@ -11,8 +11,17 @@ const questions={
   'technical-fit':'Inspect actual native/export pixels for wrapping, contrast, spacing, aspect ratio and inherited font styles.',
   'rendered-text-completeness':'Compare expected native text with the image: are complete titles, heading prefixes, body labels and caveats visible?',
   'approved-design':'Does this delivered construction and asset purpose implement the user-approved design? Describe any material departure.',
-  'repetition-justification':'Across the whole deck, is equivalent geometry justified by comparable content or does a different relationship need recomposition?'
+  'repetition-justification':'Across the whole deck, is equivalent geometry justified by comparable content or does a different relationship need recomposition?',
+  'teaching-treatment':'These cards carry a mechanism as prose with nothing drawn between them. Does the treatment show the relationship the slide teaches, or must the learner rebuild it from the sentences? Name what the learner cannot see, or say why the cards teach it here. Boxes alone are not the defect.'
 };
+// Every prompt and judgement lands in one of these, so a caller can tell an asset failure from a design deviation, a teaching problem, a fit defect or an approved direct-text slide.
+export const reviewCategories=['asset-failure','design-deviation','visual-teaching','fit-defect','direct-text'];
+const assetCodes=new Set(['approved-asset-missing','approved-candidate-missing','icon-repeated','icon-alone','icon-two-meanings']);
+const deviationCodes=new Set(['approved-diagram-not-drawn']);
+const teachingCodes=new Set(['prose-cards','relational-text-only','sequence-without-edges','repeats-previous-layout','similar-geometry','similar-native-geometry','label-title','no-brief','no-direction','title-value-needs-support','text-only','dense-run','no-notes','text-density-review']);
+export const findingCategory=code=>assetCodes.has(code)?'asset-failure':deviationCodes.has(code)?'design-deviation':teachingCodes.has(code)?'visual-teaching':'fit-defect';
+const criterionCategories={'asset-purpose':'asset-failure','approved-design':'design-deviation','technical-fit':'fit-defect','rendered-text-completeness':'fit-defect','reading-order':'fit-defect','export-completeness':'fit-defect'};
+export const criterionCategory=id=>criterionCategories[id]??'visual-teaching';
 const textOf=e=>e.shape?.text?.textElements?.map(t=>t.textRun?.content??'').join('')??(e.table?.tableRows??[]).flatMap(r=>r.tableCells??[]).map(c=>(c.text?.textElements??[]).map(t=>t.textRun?.content??'').join('')).join('\n');
 const allObjects=slide=>(slide.pageElements??slide.children??[]).flatMap(e=>[e,...(e.elementGroup?allObjects(e.elementGroup):[])]);
 const pt=v=>v?.unit==='EMU'?(v.magnitude??0)/12700:v?.magnitude??0;
@@ -44,9 +53,64 @@ export function auditNativeReview({snapshot,record,plan,mapping}){
 export function assessNativeCritique(quality,assessment){
   const result=assessCritique(quality,assessment);
   // Technical findings may share wording; content-specific creative approval may not be a bulk attestation.
-  for(const criterion of ['composition-decision','explanatory-value','asset-purpose','rendered-text-completeness','approved-design']){
-    const reasons=new Set();for(const slide of assessment.slides){const c=slide.checks.find(c=>c.criterion===criterion);if(c.status!=='pass')continue;const reason=c.reason.trim().replace(/\s+/g,' ').toLowerCase();if(reasons.has(reason))throw new Error(`Use slide-specific evidence for ${criterion}; a duplicated bulk approval is insufficient`);reasons.add(reason);}
+  for(const criterion of ['composition-decision','explanatory-value','asset-purpose','rendered-text-completeness','approved-design','teaching-treatment']){
+    const reasons=new Set();for(const slide of assessment.slides){const c=slide.checks.find(c=>c.criterion===criterion);if(c?.status!=='pass')continue;const reason=c.reason.trim().replace(/\s+/g,' ').toLowerCase();if(reasons.has(reason))throw new Error(`Use slide-specific evidence for ${criterion}; a duplicated bulk approval is insufficient`);reasons.add(reason);}
   }
-  for(const finding of quality.findings.filter(f=>f.severity==='error'))result.unresolved.push({slide:finding.slide,criterion:'asset-purpose',status:'issue',detail:finding.detail});
+  // A prose-card prompt is answered by looking at the cards: the judgement names at least one of them.
+  for(const prompt of quality.prompts.filter(p=>p.proseCards)){const c=assessment.slides.find(s=>s.id===prompt.slide).checks.find(c=>c.criterion==='teaching-treatment');if(!c.objects.some(id=>prompt.proseCards.includes(id)))throw new Error(`Answer teaching-treatment on ${prompt.slide} about the cards it names: cite at least one of ${prompt.proseCards.join(', ')}`);}
+  result.unresolved=result.unresolved.map(u=>({...u,category:criterionCategory(u.criterion)}));
+  for(const finding of quality.findings.filter(f=>f.severity==='error'))result.unresolved.push({slide:finding.slide,criterion:'asset-purpose',status:'issue',detail:finding.detail,category:finding.category??findingCategory(finding.code)});
   result.complete=!result.unresolved.length;result.status=result.complete?'native creative critique recorded; pixel inspection and user review remain separate':'native creative critique unresolved';return result;
+}
+
+// Words that name a mechanism: something that moves, repeats, depends, owns or contains. A comparison or a list of peers is not one.
+const mechanism=/cycle|loop|reconcil|sequence|order|flow|process|pipeline|step|stage|depend|caus|trigger|own|contain|hierarch|mechanism|lifecycle|hand-?off|interact|architecture|feedback|propagat|rout|transform|control/i;
+const listed=items=>items.length<2?items.join(''):`${items.slice(0,-1).join(', ')} and ${items.at(-1)}`;
+const inside=(a,b)=>a.x<=b.x+.5&&a.y<=b.y+.5&&a.x+a.width>=b.x+b.width-.5&&a.y+a.height>=b.y+b.height-.5;
+// A compiled composition judged against its approved design, with the same criteria as a native deck.
+// screens are compose preview's findings for this build; they are prompts to look, never approval.
+export function auditCompositionReview({scene,structure,report,plan,designRevision,screens=[],binding,builtArtifactDigest,artifactDigest}){
+  if(scene.slides.length!==plan.slides.length||scene.slides.some((s,i)=>s.id!==plan.slides[i].id))throw new Error('The compiled slides differ from the approved design');
+  const findings=[],prompts=[],templated=new Set((structure.layouts??[]).filter(l=>l.layout!=='@subtitled').map(l=>l.slide)),direct=new Set(plan.slides.filter(s=>s.intent.visual.family==='text').map(s=>s.id));
+  for(const f of screens){const {metrics:_,...finding}=f,category=findingCategory(f.code);findings.push({...finding,category:category==='visual-teaching'&&direct.has(f.slide)?'direct-text':category});}
+  const assets=(report.inputs?.assets??[]).filter(a=>a.asset).map(({object,slide,asset,kind,sha256})=>({object,slide,asset,kind,sha256}));
+  for(const [i,slide] of scene.slides.entries()){
+    const proposed=plan.slides[i],family=proposed.intent.visual.family,body=slide.elements.filter(e=>e.role!=='title'&&e.text!==slide.title);
+    const edges=structure.connectors.filter(c=>c.slide===slide.id),icons=(structure.icons??[]).filter(c=>c.slide===slide.id),placed=assets.filter(a=>a.slide===slide.id);
+    const shapes=body.filter(e=>e.type==='shape'),region=shapes.some(a=>shapes.some(b=>a!==b&&inside(a,b))),pictures=body.some(e=>['image','table','chart'].includes(e.type));
+    // The approved asset is a fact about the build: it is there or it is not.
+    const missing=['icon','sourced-image','generated-art'].includes(family)&&!(family==='icon'?icons.length:placed.length||body.some(e=>e.type==='image'));
+    if(missing)findings.push({slide:slide.id,code:'approved-asset-missing',severity:'error',category:'asset-failure',detail:`The approved visual is ${family}, and the build places none on this slide. Place the approved asset, or propose the change for approval.`});
+    const candidates=proposed.asset.disposition==='selected'?proposed.asset.candidates??[]:[];
+    if(!missing&&candidates.length&&!candidates.some(c=>c.kind==='icon'?icons.some(x=>x.icon===c.ref):placed.some(a=>a.asset===c.assetId)))findings.push({slide:slide.id,code:'approved-candidate-missing',severity:'warn',category:'asset-failure',detail:`None of the approved asset candidates (${candidates.map(c=>`${c.assetId}: ${c.concept}`).join('; ')}) is on this slide. Place one, or judge under asset-purpose why the slide teaches without it.`});
+    // Prose cards: a mechanism the design describes, built as boxes of sentences with nothing drawn between them. A prompt for the reviewer, never a failure on its own.
+    const cards=shapes.filter(e=>(e.text??'').trim().split(/\s+/).length>=3&&!/chevron|homePlate/i.test(e.shape??''));
+    const relationship=proposed.intent.relationship.trim(),drawn=['diagram','regions'].includes(family);
+    const prose=!direct.has(slide.id)&&!templated.has(slide.id)&&!['table','chart','quote'].includes(family)&&(drawn||mechanism.test(relationship))&&cards.length>=2&&!edges.length&&!region&&!pictures;
+    if(prose){
+      const labels=cards.map(e=>e.text.split('\n')[0].trim()),loop=/cycle|loop|reconcil|repeat|again/i.test(`${relationship} ${proposed.intent.takeaway}`);
+      findings.push({slide:slide.id,objects:cards.map(e=>e.id),code:'prose-cards',severity:'warn',category:'visual-teaching',detail:`The approved relationship is "${relationship}", but ${listed(labels)} are ${cards.length} cards of prose with nothing drawn between them: no edge, region or picture shows how one leads to another. The learner has to rebuild the ${relationship} from the sentences${loop?', and nothing shows the step that closes the loop':''}. Say in teaching-treatment what the learner cannot see, or why the cards teach it here.`});
+      if(drawn)findings.push({slide:slide.id,code:'approved-diagram-not-drawn',severity:'warn',category:'design-deviation',detail:`The approved treatment is a ${family}: "${proposed.composition}" The build draws no edge or region. Build the approved construction, or propose the change for approval.`});
+    }
+    const repeated=findings.some(f=>f.slide===slide.id&&['similar-geometry','repeats-previous-layout'].includes(f.code));
+    const ids=[...new Set([...slide.elements.map(e=>e.id),...edges.map(e=>e.id),...icons.map(e=>e.id)])];
+    prompts.push({slide:slide.id,title:slide.title,component:'composition',treatment:direct.has(slide.id)?'direct-text':family,intent:proposed.intent,sources:proposed.sources,objects:ids,
+      expectedText:slide.elements.filter(e=>e.text?.trim()).map(e=>({object:e.id,text:e.text})),approvedCopy:proposed.visibleText,approvedComposition:proposed.composition,assetCandidate:proposed.asset,
+      assetObjects:[...placed,...icons.map(c=>({object:c.id,icon:c.icon}))],...(prose?{proseCards:cards.map(e=>e.id)}:{}),
+      criteria:Object.entries(questions).filter(([id])=>id==='repetition-justification'?repeated:id==='teaching-treatment'?prose:true).map(([id,question])=>({id,question}))});
+  }
+  const groups=[...new Set(findings.filter(f=>f.code==='similar-geometry').map(f=>JSON.stringify(f.relatedSlides)))].map(g=>JSON.parse(g));
+  const quality={schema:1,policy:3,kind:'composition',sceneDigest:digest(scene),structureDigest:digest(structure),designRevision,build:binding,assets,builtArtifactDigest,artifactDigest,
+    bindings:plan.slides.map(s=>({planId:s.id,slide:s.id})),prompts,findings,deckReview:{groups,questions:['What does each visual make easier to understand than the same words in a list?','Which repeated geometry supports comparison, and which different relationship needs recomposition?']},
+    limitations:['Screens and prose-card prompts point at slides to look at; they do not judge comprehension.','The rendered deck is a LibreOffice render; verify fidelity in the target editor.']};
+  quality.revision=digest(quality);return quality;
+}
+// The review in five categories: prompts from the build, judgements from the assessment, and the slides approved as direct text.
+export function categorizeReview(quality,assessment){
+  const categories=Object.fromEntries(reviewCategories.map(c=>[c,[]]));
+  for(const f of quality.findings)categories[f.category??findingCategory(f.code)].push({slide:f.slide,kind:'prompt',code:f.code,severity:f.severity,detail:f.detail,...(f.objects?{objects:f.objects}:{})});
+  let judged=null;if(assessment)try{judged=assessNativeCritique(quality,assessment);}catch{judged=null;}
+  for(const u of judged?.unresolved??[])if(u.objects)categories[u.category].push({slide:u.slide,kind:'judgement',criterion:u.criterion,status:u.status,detail:u.detail,objects:u.objects});
+  for(const p of quality.prompts)if(p.treatment==='direct-text'||p.intent?.visual?.family==='text')categories['direct-text'].push({slide:p.slide,kind:'treatment',purpose:p.intent.visual.purpose,reason:p.assetCandidate?.reason??null,accepted:judged?!judged.unresolved.some(u=>u.slide===p.slide):null});
+  return {schema:1,categories,complete:judged?.complete??false};
 }
