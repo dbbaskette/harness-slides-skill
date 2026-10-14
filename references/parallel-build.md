@@ -57,6 +57,8 @@ Tell the user which preview files the build left in their Drive.
 - Paths: this guidance entry, the runtime, the brand contract, the work
   directory, the name of the section file to write, and the source material,
   so it can draw on more than the brief repeats.
+- When the deck is bound to an approved design: the design project, and that
+  its slides must keep their approved IDs, order, titles and `intent`.
 - The `direction`, to copy unchanged, and the house style.
 - Its slides, in order. For each: the slide ID, the approved title, what the
   audience must understand, the relation, the focal point and the rhythm; then
@@ -81,7 +83,13 @@ must make the audience understand, not from the nearest row of boxes. Keep the
 brand's body size for this deck's delivery; a section that shrinks its text to
 fit more in will not match the others. Write
 only your section file, with the deck's `direction` copied unchanged and your ID
-prefix on every node. Check with `compose compile` and no `--output` until it
+prefix on every node. Use only asset IDs that `assets status` lists. Do not copy
+image files into a section. Place a recorded icon as `{type:icon,id,asset:ID}`.
+
+Under an approved design, add `--design-project CONTENT --section` to each
+`compile` and `preview`. A refusal names the slide that is missing, extra,
+out of order, retitled or given a changed `intent`.
+Check with `compose compile` and no `--output` until it
 fits, then preview your slides together, and revise and look again where one
 needs it, twice at most. Give each slide speaker `notes`. Before returning, name your weakest slide, fix it and preview
 once more. Report what still bothers you instead of polishing further: the

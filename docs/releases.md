@@ -30,7 +30,7 @@ else made, and git honours its config, hooks, alternates, replacement refs and
 grafts. Each `start` and `pin` deletes it and fetches into a fresh one, with git's
 system and global config ignored, so only the trusted URL decides what is read.
 
-Users see “Using Harness Slides v0.13.1”. `--version` is an offline human-readable
+Users see “Using Harness Slides v0.14.0”. `--version` is an offline human-readable
 check; `version` returns `package`, `runtimeVersion`, resolved `runtime` and
 `capabilities` as JSON. Run it from the returned runtime. `capabilities` names the
 features a caller can rely on, as listed in the

@@ -30,6 +30,12 @@ fabricated metrics, unrelated stock images or fake customer logos does not estab
 that columns are better than a supported native construction or approved icons.
 Consider a concrete asset candidate before choosing no asset, and say in the
 proposal what it is and why it was chosen or left out. There is no asset quota.
+Use the manifest's asset ID as a candidate's `assetId`. Record icons with `assets icon
+ICON_ID --id ASSET_ID --brand brand-contract.json`. Before building, run `assets check
+--project DIR --design-project DIR` and resolve what it reports. For an icon, search
+the brand icon library and give the icon's ID as `ref` with `refType: "library-id"`,
+so the approved icon is exact. Propose with `--brand brand-contract.json` to have
+each ID checked.
 
 Example: “Persistence versus availability: left, a native disk/recovery sequence;
 right, a primary/replica serving relationship. Short labels, optional approved disk
@@ -68,7 +74,8 @@ Record what the user actually said, once, where the method keeps it:
 
 After your own inspection, show the user the actual full-size rendered slides
 and wait for approval or revisions. For compositions these are the images from
-the final `compose preview`; other methods prepare them through
+the final `compose preview`, or
+from `review --compiled` when the deck is bound to an approved design; other methods prepare them through
 [checkpoint records](design-records.md). User acceptance is separate from your
 own inspection. An explicit prior waiver is reported as waived, not
 user-reviewed. A changed slide needs showing again.

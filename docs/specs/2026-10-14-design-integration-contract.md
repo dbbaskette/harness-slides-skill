@@ -1,6 +1,6 @@
 # Design integration contract
 
-Status: built on `main` after 0.13.1; not yet released. Written 2026-10-14 for
+Status: released in 0.14.0 (issue #51). Written 2026-10-14 for
 Training Studio's visual teaching plan, milestone 1 (issue #46). The
 section-scoped check is milestone 2 (issue #47), the
 [asset manifest](#the-asset-manifest) was added for milestone 3 (issue #49), and the
@@ -50,13 +50,13 @@ exercises the same contract, and Training Studio copies it.
 
 ## Detecting support
 
-`main` and the 0.13.1 release both report version 0.13.1, so a version number
-cannot tell a caller what a runtime supports. To detect support, read
+The 0.13.1 release and the `main` builds that led to 0.14.0 all report version
+0.13.1, so a version number cannot tell a caller what a runtime supports. To detect support, read
 `capabilities` from `harness-slides version` and look for a name. Do not compare
 versions, and do not provoke a refusal to find out.
 
 ```json
-{"package":"harness-slides","runtimeVersion":"0.13.1","runtime":"/…/harness-slides",
+{"package":"harness-slides","runtimeVersion":"0.14.0","runtime":"/…/harness-slides",
  "capabilities":["assets","assets-approved-candidates","canonical-digests","compose-icon-assets",
    "compose-review","compose-section","design-batch","design-icon-ids","design-schema-2",
    "json-refusals","native-charts","relative-records"]}
@@ -574,18 +574,17 @@ checked yet; see
 
 ## Not in this change
 
-- Version and release. Live guidance does not describe schema 2, batch mode,
-  `--json`, `--section`, `--design-project` on `compose preview`, the asset manifest,
-  icon candidates by library ID, icons by asset ID, `review --compiled` or the
-  `chart` node yet. New
-  tasks fetch guidance from `main` while the released runtime is 0.13.1. Those
-  lines go with the release that raises `minimumRuntime` (issue #51). See
-  [guidance for the release](#guidance-for-the-release).
+- Version and release. Release 0.14.0 (issue #51) raised `minimumRuntime` to
+  0.14.0 and applied the lines in
+  [guidance for the release](#guidance-for-the-release) and the sections after it
+  to live guidance, with a short note on schema 2, batch mode and `--json` in
+  `references/design-records.md`.
 
 ## Guidance for the release
 
-These lines need runtime behaviour after 0.13.1. Apply them in the release that
-raises `minimumRuntime` (issue #51). Each replaces the text quoted before it.
+These lines need runtime behaviour after 0.13.1. They, and those in the sections
+below, were applied in 0.14.0 (issue #51), which raised `minimumRuntime`. Each
+replaces the text quoted before it.
 
 `references/compositions.md`, in "Build, look, fix", replace "Add
 `--design-project CONTENT` to `compile` only when slides carry `intent` blocks
@@ -727,6 +726,8 @@ guidance with the release that raises `minimumRuntime` (issue #51), and not
 before. Apply them once
 [the Google import check](../verification/2026-10-14-native-charts-google-import.md)
 has been run, and add to the last paragraph whatever it finds the importer loses.
+The check had not been run when 0.14.0 was released, so the last paragraph says
+that the Google import is unchecked; replace that sentence with its findings.
 
 - `references/compositions.md`, in the node table, after the `table` row:
 
