@@ -92,6 +92,7 @@ from four containers and a handful of leaves:
 | `badge` | A small numbered or lettered disc, for steps and references |
 | `rule` | A thin line between the parts of a column or a row |
 | `table` | A native table in the brand's table style, for comparing values across rows |
+| `chart` | A native bar, line or pie chart in the brand's chart colors, its data editable |
 | `spacer` | Deliberate empty space, and room for an arrow label |
 
 A box has three looks, set with `style`:
@@ -170,9 +171,22 @@ and outlined boxes over a picture, because no check can promise they stay
 readable. There is no see-through scrim; a brand may forbid changing a color's
 opacity.
 
+Name a recorded image by its asset ID: `{type:image,id,asset:ID}` or
+`picture:{asset:ID}`. Compile with `--asset-project DIR` when the assets are not
+in the design project. `assets status` lists the IDs.
+
 A `table` takes `rows`, the first being the header, and optional `widths` that
 share the width between columns. Each row is as tall as its tallest cell. Keep
 cells to a few words; a table compares values and is not a place for sentences.
+
+A `chart` takes `kind` (`bar`, `line` or `pie`) and `data`: `categories`,
+2 to 24 short labels, and `series`, each a `name` with one number per
+category. A pie has one series and at most eight slices. Each series, or
+each slice of a pie, takes the next brand chart color, and `compile`
+refuses more than the brand has. `title` sits in the chart, `units` titles
+the value axis and `source` is a caption under it. Use a chart when the
+shape of the numbers is the point. For one number use a `metric`; for a few
+exact values, a `table`.
 
 Show a sequence, a dependency or a
 hand-off with nodes and edges, not with a sentence that describes it. Show
@@ -212,7 +226,9 @@ down to a smaller role to make content fit; cut words, split the slide or
 restructure. The smaller roles are for what they name: `caption` for a caveat
 or a source, `label` for a heading. A live deck whose slides are set in the
 reading size is a defect, and `preview` reports it. Search the brand's icon
-library for icon IDs. An icon keeps the library's colors unless you set its
+library for icon IDs. An icon recorded in the asset manifest is placed by its
+asset ID: `{type:icon,id,asset:ID}`, compiled with `--asset-project DIR` when
+the assets are not in the design project. An icon keeps the library's colors unless you set its
 `color` and `style`: `solid` is a light icon on a colored disc, `outline` a
 colored icon in a ring, `plain` a colored icon with no container. On a filled
 card use `plain` or `outline` in a color that reads on the fill. Follow the
@@ -247,8 +263,11 @@ LibreOffice is installed and Google is unavailable.
 
 Record the user's actual approval of the per-slide design in
 `presentation-brief.md`, in their words. A composition without `intent` blocks needs no separate
-proposal file. Add `--design-project CONTENT` to `compile` only when slides carry
-`intent` blocks approved through `design propose`.
+proposal file. Add `--design-project CONTENT` to `compile` and `preview` when
+slides carry `intent` blocks approved through `design propose`. `compile` then
+checks the design even without `--output`. A file that holds only some of the
+approved slides, neighbours in approved order, adds `--section`. The whole deck
+never takes `--section`: it lists every approved slide.
 
 A deck of more than about ten content slides can be
 [built in parallel](parallel-build.md) where the harness runs subagents.
@@ -296,6 +315,14 @@ delivery. Fix the critical and major findings in one pass, preview again and
 have the new render critiqued; undo a fix that causes a new finding. A reviewer
 does not change brand colors or what a slide says.
 
+When the deck is bound to an approved design, review the build against it
+as well: `review --compiled NEW_DIR --output REVIEW --design-project CONTENT`.
+It renders `REVIEW/deck.pptx` and asks, for each slide, whether the visual
+teaches what the design approved. Inspect each image and mark it, answer
+every criterion with `review --assessment`, then `design present` the
+review. Deliver `REVIEW/deck.pptx`. The independent `compose critique`
+still applies.
+
 That is the final review for a composed deck. Note what was found and fixed in
 `presentation-brief.md`, with the deck hash the preview returns. Then show the
 user the contact sheet and the images and wait, as
@@ -306,9 +333,10 @@ build.
 The deck is built inside the brand template: the title is the layout's
 placeholder, labels sit inside their shapes, arrows are attached, and each card
 is one group. All of that survives the import into Google Slides. Read
-[review](review.md) only for a requested PDF export or an editability check.
+[review](review.md) for a design-bound review, a requested PDF export or an
+editability check.
 
-Native charts and hyperlinks are not available in compositions yet. Show a
-few numbers as bars drawn to scale or as a table. A deck that needs a real
-chart is built with [another method](authoring.md); the methods cannot yet be
-mixed in one build.
+Hyperlinks are not available in compositions yet. A chart is written as a
+native chart with its own workbook, so its data can be edited in PowerPoint.
+What Google Slides makes of it on import has not been checked; for a deck
+going to Google Slides, look at each chart in the Google preview.

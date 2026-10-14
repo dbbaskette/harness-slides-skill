@@ -2,7 +2,7 @@
 
 | Built with | While building | Before delivery |
 | --- | --- | --- |
-| [Compositions](compositions.md) | `compose preview` after each slide | `compose preview` of the whole build, every image opened. Nothing below is required unless a PDF export or an editability check was asked for |
+| [Compositions](compositions.md) | `compose preview` after each slide | `compose preview` of the whole build, every image opened. With an approved design, also `review --compiled` and [native critique](native-critique.md)'s assessment. Nothing else is required unless a PDF export or an editability check was asked for |
 | Typed components or scenes | Render each changed slide | This page, plus [font screening and critique](quality.md) |
 | Native template tools | Render each changed slide | This page, plus [native critique](native-critique.md) |
 | Scoped edits to an existing deck | Render each changed slide | This page; compare with the source |

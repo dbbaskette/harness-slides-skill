@@ -3,8 +3,9 @@
 For typed components, scenes and native-template builds, which check an approved
 proposal before they build and before the final user review. Compositions may be
 bound to the same design session: pass `--design-project CONTENT` to `compose compile`
-with `--output`, and list every composed slide in the proposal, in order and with the
-same titles. An unbound composition records approval in the presentation brief.
+and `compose preview`. A whole deck lists every proposed slide, in order and with the
+same titles; a section file adds `--section` and lists a run of neighbouring ones.
+An unbound composition records approval in the presentation brief.
 
 ## Before construction
 
@@ -23,6 +24,16 @@ and complete schema-2 intent record the [design](design.md) decision for each sl
 IDs are allowed when identified honestly; they are not researched proof. Asset
 `disposition` is selected/not-needed/unavailable; an unavailable asset needs an
 explicit selected fallback. `visibleText` is proposed copy, not notes.
+
+Schema 2 adds optional per-slide fields: `objectives` (objective IDs), `copy`
+(`{points:[{label?,text?}],focal?,caveat?,source?}`, from which `visibleText` is
+rendered), `qualifications` (wording the copy must keep), `notes` (presenter notes,
+outside the approval) and `asset.candidates`
+(`[{assetId,kind,ref,refType?,concept,alt?,status}]`). `design propose --mode batch`
+asks about every pending slide at once; one approve of `Approve the whole plan`
+approves them all. Add `--json` to a `design`, `assets` or `images` action,
+`compose compile`, `compose preview` or `review` to get a refusal on stdout as
+`{status:"blocked",problems:[{code,slide,asset,detail,recoverable,next}]}`.
 
 The result supplies a revision, current question and selected slide descriptions.
 Response: `{questionId,planRevision,decision,feedback,waiveRendered?}`. `feedback`
@@ -55,6 +66,6 @@ node scripts/harness-slides.mjs design present --project CONTENT --output REVIEW
 
 Use the returned rendered-review question through the same host interface and wait.
 Record approval or revisions with `design respond`. For a workspace, use its `build/review` directory so readiness binds the acceptance
-to that exact built artifact. User acceptance is distinct from
+to that exact built artifact. For a bound composition, use the `review --compiled` output directory. User acceptance is distinct from
 pixel coverage and creative critique. An explicit prior waiver is reported as waived,
 not user-reviewed. Changed render hashes invalidate acceptance.

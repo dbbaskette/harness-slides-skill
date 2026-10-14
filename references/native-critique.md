@@ -48,6 +48,16 @@ design. Equivalent geometry may be justified for genuinely comparable content.
 Creative pass reasons must be specific to each slide, not duplicated bulk approvals.
 This targets boilerplate, not a claim that string validation proves comprehension.
 
+A composition is reviewed with `review --compiled COMPILED --output REVIEW
+--design-project CONTENT`. Its packet is the same, and `designReview` sorts
+what needs attention into asset failures, design deviations, visual
+teaching problems, fit defects and approved direct text. A `prose-cards`
+prompt means a mechanism is drawn as boxes of sentences. Answer its
+`teaching-treatment` criterion by citing the cards, and say what the
+learner cannot see or why the cards teach it. Boxes alone are not the
+defect. A direct-text slide approved for its reason passes without
+graphics.
+
 Judge visual finish within `focal-hierarchy`, `reading-order` and `technical-fit`,
 not just the presence of actors and readable text. At thumbnail size, identify
 what attracts attention first and whether the intended focal element dominates.

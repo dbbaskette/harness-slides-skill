@@ -25,6 +25,9 @@ gemini-3.1-flash-image`, the earlier request shape, and report which one worked.
   the picture.
 - A missing key does not change whether an image is planned, only how it is
   sourced: ask the user for a supplied image, or leave the slot for them.
+- A supplied image is recorded first: `assets add-supplied FILE --project DIR
+  --alt TEXT --source TEXT`, with `--restrictions` for any limit on its use and
+  `--kind screenshot|chart` when it is one.
 
 ## Key and cost
 
@@ -58,6 +61,10 @@ node scripts/harness-slides.mjs images generate --project ./deck-work \
   --id deck-slide-04-v1 --prompt-file ./deck-work/slide-04-brief.txt \
   --output assets/slide-04.png --design-project CONTENT --slide APPROVED_SLIDE_ID
 ```
+
+The image is recorded in the project's asset manifest under its `--id`. Pass
+`--alt` with what it shows. Place it in a composition as `{type:image,id,asset:ID}`,
+not by path.
 
 Options: `--aspect` (default `16:9`), `--size 1K|2K|4K` (default `2K`), up to five
 `--reference` images, `--style PATH`. One call makes one image. Google keeps the

@@ -1,7 +1,8 @@
 # Typed components
 
-Prefer [compositions](compositions.md) for new slides. Use these typed components
-for charts, which compositions do not yet express.
+Prefer [compositions](compositions.md) for new slides, charts included. Use
+these typed components for a deck already built with them, or for a chart
+linked to Google Sheets.
 
 Approve [the per-slide proposal](design-walkthrough.md) first and keep it in
 [checkpoint records](design-records.md).
