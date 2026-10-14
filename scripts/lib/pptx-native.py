@@ -410,6 +410,7 @@ class Slide:
         frame = group.find('p:grpSpPr/a:xfrm', tools.NS)
         frame.find('a:off', tools.NS).attrib.update(x=str(emu(e['x'] + (e['width'] - width) / 2)), y=str(emu(e['y'] + (e['height'] - height) / 2)))
         frame.find('a:ext', tools.NS).attrib.update(cx=str(emu(width)), cy=str(emu(height)))
+        tools.scale_text(group)
         remap = {}
         for index, node in enumerate(group.iter('{' + tools.NS['p'] + '}cNvPr')):
             fresh = self.numbers[e['id']] if index == 0 else self.number(f'{e["id"]}#{index}')
