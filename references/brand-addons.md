@@ -35,8 +35,9 @@ native template authority; language contains organization naming rules separatel
 from the selected author's voice and its confirmed/provisional state. Unspecified
 company tone stays unspecified. A blog contract excludes slide geometry.
 
-Tanzu Brand exposes `contract export --medium slides|blog --output NEW_DIR`, with
-optional brand/variant, delivery and an explicitly selected portable voice
+Tanzu Brand holds three brands (Broadcom, Tanzu, VMware); its name selects none.
+It exposes `contract export --medium slides|blog --brand BRAND --output NEW_DIR`,
+with optional variant, delivery and an explicitly selected portable voice
 profile (`id`, `guide`, `status:provisional|confirmed`, optional `revision`). This
 reuses canonical sources, not a second editable token set. `contract check --file`
 verifies local source hashes. Pin the exported contract for the task; authority
