@@ -275,7 +275,7 @@ representative guidance-start response. Bootstrap activation is shown separately
 | Parallel build, each worker | 9,366 |
 | New PPTX scene + contract + review | 6,593 |
 | New Google scene + contract + review | 7,732 |
-| Content-led PPTX + selected component + review | 8,582 |
+| Content-led PPTX + selected component + review | 8,600 |
 | Font screening + structured critique + review | 3,728 |
 | Optional image guidance + download result | 2,922 |
 
