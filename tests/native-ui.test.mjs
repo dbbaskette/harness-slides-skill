@@ -16,9 +16,21 @@ test('PPTX images preserve editable native image objects with alt text and do no
 test('real browser selects an object, saves a version, previews updated text and restores history', {skip:process.env.HARNESS_BROWSER_TESTS!=='1'},async t=>{
   const dir=await temporary(t),root=join(dir,'workspace');await initWorkspace({root,scene:await sceneFixture(),format:'pptx'});const studio=await startStudio({root});t.after(()=>studio.close());
   const {chromium}=await import('playwright'),browser=await chromium.launch({headless:true});t.after(()=>browser.close());const page=await browser.newPage();await page.goto(studio.url);
-  const frame=page.frameLocator('#preview');await frame.locator('[data-object-id="story_title"]').click();await page.locator('#text').fill('A title changed in the browser');await page.getByRole('button',{name:'Save new version'}).click();await page.locator('#version').filter({hasText:'v000002'}).waitFor();
+  const frame=page.frameLocator('#preview');await frame.locator('[data-object-id="story_title"]').click();await page.locator('#selection').filter({hasText:'story_title'}).waitFor();await page.locator('#text').fill('A title changed in the browser');await page.getByRole('button',{name:'Save new version'}).click();await page.locator('#version').filter({hasText:'v000002'}).waitFor();
   assert.equal((await loadWorkspace(root)).scene.slides[0].elements[0].text,'A title changed in the browser');
   await frame.getByText('A title changed in the browser',{exact:true}).waitFor();await page.locator('#history').selectOption('v000001');await page.getByRole('button',{name:'Restore as new version'}).click();await page.locator('#version').filter({hasText:'v000003'}).waitFor();assert.equal((await loadWorkspace(root)).versions.length,3);
+});
+test('real browser edits a composition source and restores it without flattening relationships',{skip:process.env.HARNESS_BROWSER_TESTS!=='1'},async t=>{
+  const {compileCompositionFile}=await import('../scripts/lib/compose-file.mjs'),{loadCompositionProject}=await import('../scripts/lib/composition-project.mjs');
+  const dir=await temporary(t),file=join(dir,'composition.json'),root=join(dir,'compiled');
+  await writeFile(file,JSON.stringify({version:1,title:'Browser composition',slides:[{id:'browser_slide',title:'Requests move to storage',sources:['request'],canvas:{type:'stack',direction:'row',gap:'wide',children:[{type:'box',id:'source_card',text:'Request'},{type:'box',id:'target_card',text:'Storage'}]},connect:[{id:'browser_arrow',from:'source_card',to:'target_card'}]}]}));
+  await compileCompositionFile({file,output:root});const studio=await startStudio({root});t.after(()=>studio.close());
+  const {chromium}=await import('playwright'),browser=await chromium.launch({headless:true});t.after(()=>browser.close());const page=await browser.newPage();await page.goto(studio.url);
+  await page.frameLocator('#preview').locator('[data-object-id="source_card"]').click();await page.locator('#selection').filter({hasText:'source_card'}).waitFor();assert.equal(await page.locator('#x').isDisabled(),true);
+  await page.locator('#text').fill('Incoming request');await page.getByRole('button',{name:'Save new version'}).click();await page.locator('#version').filter({hasText:'v000002'}).waitFor();
+  let w=await loadCompositionProject(root);assert.equal(w.composition.slides[0].canvas.children[0].text,'Incoming request');assert.equal(w.composition.slides[0].connect[0].from,'source_card');
+  await page.locator('#history').selectOption('v000001');await page.getByRole('button',{name:'Restore as new version'}).click();await page.locator('#version').filter({hasText:'v000003'}).waitFor();
+  w=await loadCompositionProject(root);assert.equal(w.composition.slides[0].canvas.children[0].text,'Request');
 });
 test('real PPTX render produces complete PNG coverage and binds final review to current artifact', {skip:process.env.HARNESS_RENDER_TESTS!=='1'},async t=>{
   const dir=await temporary(t),root=join(dir,'workspace');await initWorkspace({root,scene:await sceneFixture(),format:'pptx'});const build=await buildWorkspace({root}),output=join(build.build,'review'),review=await prepareReview({file:join(build.build,'deck.pptx'),output});assert.equal(review.slides,2);assert.deepEqual(review.pending,[1,2]);

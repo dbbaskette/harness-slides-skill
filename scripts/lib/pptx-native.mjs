@@ -33,7 +33,6 @@ export async function checkIcons(structure,brand) {
 export async function emitNativePptx({scene,structure={groups:[],connectors:[]},brand,output,base=process.cwd()}) {
   validateScene(scene);validateBrandContract(brand,{medium:'slides'});await checkBrandSources(brand);
   const native=brand.design.nativeTemplate,sl=brand.design.slides;
-  if(!native)throw new Error('The native emitter needs a brand contract with a native template; use pptx render for unbranded decks');
   if(Math.abs(sl.canvas.width-scene.canvas.width)>1||Math.abs(sl.canvas.height-scene.canvas.height)>1)throw new Error('Scene and brand canvas differ');
   const theme=themeFor(scene),hex=value=>color(value,theme),slides=[];
   for(const s of scene.slides) {
@@ -61,23 +60,32 @@ export async function emitNativePptx({scene,structure={groups:[],connectors:[]},
     // Icons take their recorded place in the drawing order, so they sit and group with their neighbours.
     // Each order was recorded against the scene's own elements, so earlier insertions shift later ones by one.
     for(const [n,icon] of (structure.icons??[]).filter(i=>i.slide===s.id).sort((a,b)=>a.order-b.order).entries()){const {slide:_,order,...rest}=icon;elements.splice(Math.min(order+n,elements.length),0,{type:'icon',...rest});}
-    const chosen=(structure.layouts??[]).find(l=>l.slide===s.id);
+    const chosen=native&&(structure.layouts??[]).find(l=>l.slide===s.id);
     slides.push({id:s.id,...(chosen?{layout:chosen.layout,placeholders:chosen.placeholders,...(chosen.pictures?{pictures:chosen.pictures}:{})}:{}),elements,...(s.notes?{notes:s.notes}:{}),groups:structure.groups.filter(g=>g.slide===s.id).map(({id,members})=>({id,members})),connectors:structure.connectors.filter(c=>c.slide===s.id).map(({id,from,to})=>({id,from,to}))});
   }
   const iconLibrary=await checkIcons(structure,brand);
-  const plan={layoutPart:native.layoutPart,...(iconLibrary?{iconLibrary}:{}),font:brand.design.fontFamily,shapeInset:sl.spacing?.inset??16,slides};
+  const plan={layoutPart:native?.layoutPart??'ppt/slideLayouts/slideLayout1.xml',...(!native?{canvasBackground:hex('background')}:{}),...(iconLibrary?{iconLibrary}:{}),font:brand.design.fontFamily,shapeInset:sl.spacing?.inset??16,slides};
   const dir=await mkdtemp(join(tmpdir(),'harness-native-'));
   try {
     // The deck is written and read back in this private folder. It takes its output name only once it reads back, so a failed render leaves nothing there.
     const planFile=join(dir,'plan.json'),built=join(dir,'deck.pptx'),target=resolve(output);await writeFile(planFile,JSON.stringify(plan),{flag:'wx',mode:0o600});
+    let template=native?.path;
+    if(!template){
+      // Only the empty package comes from PptxGenJS. All composition geometry,
+      // tables, groups and connections go through the same native writer.
+      const {default:PptxGenJS}=await import('pptxgenjs'),pptx=new PptxGenJS();
+      pptx.defineLayout({name:'NEUTRAL',width:scene.canvas.width/72,height:scene.canvas.height/72});pptx.layout='NEUTRAL';pptx.title=scene.title;
+      pptx.addSlide().addNotes('');template=join(dir,'neutral.pptx');
+      await writeFile(template,await pptx.write({outputType:'nodebuffer'}));
+    }
     let stdout;
-    try{({stdout}=await exec('python3',['-B',fileURLToPath(new URL('./pptx-native.py',import.meta.url)),'emit',resolve(native.path),planFile,built],{timeout:120000,maxBuffer:16*1024*1024}));}
+    try{({stdout}=await exec('python3',['-B',fileURLToPath(new URL('./pptx-native.py',import.meta.url)),'emit',resolve(template),planFile,built],{timeout:120000,maxBuffer:16*1024*1024}));}
     catch(error){throw new Error(error.code==='ENOENT'?'Python 3.9+ is required. Run harness-slides doctor.':error.stderr?.trim()||error.message);}
     const emitted=JSON.parse(stdout),inventory=await pptxTool('inspect',[built]);
     // An existing file is never replaced. A copy that stops part way is removed; one that found a file already there leaves it alone.
     try{await copyFile(built,target,constants.COPYFILE_EXCL);}
     catch(error){if(error.code==='EEXIST')throw new Error(`${target} already exists; choose a new output file`);await rm(target,{force:true}).catch(()=>{});throw error;}
-    return {output:target,slides:emitted.slides,sha256:inventory.sha256,editable:true,status:'unreviewed draft',emitter:'native template',layoutPart:emitted.layoutPart,titlePlaceholder:emitted.titlePlaceholder,removedTemplateParts:emitted.removedTemplateParts,icons:emitted.report.flatMap(r=>r.icons),native:emitted.report};
+    return {output:target,slides:emitted.slides,sha256:inventory.sha256,editable:true,status:'unreviewed draft',emitter:native?'native template':'generated deck; the brand contract has no native template',layoutPart:emitted.layoutPart,titlePlaceholder:emitted.titlePlaceholder,removedTemplateParts:emitted.removedTemplateParts,icons:emitted.report.flatMap(r=>r.icons),native:emitted.report};
   } finally{await rm(dir,{recursive:true,force:true});}
 }
 
@@ -86,7 +94,7 @@ export async function templateLayouts(brand) {
   if(!brand)throw new Error('Provide --brand brand-contract.json');
   validateBrandContract(brand,{medium:'slides'});await checkBrandSources(brand);
   const native=brand.design.nativeTemplate;
-  if(!native)throw new Error('This brand contract has no native template, so there are no template layouts to choose');
+  if(!native)return {default:'Content',layouts:[{name:'Cover',title:true,subtitles:2,pictures:0},{name:'Section',title:true,subtitles:1,pictures:0},{name:'Closing',title:true,subtitles:0,pictures:0}],use:'Neutral layouts use editable text with the contract typography and geometry.'};
   let stdout;
   try{({stdout}=await exec('python3',['-B',fileURLToPath(new URL('./pptx-native.py',import.meta.url)),'layouts',resolve(native.path),native.layoutPart],{timeout:60000,maxBuffer:4*1024*1024}));}
   catch(error){throw new Error(error.code==='ENOENT'?'Python 3.9+ is required. Run harness-slides doctor.':error.stderr?.trim()||error.message);}
@@ -97,11 +105,10 @@ export async function templateLayouts(brand) {
 // Catch a misspelled or overfilled template layout at compile, not at render.
 export async function checkLayouts(structure,brand) {
   const wanted=structure.layouts??[];if(!wanted.length)return;
-  if(!brand.design.nativeTemplate){if(wanted.every(w=>w.layout==='@subtitled'))return;throw new Error('This composition uses template layouts, which need a brand with a native template');}
   const {layouts}=await templateLayouts(brand),tidy=name=>String(name).replace(/\s+/g,' ').trim();
   const wrong=[];
   for(const w of wanted) {
-    if(w.layout==='@subtitled'){if(!layouts.some(l=>l.subtitled))wrong.push(`${w.slide}: the template has no layout with a title, a subtitle line and an open canvas; remove the subtitle`);continue;}
+    if(w.layout==='@subtitled'){if(brand.design.nativeTemplate&&!layouts.some(l=>l.subtitled))wrong.push(`${w.slide}: the template has no layout with a title, a subtitle line and an open canvas; remove the subtitle`);continue;}
     const match=layouts.find(l=>tidy(l.name)===tidy(w.layout));
     if(!match)wrong.push(`${w.slide}: the template has no layout named ${w.layout}. Available: ${layouts.map(l=>l.name).join(', ')}`);
     else if(w.placeholders.length>match.subtitles)wrong.push(`${w.slide}: layout ${match.name} has ${match.subtitles} subtitle placeholders; remove the extra text`);

@@ -81,7 +81,7 @@ test('outline check, draft and start work from the command line and feed the bui
   const out=join(dir,'build'),started=await run('start','--file',file,'--brand',brandFile,'--output',out);
   // Five slides become sections of three and two; the run after the break is its own section.
   assert.deepEqual(started.parts,['lead-1.json','section-1.json','section-2.json','lead-2.json','section-3.json','lead-3.json']);assert.equal(started.sections,3);
-  assert.deepEqual((await readdir(out)).sort(),['briefs','lead-1.json','lead-2.json','lead-3.json','outline.json','parts.json','presentation-brief.md']);
+  assert.deepEqual((await readdir(out)).sort(),['briefs','lead-1.json','lead-2.json','lead-3.json','outline.json','parts.json','presentation-brief.md','project.json']);
   const lead=JSON.parse(await readFile(join(out,'lead-1.json')));
   assert.deepEqual(lead.direction,direction);assert.deepEqual(lead.slides.map(s=>[s.id,s.layout,s.subtitle]),[['cover_slide','Cover','Sub']]);validateComposition(lead,c);
   const brief=await readFile(join(out,'briefs','section-2.md'),'utf8');

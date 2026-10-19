@@ -108,12 +108,12 @@ test('images are embedded with alt text, fitted for contain and cropped for cove
   assert.match(await part(await render('cover','cover.pptx'),'ppt/slides/harnessSlide1.xml'),/<a:srcRect t="\d+" b="\d+"\/>/);
 });
 
-test('unsupported scene objects and a missing template are refused by name',async t=>{
+test('unsupported scene objects are refused and template-free brands use the native writer',async t=>{
   const dir=await temporary(t),c=await brand(dir),{scene,structure}=await compileComposition(flow(),c);
   const linked=structuredClone(scene);linked.slides[0].elements.push({id:'linked_text',type:'text',x:48,y:300,width:400,height:80,text:'More',href:'https://example.com/more'});
   await assert.rejects(()=>emitNativePptx({scene:linked,structure,brand:c,output:join(dir,'t.pptx')}),/linked_text: the native emitter does not write hyperlinks yet/);
   const plain=structuredClone(c);delete plain.design.nativeTemplate;plain.revision=contractRevision(plain);
-  await assert.rejects(()=>emitNativePptx({scene,structure,brand:plain,output:join(dir,'p.pptx')}),/needs a brand contract with a native template/);
+  const neutral=await emitNativePptx({scene,structure,brand:plain,output:join(dir,'p.pptx')});assert.equal(neutral.editable,true);assert.ok(neutral.native[0].attached.length);
   await emitNativePptx({scene,structure,brand:c,output:join(dir,'once.pptx')});
   await assert.rejects(()=>emitNativePptx({scene,structure,brand:c,output:join(dir,'once.pptx')}),/exists/i);
 });
@@ -233,7 +233,7 @@ test('a deck that cannot be read back is not left at its output, by render or by
   await assert.rejects(()=>previewComposition({file:compiled,output:join(dir,'preview')},{run:async()=>({stdout:''}),drive:{importDeck:upload,updateDeck:upload,exportPdf:upload}}),/unbound prefix/);assert.deepEqual(uploads,[]);
   // The generated deck is read back as well, and removed when that fails.
   await assert.rejects(()=>render(neutral,join(dir,'neutral.pptx'),{env:{...process.env,PATH:bin}}),/reader unavailable/);
-  assert.deepEqual((await readdir(dir)).sort(),before);
+  assert.deepEqual((await readdir(dir)).filter(name=>name!=='.harness-slides').sort(),before);
 });
 
 test('hand-edited structure that would corrupt the slide is refused, and failures leave no partial file',async t=>{

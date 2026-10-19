@@ -1,5 +1,49 @@
 # Verification
 
+## Current development verification — 0.15.0, 19 October 2026
+
+Issue #72 closes the reproduced gaps in unbranded native structure, direct-source
+image snapshots, critique coverage and preview ownership. The native writer is
+shared between neutral and template compositions. Tests inspect real PPTX XML,
+package relationships, notes, groups, connections, table row heights and routing;
+these checks establish structure, not native pixel fidelity.
+
+Reproduce the local gate with `npm ci --ignore-scripts`, `npm run test:setup`,
+`npx playwright install chromium`, then `HARNESS_BROWSER_TESTS=1 npm test`.
+Python dependencies stay in `.harness-slides/test-python`. `npm run context:check`
+and `npm run docs:check` check the routed context counts and local Markdown links.
+The scene and composition studio browser tests exercise selection, text edits,
+new versions and restore. HTTP tests additionally exercise stale saves and moved
+projects. Bundle tests verify unchanged reuse, one-page rasterization after a
+revision, missing/corrupt artifacts, and exact PPTX reuse through preview,
+design-bound review and delivery. Fixtures never stand for visual acceptance.
+
+The development verification environment is Intel macOS 15.7.9, Node 25.9.0 and
+Python 3.9.6. LibreOffice/Poppler are unavailable in that environment; native
+pixel rendering and exact-font integration are not claimed by this run. The
+new GitHub Actions workflow has separate portable core jobs (Node 20/22) and a
+native job provisioning LibreOffice, Poppler, Arial and Chromium. `npm run
+test:native` enables all optional checks and fails if those tools are missing.
+The existing Tart gate remains available for clean macOS integration.
+
+No live Google or Gemini requests were made for this change. Google ownership,
+version conflicts and preservation of old previews are covered with transport
+fixtures. Google import fidelity, live image generation and target-editor
+appearance remain separate acceptance checkpoints, regardless of issue state.
+The native icon/chart procedures below still need live account evidence.
+
+`node tools/benchmark-render.mjs` measures real local rendering where LibreOffice
+and Poppler are installed. `--fixture` replaces that transport while retaining
+real native PPTX construction. The recorded [12-slide fixture run](measurements/2026-10-19-render-bundles.json)
+had a 51.9 ms median unchanged reuse and rasterized only page 1 for a one-slide
+revision. This is orchestration evidence, not a comparison to historical native
+conversion timings or a production latency guarantee.
+
+Local full gate: **297 tests, 295 passed, two skipped, zero failures**. The two
+skips are the native-render and exact-font checks. Both real-browser tests ran.
+
+The records below are historical evidence for their named revisions.
+
 Host milestone, October 7, 2026: 26/26 tests passed with both real-browser and
 real-rendering checks enabled. The suite verifies native chart/workbook and
 table objects, notes, native images, source immutability, exact unedited XML

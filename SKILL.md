@@ -8,6 +8,8 @@ description: Create, redesign, edit and visually review editable Google Slides o
 The AI owns story and design unless supplied. A user can provide a brief, source
 documents or an existing deck; never require them to design an outline or JSON.
 Default to native Google Slides, honoring explicit PowerPoint requests.
+Branding is optional: the draft/build path supports neutral live or reading
+profiles and neutral cover, section and closing layouts.
 
 For new creative work, decide each slide's content and assets on its own merits
 and review what the visual explains; generated art is one option, not a quota.
@@ -50,7 +52,7 @@ this engine. Apply its selected contract and assets; do not mix identities.
 | Native Google access/operations | [Google Slides](references/google-slides.md) |
 | Writing a brand add-on or choosing among templates | [Brand add-ons](references/brand-addons.md); [template reuse](references/templates.md) only for inspection/composition. A deck that only uses an exported brand contract needs neither |
 | Final rendering and verification, other than of a composed deck | [Review](references/review.md); its first table says which checks apply to the method used |
-| Workspace browser and version controls | [Workspace](references/workspace.md) |
+| Scene or composition project browser, resume and version controls | [Workspace](references/workspace.md) |
 | Custom image generation or image setup | [Images](references/images.md) |
 | Supplied images, brand icons or generated art a deck uses | [Images](references/images.md) |
 

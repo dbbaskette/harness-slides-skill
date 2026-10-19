@@ -1,6 +1,6 @@
 {
   "name": "harness-slides",
-  "version": "0.14.1",
+  "version": "0.15.0",
   "description": "Brand-neutral editable slide authoring, preservation and visual review for agent harnesses.",
   "type": "module",
   "license": "MIT",
@@ -11,11 +11,14 @@
     "harness-slides": "scripts/harness-slides.mjs"
   },
   "scripts": {
-    "test": "node --test tests/*.test.mjs",
+    "test": "node scripts/ci/test.mjs",
     "context:update": "node tools/context-usage.mjs --write",
     "context:check": "node tools/context-usage.mjs --check",
     "install:skill": "node scripts/install.mjs",
-    "ci:local": "bash scripts/ci/tart-macos.sh"
+    "ci:local": "bash scripts/ci/tart-macos.sh",
+    "test:setup": "node scripts/ci/test-setup.mjs",
+    "test:native": "node scripts/ci/test.mjs --native",
+    "docs:check": "node tools/check-doc-links.mjs"
   },
   "dependencies": {
     "fontkit": "2.0.4",

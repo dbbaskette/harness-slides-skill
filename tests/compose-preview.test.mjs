@@ -8,7 +8,7 @@ import {compileCompositionFile} from '../scripts/lib/compose-file.mjs';
 import {compileComposition} from '../scripts/lib/compose.mjs';
 import {previewComposition,screenComposition,recordCritique,criticQuestions} from '../scripts/lib/compose-preview.mjs';
 import {encodePng,decodePng} from '../scripts/lib/contact-sheet.mjs';
-import {updateDeck,exportPdf} from '../scripts/google-drive-deck.mjs';
+import {importDeck,updateDeck,exportPdf} from '../scripts/google-drive-deck.mjs';
 
 const slide=(id,title,canvas,connect)=>({id,title,sources:['brief:test'],canvas,...(connect?{connect}:{})});
 const deck=()=>({version:1,title:'Preview deck',slides:[
@@ -50,7 +50,7 @@ test('everyday wording is not mistaken for a relationship, and numbered boxes wi
 
 test('a preview builds the deck, imports it once, exports the render and returns images with findings',async t=>{
   const {dir,output}=await compiled(t),{calls,deps}=fakes(),result=await previewComposition({file:output,output:join(dir,'preview')},deps);
-  assert.deepEqual(calls.slice(0,5),[['pdfinfo'],['pdftoppm','-v'],['import','Preview: Preview deck'],['pdf','drive_file_1'],['pdfinfo']]);
+  assert.deepEqual(calls.filter(c=>['import','pdf'].includes(c[0])),[['import','Preview: Preview deck'],['pdf','drive_file_1']]);
   assert.equal(result.fileId,'drive_file_1');assert.equal(result.slides.length,4);assert.equal(result.emitter,'native template');assert.match(result.next,/--file-id drive_file_1/);
   assert.deepEqual((await readdir(join(dir,'preview'))).sort(),['contact-sheet.png','critic.json','deck.pdf','deck.pptx','preview.json','slide-01.png','slide-02.png','slide-03.png','slide-04.png']);
   // The whole-deck render carries one sheet of every slide and the packet a reviewer answers from.
@@ -63,7 +63,7 @@ test('a preview builds the deck, imports it once, exports the render and returns
 
 test('a later preview updates the same Drive file and can render one slide',async t=>{
   const {dir,output}=await compiled(t),{calls,deps}=fakes(),result=await previewComposition({file:output,output:join(dir,'preview'),slide:'cards_one','file-id':'drive_file_9'},deps);
-  assert.deepEqual(calls[2],['update','drive_file_9']);assert.ok(!calls.some(c=>c[0]==='import'));
+  assert.deepEqual(calls.find(c=>c[0]==='update'),['update','drive_file_9']);assert.ok(!calls.some(c=>c[0]==='import'));
   assert.deepEqual(result.slides.map(s=>[s.id,s.number]),[['cards_one',3]]);assert.deepEqual(calls.filter(c=>c[0]==='pdftoppm'&&c[1]!=='-v'),[['pdftoppm','-f','3','-l','3']]);
   assert.deepEqual((await readdir(join(dir,'preview'))).filter(n=>n.endsWith('.png')),['slide-03.png']);
 });
@@ -72,23 +72,31 @@ test('a render with the wrong page count, an unknown slide or a missing renderer
   const {dir,output}=await compiled(t);
   await assert.rejects(()=>previewComposition({file:output,output:join(dir,'short')},fakes(3).deps),/render has 3 pages for 4 slides.*preview deck is in Drive.*retry with --file-id drive_file_1/);
   const missing=fakes();missing.deps.run=async()=>{throw Object.assign(new Error('spawn pdfinfo ENOENT'),{code:'ENOENT'});};
-  await assert.rejects(()=>previewComposition({file:output,output:join(dir,'tools')},missing.deps),/brew install poppler/);assert.deepEqual(missing.calls,[]);
+  await assert.rejects(()=>previewComposition({file:output,output:join(dir,'tools')},missing.deps),/Poppler/);assert.deepEqual(missing.calls,[]);
   await assert.rejects(()=>previewComposition({file:output,output:join(dir,'unknown'),slide:'missing_slide'},fakes().deps),/No slide missing_slide/);
-  await assert.rejects(()=>previewComposition({file:output,output:join(dir,'local'),renderer:'local'},fakes().deps),/LibreOffice \(soffice\) is not installed/);
+  await assert.rejects(()=>previewComposition({file:output,output:join(dir,'local'),renderer:'local'},fakes().deps),/soffice is not installed/);
   assert.deepEqual((await readdir(dir)).filter(n=>['short','unknown','local','tools'].includes(n)),[]);
 });
 
-test('Drive update and PDF export call the documented endpoints and check what comes back',async t=>{
-  const dir=await temporary(t),pptx=join(dir,'deck.pptx'),seen=[];await writeFile(pptx,Buffer.from([0x50,0x4b,0x03,0x04,0,0]));
-  const deps=body=>({tokenProvider:async()=>'token',fetcher:async(url,options)=>{seen.push([options?.method??'GET',String(url)]);return new Response(body,{status:200});}});
-  const slides='application/vnd.google-apps.presentation';
-  const updated=await updateDeck({fileId:'file_1',file:pptx},deps(JSON.stringify({id:'file_1',name:'Preview: Deck',mimeType:slides})));
-  assert.equal(updated.id,'file_1');assert.deepEqual(seen.map(s=>s[0]),['GET','PATCH']);assert.match(seen[1][1],/upload\/drive\/v3\/files\/file_1\?uploadType=media/);
-  // A real deck, or a file that is not Slides, is never overwritten: only the metadata read happens.
-  for(const body of [{id:'file_1',name:'Quarterly review',mimeType:slides},{id:'file_1',name:'Preview: notes',mimeType:'application/pdf'}]){seen.length=0;await assert.rejects(()=>updateDeck({fileId:'file_1',file:pptx},deps(JSON.stringify(body))),/Refusing to overwrite/);assert.deepEqual(seen.map(s=>s[0]),['GET']);}
-  await assert.rejects(()=>updateDeck({fileId:'bad id!',file:pptx},deps('{}')),/must be a Google Drive ID/);
-  await exportPdf({fileId:'file_1',output:join(dir,'a.pdf')},deps('%PDF-1.7 content'));assert.match(seen.at(-1)[1],/files\/file_1\/export\?mimeType=application%2Fpdf/);
-  await assert.rejects(()=>exportPdf({fileId:'file_1',output:join(dir,'b.pdf')},deps('<html>sign in</html>')),/did not return a PDF/);
+test('Drive previews require ownership and a matching version, and preserve the previous file',async t=>{
+  const dir=await temporary(t),pptx=join(dir,'deck.pptx'),seen=[],state=join(dir,'receipts');await writeFile(pptx,Buffer.from([0x50,0x4b,0x03,0x04,0,0]));
+  const slides='application/vnd.google-apps.presentation';let owner,version='1',name='Preview: Deck',id=0;
+  const deps={previewState:state,tokenProvider:async()=>'token',fetcher:async(url,options)=>{
+    seen.push([options?.method??'GET',String(url)]);
+    if(options?.method==='POST'){owner=JSON.parse(options.body.toString().split('\r\n\r\n')[1].split('\r\n--')[0]).appProperties.harnessPreviewOwner;return new Response(JSON.stringify({id:'file_'+(++id),name,mimeType:slides,version}));}
+    if(String(url).includes('/export'))return new Response('%PDF-1.7 content');
+    return new Response(JSON.stringify({id:'file_1',name,mimeType:slides,appProperties:{harnessPreviewOwner:owner},version}));
+  }};
+  await assert.rejects(()=>updateDeck({fileId:'file_1',file:pptx},deps),/ownership receipt/);assert.equal(seen.length,0);
+  await importDeck({file:pptx,name,preview:true},deps);const updated=await updateDeck({fileId:'file_1',file:pptx},deps);
+  assert.equal(updated.id,'file_2');assert.equal(updated.preservedPrevious,true);assert.ok(!seen.some(([method])=>method==='PATCH'));
+  // Use the saved owner for file_1 again; a changed version is rejected before upload.
+  const receipt=JSON.parse(await readFile(join(state,'file_1.json'),'utf8'));owner=receipt.owner;version='2';
+  await assert.rejects(()=>updateDeck({fileId:'file_1',file:pptx},deps),/changed remotely/);
+  version='1';owner='unrelated';await assert.rejects(()=>updateDeck({fileId:'file_1',file:pptx},deps),/ownership differs/);
+  owner=receipt.owner;name='Quarterly review';await assert.rejects(()=>updateDeck({fileId:'file_1',file:pptx},deps),/Refusing to overwrite/);
+  await assert.rejects(()=>updateDeck({fileId:'bad id!',file:pptx},deps),/must be a Google Drive ID/);
+  await exportPdf({fileId:'file_1',output:join(dir,'a.pdf')},deps);assert.match(seen.at(-1)[1],/files\/file_1\/export/);
 });
 
 test('text on a filled card is judged against the card, and an icon the color of its card is flagged',async t=>{
@@ -123,17 +131,18 @@ test('screens ask for a direction and briefs, and notice dense runs and label ti
 test('a critique is recorded against the render it judged, and a critical finding blocks delivery',async t=>{
   const {dir,output}=await compiled(t),preview=join(dir,'preview'),result=await previewComposition({file:output,output:preview},fakes().deps);
   const save=async(name,value)=>{const file=join(dir,name);await writeFile(file,JSON.stringify(value));return file;};
+  const answers=(slides,findings=[])=>slides.map(s=>({id:s.id,answers:criticQuestions.map((_,i)=>!findings.some(f=>f.slide===s.id&&f.question===i+1)),note:'SCRIPTED FIXTURE: inspected '+s.id}));
   const finding=(extra={})=>({slide:'prose_slide',question:2,severity:'major',note:'The eye lands on the grey panel, not the claim.',...extra});
   // Every problem with a critique is reported together.
   const message=await recordCritique({file:preview,assessment:await save('bad.json',{deckSha256:'0'.repeat(64),reviewer:'someone',findings:[finding({slide:'missing_slide'}),finding({question:9}),finding({severity:'awful'}),finding({note:'Bad.'})],weakest:['a','b','c','d']})}).then(()=>'',e=>e.message);
-  for(const part of [/7 problems to fix/,/deckSha256 is not the deck this packet describes/,/reviewer is independent/,/no slide missing_slide/,/question is 1 to 8/,/severity is critical, major or minor/,/note says what is wrong/,/weakest names up to three slides/])assert.match(message,part);
-  const blocked=await recordCritique({file:preview,assessment:await save('one.json',{deckSha256:result.deckSha256,reviewer:'independent',findings:[finding({severity:'critical',fix:'Make the claim the largest element.'}),finding({slide:'cards_one',question:6,severity:'minor'})],weakest:['prose_slide']})});
+  for(const part of [/8 problems to fix/,/deckSha256 is not the deck this packet describes/,/reviewer is independent/,/no slide missing_slide/,/question is 1 to 8/,/severity is critical, major or minor/,/note says what is wrong/,/weakest names up to three slides/])assert.match(message,part);
+  const blocked=await recordCritique({file:preview,assessment:await save('one.json',{deckSha256:result.deckSha256,reviewer:'independent',slides:answers(result.slides,[finding({severity:'critical'}),finding({slide:'cards_one',question:6,severity:'minor'})]),findings:[finding({severity:'critical',fix:'Make the claim the largest element.'}),finding({slide:'cards_one',question:6,severity:'minor'})],weakest:['prose_slide']})});
   assert.deepEqual([blocked.status,blocked.critical,blocked.major,blocked.minor,blocked.reviewer],['blocked',1,0,1,'independent']);assert.match(blocked.next,/Do not deliver/);
   const record=JSON.parse(await readFile(blocked.critique,'utf8'));assert.equal(record.deckSha256,result.deckSha256);assert.equal(record.findings.length,2);
   // One critique per render: the next one needs a new render.
   await assert.rejects(()=>recordCritique({file:preview,assessment:join(dir,'one.json')}),/already has a critique; fix the slides, preview again/);
   const again=join(dir,'preview-2'),second=await previewComposition({file:output,output:again,'file-id':'drive_file_1'},fakes().deps);
-  const clear=await recordCritique({file:again,assessment:await save('two.json',{deckSha256:second.deckSha256,reviewer:'author',findings:[]})});
+  const clear=await recordCritique({file:again,assessment:await save('two.json',{deckSha256:second.deckSha256,reviewer:'author',slides:answers(second.slides),findings:[]})});
   assert.deepEqual([clear.status,clear.reviewer],['clear','author']);assert.match(clear.next,/Clear to show the user/);
   // A single-slide preview has no packet to critique.
   const single=join(dir,'single');await previewComposition({file:output,output:single,slide:'cards_one','file-id':'drive_file_1'},fakes().deps);

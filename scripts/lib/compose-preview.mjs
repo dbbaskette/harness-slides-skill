@@ -1,5 +1,5 @@
 // Build, render and screen a compiled composition so each slide can be seen and fixed while its design is fresh.
-import {readFile,writeFile,mkdir,rm} from 'node:fs/promises';
+import {readFile,writeFile,mkdir,rm,copyFile,lstat} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
@@ -7,7 +7,7 @@ import {pathToFileURL} from 'node:url';
 import {auditSceneQuality} from './slide-quality.mjs';
 import {renderCompositionDir} from './compose-file.mjs';
 import {importDeck,updateDeck,exportPdf,previewPrefix} from '../google-drive-deck.mjs';
-import {hash} from './common.mjs';
+import {hash,regularInside,digest} from './common.mjs';
 import {requireSceneDesign} from './design-session.mjs';
 import {refuse} from './refusals.mjs';
 import {themeFor,color} from './scene.mjs';
@@ -107,8 +107,15 @@ const grades={critical:'The slide misleads, cannot be read, or its point cannot 
 export async function recordCritique({file,assessment}) {
   if(!file||!assessment)throw new Error('Provide --file PREVIEW_DIR and --assessment critique.json');
   const dir=resolve(file),packet=JSON.parse(await readFile(join(dir,'critic.json'),'utf8').catch(()=>{throw new Error('No critic packet here; run compose preview on the whole deck, without --slide');}));
-  const given=JSON.parse(await readFile(assessment,'utf8')),problems=[],ids=new Set(packet.slides.map(s=>s.id));
-  if(!given||typeof given!=='object'||Object.keys(given).some(k=>!['deckSha256','reviewer','findings','weakest'].includes(k)))throw new Error('A critique takes deckSha256, reviewer, findings and weakest');
+  await verifyCriticPacket(dir,packet);
+  const record=assessCompositionCritique(packet,JSON.parse(await readFile(assessment,'utf8'))),blocked=record.critical>0;
+  await writeFile(join(dir,'critique.json'),JSON.stringify(record,null,2)+'\n',{flag:'wx',mode:0o600}).catch(error=>{throw new Error(error.code==='EEXIST'?'This render already has a critique; fix the slides, preview again and critique the new render':error.message);});
+  return {critique:join(dir,'critique.json'),reviewer:record.reviewer,critical:record.critical,major:record.major,minor:record.minor,status:record.status,next:blocked?'Do not deliver. Fix each critical finding, preview the deck again and have the new render critiqued.':record.major?'Fix the major findings in one pass, then preview again. Undo any fix that causes a new finding.':'Clear to show the user.'};
+}
+
+export function assessCompositionCritique(packet,given){
+  const problems=[],ids=new Set(packet.slides.map(s=>s.id));
+  if(!given||typeof given!=='object'||Object.keys(given).some(k=>!['deckSha256','reviewer','findings','weakest','slides'].includes(k)))throw new Error('A critique takes deckSha256, reviewer, slides, findings and weakest');
   if(given.deckSha256!==packet.deckSha256)problems.push('deckSha256 is not the deck this packet describes; critique the latest render');
   if(!['independent','author'].includes(given.reviewer))problems.push('reviewer is independent (did not write the slides) or author');
   if(!Array.isArray(given.findings))problems.push('findings is a list; use an empty list when there are none');
@@ -122,14 +129,47 @@ export async function recordCritique({file,assessment}) {
     if(f.fix!==undefined&&(typeof f.fix!=='string'||!f.fix.trim()))problems.push(`${where}: fix is a sentence, or omitted`);
   }
   if(given.weakest!==undefined&&(!Array.isArray(given.weakest)||given.weakest.length>3||given.weakest.some(id=>!ids.has(id))))problems.push('weakest names up to three slides of this deck');
+  if(!Array.isArray(given.slides)||given.slides.length!==ids.size||new Set(given.slides.map(s=>s?.id)).size!==ids.size)problems.push('slides must answer every question for every slide exactly once');
+  for(const s of Array.isArray(given.slides)?given.slides:[]){
+    if(!ids.has(s?.id)||!Array.isArray(s.answers)||s.answers.length!==criticQuestions.length||s.answers.some(a=>typeof a!=='boolean')||typeof s.note!=='string'||s.note.trim().length<12){problems.push('Each slide needs its id, eight boolean answers, and a slide-specific inspection note');continue;}
+    for(const [i,pass] of s.answers.entries())if(pass===Boolean((Array.isArray(given.findings)?given.findings:[]).some(f=>f.slide===s.id&&f.question===i+1)))problems.push(`${s.id}: question ${i+1} must agree with its finding (false requires a finding; true must have none)`);
+  }
   if(problems.length)throw new Error(problems.length===1?problems[0]:`${problems.length} problems to fix:\n${problems.join('\n')}`);
   const count=level=>given.findings.filter(f=>f.severity===level).length,blocked=count('critical')>0;
-  const record={schema:1,deckSha256:packet.deckSha256,reviewer:given.reviewer,recordedAt:new Date().toISOString(),findings:given.findings,weakest:given.weakest??[],critical:count('critical'),major:count('major'),minor:count('minor'),status:blocked?'blocked':'clear'};
-  await writeFile(join(dir,'critique.json'),JSON.stringify(record,null,2)+'\n',{flag:'wx',mode:0o600}).catch(error=>{throw new Error(error.code==='EEXIST'?'This render already has a critique; fix the slides, preview again and critique the new render':error.message);});
-  return {critique:join(dir,'critique.json'),reviewer:record.reviewer,critical:record.critical,major:record.major,minor:record.minor,status:record.status,next:blocked?'Do not deliver. Fix each critical finding, preview the deck again and have the new render critiqued.':record.major?'Fix the major findings in one pass, then preview again. Undo any fix that causes a new finding.':'Clear to show the user.'};
+  const record={schema:2,packetDigest:digest(packet),deckSha256:packet.deckSha256,reviewer:given.reviewer,slides:given.slides,recordedAt:new Date().toISOString(),findings:given.findings,weakest:given.weakest??[],critical:count('critical'),major:count('major'),minor:count('minor'),status:blocked?'blocked':'clear'};
+  return record;
 }
 
-export async function previewComposition({file,output,slide,'file-id':fileId,renderer='google',fonts,'design-project':designProject,section},deps={}) {
+export async function verifyCriticPacket(dir,packet){
+  if(packet.schema!==2||!Array.isArray(packet.slides)||!packet.slides.length)throw new Error('This critic packet predates artifact verification; preview the whole deck again');
+  const preview=JSON.parse(await readFile(await regularInside(dir,'preview.json'),'utf8'));
+  if(packet.deckSha256!==preview.deckSha256||digest(packet.questions)!==digest(criticQuestions)||digest(packet.slides.map(s=>[s.id,s.number]))!==digest(preview.slides.map(s=>[s.id,s.number])))throw new Error('Critic inventory changed; preview and inspect again');
+  for(const [name,sha] of [['deck.pptx',packet.deckSha256],...packet.slides.map(s=>[s.image,s.imageSha256])]){
+    if(!sha||hash(await readFile(await regularInside(dir,name)))!==sha)throw new Error(`Critique artifact changed: ${name}; preview and inspect again`);
+  }
+  return packet;
+}
+
+export async function previewComposition(options,deps={}){
+  // Always check current design/input state, including when pixels can be reused.
+  if(!options.file||!options.output)throw new Error('Provide --file COMPILED_DIR and a new --output directory');
+  try{await lstat(options.output);throw new Error('Preview output already exists; choose a new directory');}catch(error){if(error.code!=='ENOENT')throw error;}
+  if(options.section&&!options['design-project'])throw refuse('--section needs --design-project: a section is checked against the approved design',{code:'input-invalid'});
+  const scene=JSON.parse(await readFile(join(options.file,'scene.json'),'utf8'));
+  const approved=options['design-project']?await requireSceneDesign(scene,options['design-project'],undefined,{section:options.section}):null;
+  if(options.slide&&!scene.slides.some(s=>s.id===options.slide))throw new Error(`No slide ${options.slide}; choose one of ${scene.slides.map(s=>s.id).join(', ')}`);
+  const {compositionRenderBundle,materializeRenderBundle}=await import('./render-bundle.mjs');
+  const bundle=await compositionRenderBundle(options,deps,renderCompositionPreview),result=await materializeRenderBundle(bundle,options.output,{slide:options.slide});
+  if(approved)result.design={revision:approved.revision,scope:approved.scope,slides:approved.slides};else delete result.design;
+  const {compositionBinding,recordCompositionArtifact}=await import('./composition-project.mjs');
+  result.buildBinding=await compositionBinding(options.file);
+  if(!options.slide){const packet=JSON.parse(await readFile(join(options.output,'critic.json'),'utf8'));packet.buildBinding=result.buildBinding;await writeFile(join(options.output,'critic.json'),JSON.stringify(packet,null,2)+'\n');}
+  await writeFile(join(options.output,'preview.json'),JSON.stringify(result,null,2)+'\n');
+  if(options.register!==false)await recordCompositionArtifact(options.project??resolve(options.file,JSON.parse(await readFile(join(options.file,'compose-report.json'),'utf8')).project??'.'),options.file,'preview',{path:resolve(options.output),remote:result.fileId?{fileId:result.fileId,url:result.url}:null});
+  return result;
+}
+
+async function renderCompositionPreview({file,output,slide,'file-id':fileId,renderer='google',fonts,'design-project':designProject,section,soffice:customSoffice,pdfinfo:customPdfinfo,pdftoppm:customPdftoppm},deps={}) {
   if(!file||!output)throw new Error('Provide --file COMPILED_DIR and a new --output directory');
   if(!['google','local'].includes(renderer))throw new Error('Renderer must be google or local');
   if(section&&!designProject)throw refuse('--section needs --design-project: a section is checked against the approved design',{code:'input-invalid'});
@@ -141,15 +181,15 @@ export async function previewComposition({file,output,slide,'file-id':fileId,ren
   const approved=designProject?await requireSceneDesign(scene,designProject,undefined,{section}):null;
   const tool=async(command,args,options)=>{try{return await run(command,args,options);}catch(error){throw new Error(error.code==='ENOENT'?'Poppler (pdfinfo, pdftoppm) is required to turn the render into images: brew install poppler':String(error.message).split('\n')[0]);}};
   // Check the image tools before anything is uploaded, so a missing tool cannot strand a Drive file.
-  const pdfinfo=process.env.HARNESS_PDFINFO||'pdfinfo',pdftoppm=process.env.HARNESS_PDFTOPPM||'pdftoppm';await tool(pdfinfo,['-v'],{timeout:15000});await tool(pdftoppm,['-v'],{timeout:15000});
+  const pdfinfo=customPdfinfo||process.env.HARNESS_PDFINFO||'pdfinfo',pdftoppm=customPdftoppm||process.env.HARNESS_PDFTOPPM||'pdftoppm';await tool(pdfinfo,['-v'],{timeout:15000});await tool(pdftoppm,['-v'],{timeout:15000});
   output=resolve(output);await mkdir(output,{mode:0o700});let remote=null;
   try {
     const deck=join(output,'deck.pptx'),pdf=join(output,'deck.pdf'),built=await renderCompositionDir({file:dir,output:deck});
     if(renderer==='google') {
-      remote=fileId?await drive.updateDeck({fileId,file:deck},deps.google):await drive.importDeck({file:deck,name:`${previewPrefix}${scene.title}`},deps.google);
+      remote=fileId?await drive.updateDeck({fileId,file:deck},deps.google):await drive.importDeck({file:deck,name:`${previewPrefix}${scene.title}`,preview:true},deps.google);
       await drive.exportPdf({fileId:remote.id,output:pdf},deps.google);
     } else {
-      const soffice=process.env.HARNESS_SOFFICE||'soffice',profile=join(output,'.office-profile');
+      const soffice=customSoffice||process.env.HARNESS_SOFFICE||'soffice',profile=join(output,'.office-profile');
       try{await run(soffice,[`-env:UserInstallation=${pathToFileURL(profile).href}`,'--headless','--convert-to','pdf','--outdir',output,deck],{timeout:120000,maxBuffer:1024*1024});}
       catch(error){throw new Error(error.code==='ENOENT'?'LibreOffice (soffice) is not installed. Use --renderer google, or install LibreOffice for offline previews.':`Local render failed: ${String(error.message).split('\n')[0]}`);}
       finally{await rm(profile,{recursive:true,force:true});}
@@ -158,28 +198,29 @@ export async function previewComposition({file,output,slide,'file-id':fileId,ren
     const pages=Number((await tool(pdfinfo,[pdf],{timeout:30000,maxBuffer:1024*1024})).stdout.match(/^Pages:\s+(\d+)/m)?.[1]);
     if(!Number.isInteger(pages))throw new Error('Could not read the page count of the render');
     if(pages!==scene.slides.length)throw new Error(`The render has ${pages} pages for ${scene.slides.length} slides; check the deck for an import problem`);
-    const findings=await screenComposition({scene,structure,native:built.native??[],fonts:fonts?JSON.parse(await readFile(fonts,'utf8')):undefined}),slides=[];
+    const findings=await screenComposition({scene,structure,native:built.native??[],fonts:fonts?JSON.parse(await readFile(fonts,'utf8')):(await load('compose-report.json')).fonts}),slides=[];
     for(const [index,s] of scene.slides.entries()) {
       if(wanted!==null&&wanted!==index)continue;
       const image=`slide-${String(index+1).padStart(2,'0')}.png`;
-      await tool(pdftoppm,['-f',String(index+1),'-l',String(index+1),'-singlefile','-scale-to','1600','-png',pdf,join(output,image.replace(/\.png$/,''))],{timeout:60000,maxBuffer:1024*1024});
+      if(deps.reuseImages?.has(index+1))await copyFile(deps.reuseImages.get(index+1),join(output,image));
+      else await tool(pdftoppm,['-f',String(index+1),'-l',String(index+1),'-singlefile','-scale-to','1600','-png',pdf,join(output,image.replace(/\.png$/,''))],{timeout:60000,maxBuffer:1024*1024});
       slides.push({id:s.id,number:index+1,title:s.title,image:join(output,image),findings:findings.filter(f=>f.slide===s.id).map(({slide:_,metrics,...rest})=>rest)});
     }
     // A render of the whole deck also gets one sheet of every slide and the packet a reviewer works from.
     const deckSha256=hash(await readFile(deck)),review={};
     if(wanted===null) {
       const thumbs=[];
-      for(const [index] of scene.slides.entries()){const base=join(output,`thumb-${String(index+1).padStart(2,'0')}`);await tool(pdftoppm,['-f',String(index+1),'-l',String(index+1),'-singlefile','-scale-to','480','-png',pdf,base],{timeout:60000,maxBuffer:1024*1024});thumbs.push(`${base}.png`);}
-      try{review.contactSheet=(await writeContactSheet(thumbs,join(output,'contact-sheet.png'))).path;}catch(error){review.contactSheetError=error.message;}
+      const {thumbnailPng}=await import('./contact-sheet.mjs');
+      try{for(const s of slides){const name=join(output,`thumb-${String(s.number).padStart(2,'0')}.png`);await writeFile(name,thumbnailPng(await readFile(s.image),480));thumbs.push(name);}review.contactSheet=(await writeContactSheet(thumbs,join(output,'contact-sheet.png'))).path;}catch(error){review.contactSheetError=error.message;}
       for(const thumb of thumbs)await rm(thumb,{force:true});
       const briefs=new Map((structure.briefs??[]).map(b=>[b.slide,b]));
       review.critic=join(output,'critic.json');
-      await writeFile(review.critic,JSON.stringify({schema:1,deckSha256,...(review.contactSheet?{contactSheet:review.contactSheet}:{}),questions:criticQuestions,grades,
+      await writeFile(review.critic,JSON.stringify({schema:2,deckSha256,...(review.contactSheet?{contactSheet:'contact-sheet.png'}:{}),questions:criticQuestions,grades,
         instructions:'For a reviewer who did not write these slides. Look at the contact sheet for the deck as a whole, then each image at full size. Answer every question for every slide; each no is a finding with a severity and one sentence on what is wrong. Judge only what is visible. Do not propose changes to brand colors or to what a slide says.',
-        slides:slides.map(s=>({number:s.number,id:s.id,title:s.title,image:s.image,...(briefs.get(s.id)?.relation?{relation:briefs.get(s.id).relation}:{}),rhythm:briefs.get(s.id)?.rhythm??'dense'})),
-        answer:{deckSha256,reviewer:'independent|author',findings:[{slide:'SLIDE_ID',question:1,severity:'critical|major|minor',note:'What is wrong, in a sentence.',fix:'Optional: what would fix it.'}],weakest:['up to three slide IDs']}},null,2)+'\n',{flag:'wx',mode:0o600});
+        slides:await Promise.all(slides.map(async s=>({number:s.number,id:s.id,title:s.title,image:s.image.split(/[\\/]/).at(-1),imageSha256:hash(await readFile(s.image)),...(briefs.get(s.id)?.relation?{relation:briefs.get(s.id).relation}:{}),rhythm:briefs.get(s.id)?.rhythm??'dense'}))),
+        answer:{deckSha256,reviewer:'independent|author',slides:slides.map(s=>({id:s.id,answers:Array(8).fill(null),note:'What you inspected on this slide; use true/false for every question.'})),findings:[{slide:'SLIDE_ID',question:1,severity:'critical|major|minor',note:'What is wrong, in a sentence.',fix:'Optional: what would fix it.'}],weakest:['up to three slide IDs']}},null,2)+'\n',{flag:'wx',mode:0o600});
     }
-    const result={schema:1,output,deck,deckSha256,...review,...(approved?{design:{revision:approved.revision,scope:approved.scope,slides:approved.slides}}:{}),renderer:renderer==='google'?'Google Slides PDF export':'LibreOffice',emitter:built.emitter,...(remote?{fileId:remote.id,url:remote.url}:{}),slides,
+    const result={schema:1,output,deck,deckSha256,...review,...(approved?{design:{revision:approved.revision,scope:approved.scope,slides:approved.slides}}:{}),renderer:renderer==='google'?'Google Slides PDF export':'LibreOffice',emitter:built.emitter,native:built.native??[],...(remote?{fileId:remote.id,url:remote.url}:{}),slides,
       status:'rendered and screened; open each image and judge it. Screens are prompts to look, not approval.',next:remote?`Reuse this Drive file for the next preview: --file-id ${remote.id}`:undefined};
     await writeFile(join(output,'preview.json'),JSON.stringify(result,null,2)+'\n',{flag:'wx',mode:0o600});
     return result;

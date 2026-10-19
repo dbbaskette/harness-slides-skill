@@ -674,7 +674,8 @@ class Slide:
     def xml(self):
         self.plan_connectors = {c['id']: c for c in self.spec.get('connectors', [])}
         shapes = ''.join(self.draw(node) for node in self.grouped())
-        return (f'{HEAD}<p:sld {NS}><p:cSld><p:spTree>{TREE}{shapes}</p:spTree></p:cSld>'
+        background = f'<p:bg><p:bgPr>{fill(self.plan["canvasBackground"])}<a:effectLst/></p:bgPr></p:bg>' if self.plan.get('canvasBackground') else ''
+        return (f'{HEAD}<p:sld {NS}><p:cSld>{background}<p:spTree>{TREE}{shapes}</p:spTree></p:cSld>'
                 '<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>')
 
 

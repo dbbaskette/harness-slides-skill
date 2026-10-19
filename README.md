@@ -16,12 +16,12 @@ Missing fonts and uncertain claims are reported for resolution.
 
 ## Review the design before it builds
 
-For a new deck, the agent walks you through each proposed slide: its message,
-visible copy, layout, diagram/icons/image and important caveats. Approve it, ask
-for a change, or review the remaining plan together. Claude and Codex use their
-available question interface; chat works when a question tool is unavailable.
-The agent waits for your answer before construction. You can explicitly ask for
-an autonomous build when you prefer that.
+For a new deck, the agent first shows a whole-deck wireframe draft to settle the
+story, wording and order. After your approval it shows two or three rendered
+looks for a representative slide, unless you supplied an established look.
+Your choice sets the direction for the build. Claude and Codex use their
+available question interface; chat works when it is unavailable. The agent waits
+for your actual answer at each checkpoint. You can explicitly request autonomy.
 
 After building, it shows the rendered slides and pauses for revisions again.
 Technical checks, design critique and your acceptance are tracked separately.
@@ -49,6 +49,9 @@ skills. To preview the changes first, add `--dry-run` to the installer command.
 ## Know which version you are using
 
 The current published release is [v0.14.1](https://github.com/dbbaskette/harness-slides-skill/releases/tag/v0.14.1).
+The development checkout is 0.15.0 (unreleased), with composition projects,
+verified critique packets and shared native render bundles. Its guidance requires
+the matching runtime; 0.14.1 installations retain compatible guidance.
 The skill reports “Using Harness Slides v0.14.1” when starting or resuming work.
 A resumed deck may use its older saved runtime and will report that version.
 Guidance can refresh independently; its revision does not replace the runtime version.
@@ -190,8 +193,11 @@ Use the same entrypoint for the rest of the workflow:
 Replace `./deck-work` with the workspace path returned by your agent. To continue
 later, reopen the same project and name that workspace.
 
-The local studio lets you select objects, edit text or geometry, and save a new
-version. Its browser preview approximates the final layout. Review the actual
+The local studio opens scene workspaces and composition projects. Scene objects
+support text and geometry edits; composition text edits reflow the source and
+preserve attached arrows and groups. Change composition layouts through the agent.
+Each save creates a version. Status shows findings and the next review step;
+restoring a version requires fresh review. Its browser preview approximates the final layout. Review the actual
 PowerPoint or Google Slides render before sharing the deck.
 
 ## If something gets stuck
@@ -242,8 +248,15 @@ version history, template inspection, native edits, Google access, and review.
 See [workspace controls](references/workspace.md), [editable authoring](references/authoring.md),
 and [native editing](references/editing.md) for the relevant command examples.
 
-`npm test` checks the engine, preservation, Google fixtures, installer, and
-studio. `npm run ci:local` uses the shared Tart/macOS suite with a disposable
+Run `npm ci --ignore-scripts` and `npm run test:setup` before `npm test`; setup
+installs pinned Pillow in an isolated Python environment. `npm test` checks the
+engine, preservation, Google fixtures, installer and studio APIs, and reports
+optional native checks as skipped. `npm run test:native` requires Chromium
+(`npx playwright install chromium`), LibreOffice, Poppler and exact Arial fonts;
+it enables browser/render/font checks. GitHub Actions has separate core and native
+jobs. `npm run docs:check` checks local Markdown links. `doctor --format pptx`
+or `--format google-slides` reports route requirements and configured tool paths.
+`npm run ci:local` uses the shared Tart/macOS suite with a disposable
 clone, real browser interaction, and LibreOffice rendering. Tests require no
 live Google or model account. See [verification](docs/verification.md) for recorded
 results and limits, and the [implementation plan](docs/implementation-plan.md)
@@ -264,20 +277,20 @@ representative guidance-start response. Bootstrap activation is shown separately
 | --- | ---: |
 | Discovery metadata | 39 |
 | Installed bootstrap | 412 |
-| Bootstrap + current guidance entry | 1,513 |
-| Scoped PPTX edit + final review | 3,296 |
-| Scoped Google edit + final review | 3,883 |
-| New PPTX deck from native template + review | 7,446 |
-| New Google deck from native template + review | 8,473 |
-| Draft stage only: outline + contract | 4,662 |
-| New composed deck: draft, then build | 12,170 |
-| Parallel build, lead | 11,040 |
-| Parallel build, each worker | 9,366 |
-| New PPTX scene + contract + review | 6,593 |
-| New Google scene + contract + review | 7,732 |
-| Content-led PPTX + selected component + review | 8,600 |
-| Font screening + structured critique + review | 3,728 |
-| Optional image guidance + download result | 2,922 |
+| Bootstrap + current guidance entry | 1,543 |
+| Scoped PPTX edit + final review | 3,326 |
+| Scoped Google edit + final review | 3,913 |
+| New PPTX deck from native template + review | 7,476 |
+| New Google deck from native template + review | 8,503 |
+| Draft stage only: outline + contract | 4,807 |
+| New composed deck: draft, then build | 12,506 |
+| Parallel build, lead | 11,275 |
+| Parallel build, each worker | 9,571 |
+| New PPTX scene + contract + review | 6,623 |
+| New Google scene + contract + review | 7,762 |
+| Content-led PPTX + selected component + review | 8,630 |
+| Font screening + structured critique + review | 3,758 |
+| Optional image guidance + download result | 2,952 |
 
 Intake, workspace, brand integration and image guidance load only when needed. Native-template
 authoring skips the scene contract; scene routes include its actual helper output.
