@@ -22,10 +22,10 @@ text fitting alongside those helpers. A theme gallery is a later enhancement.
 ## Which skills were previously reviewed?
 
 The clearest historical record is Tanzu Brand's
-[October 6 research report](../../../tanzu-brand/docs/research/2026-10-06-presentation-integrations.md)
-and its [pinned source list](../../../tanzu-brand/docs/research/presentation-integrations/sources.json).
-These are local companion-project references; they will not resolve for someone
-who has cloned only Harness Slides.
+[October 6 research report](https://github.com/dbbaskette/tanzu-brand/blob/3f5f7310208b21de8b75826bf62361d07825bdd2/docs/research/2026-10-06-presentation-integrations.md)
+and its [pinned source list](https://github.com/dbbaskette/tanzu-brand/blob/3f5f7310208b21de8b75826bf62361d07825bdd2/docs/research/presentation-integrations/sources.json).
+Both links point to the recorded companion-project revision; no sibling checkout
+is needed.
 
 | Earlier reference | Recorded commit | What was relevant |
 | --- | --- | --- |

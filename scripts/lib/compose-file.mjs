@@ -1,5 +1,6 @@
 // File boundary for compositions: read inputs, enforce the design gate, write a new output folder.
-import {readFile,mkdir,writeFile,rm} from 'node:fs/promises';
+import {readFile,mkdir,writeFile,rm,copyFile} from 'node:fs/promises';
+import {constants} from 'node:fs';
 import {resolve,dirname,join} from 'node:path';
 import {compileComposition} from './compose.mjs';
 import {checkBrandSources,neutralBrandContract} from './brand-contract.mjs';
@@ -18,7 +19,7 @@ const lines=error=>error.message.split('\n').filter(line=>!/^\d+ problems to fix
 
 // Without --output this only checks: every structure, fit, icon and layout problem comes back from one run and nothing is written.
 // With --design-project the approved design is checked too, written or not; --section accepts a contiguous run of approved slides.
-export async function compileCompositionFile({file,brand,output,fonts,'design-project':designProject,'asset-project':assetProject,section}) {
+export async function compileCompositionFile({file,brand,output,fonts,project,'design-project':designProject,'asset-project':assetProject,section,register=true}) {
   if(!file)throw new Error('Provide --file composition.json, and a new --output directory to write the build');
   if(section&&!designProject)throw refuse('--section needs --design-project: a section is checked against the approved design',{code:'input-invalid'});
   const bytes=await readFile(file),brandBytes=brand?await readFile(brand):null;
@@ -40,19 +41,24 @@ export async function compileCompositionFile({file,brand,output,fonts,'design-pr
   if(!output)return {status:'fits; nothing written. Add a new --output directory to write the build',...summary};
   if(approved){report.designRevision=approved.revision;report.designScope=approved.scope;}
   const {assets,write}=await placeImages(scene,{base:dirname(resolve(file)),uses});
+  const source=structuredClone(comp),images=new Map(scene.slides.flatMap(s=>s.elements).filter(e=>e.type==='image').map(e=>[e.id,e.src]));
+  const freeze=n=>{if(!n)return;if(n.type==='image'&&images.has(n.id)){delete n.asset;n.src=images.get(n.id);}for(const c of n.children??[])freeze(c);freeze(n.hub);};
+  for(const s of source.slides){freeze(s.canvas);if(s.picture&&images.has(`${s.id}_picture`)){delete s.picture.asset;s.picture.src=images.get(`${s.id}_picture`);}}
   // An icon placed by asset ID is recorded with its library ID and the hash of its index entry; the build needs no copy of it.
   for(const i of structure.icons){const use=icons.get(i.id);if(use)assets.push({object:i.id,slide:i.slide,asset:use.assetId,kind:'icon',ref:use.ref,sha256:use.sha256});}
   // The composition and brand are named relative to the build when both lie in the project; one from elsewhere stays absolute.
-  output=resolve(output);const project=designProject??assetProject,input=path=>recordedPath(output,path,project);
+  output=resolve(output);const inputProject=project??designProject??assetProject,input=path=>recordedPath(output,path,inputProject);
   report.inputs={composition:{path:input(file),sha256:hash(bytes)},brand:brand?{path:input(brand),sha256:hash(brandBytes)}:{kind:'neutral defaults',revision:contract.revision},assets};
-  report.sceneDigest=digest(scene);report.structureDigest=digest(structure);
+  if(fonts)report.fonts=JSON.parse(await readFile(fonts,'utf8'));
+  report.sceneDigest=digest(scene);report.structureDigest=digest(structure);report.project=recordedPath(output,project??output,project??output);
   await mkdir(output,{mode:0o700});
   try {
-    for(const [name,value] of [['scene.json',scene],['structure.json',structure],['compose-report.json',report],['brand-contract.json',contract]])
+    for(const [name,value] of [['scene.json',scene],['structure.json',structure],['compose-report.json',report],['brand-contract.json',contract],['composition.json',source]])
       await writeFile(join(output,name),JSON.stringify(value,null,2)+'\n',{flag:'wx',mode:0o600});
     await write(output);
+    if(register)await (await import('./composition-project.mjs')).registerComposition({output,project:project??output,designProject});
   } catch(error){await rm(output,{recursive:true,force:true});throw error;}
-  return {output,sceneDigest:report.sceneDigest,...summary};
+  return {output,project:project??output,sceneDigest:report.sceneDigest,...summary};
 }
 
 // Join section files written by separate authors into one composition, in the order the manifest lists them.
@@ -88,8 +94,8 @@ export async function renderCompositionDir({file,output}) {
   const scene=await load('scene.json'),structure=await load('structure.json'),brand=await load('brand-contract.json');
   await verifyBuiltAssets(dir);
   if(structure.icons?.length&&!brand.design.nativeTemplate)throw new Error('This composition uses icons, which need a brand with a native template');
-  if(structure.layouts?.some(l=>l.layout!=='@subtitled')&&!brand.design.nativeTemplate)throw new Error('This composition uses template layouts, which need a brand with a native template');
-  if(brand.design.nativeTemplate)return (await import('./pptx-native.mjs')).emitNativePptx({scene,structure,brand,output,base:dir});
-  const {inventory,...result}=await (await import('./pptx-render.mjs')).renderPptxScene(scene,resolve(output),{base:dir});
-  return {...result,emitter:'generated deck; the brand contract has no native template'};
+  const hasReport=await readFile(join(dir,'compose-report.json')).then(()=>true,error=>{if(error.code==='ENOENT')return false;throw error;});
+  const cached=hasReport?await (await import('./render-bundle.mjs')).cachedCompositionArtifact(dir):null;
+  if(cached){try{await copyFile(cached.file,resolve(output),constants.COPYFILE_EXCL);}catch(error){if(error.code!=='EEXIST')await rm(resolve(output),{force:true});throw error;}return {output:resolve(output),slides:scene.slides.length,sha256:cached.result.deckSha256,editable:true,status:'verified native artifact; inspection and acceptance remain separate',emitter:cached.result.emitter,native:cached.result.native,reused:true};}
+  return (await import('./pptx-native.mjs')).emitNativePptx({scene,structure,brand,output,base:dir});
 }

@@ -1,5 +1,21 @@
 # Local workspace
 
+A compiled composition is also a project: open its folder directly with `studio
+--project DIR`. An outline project can link multiple builds through `compose
+compile --project ROOT --output NEW_DIR_INSIDE_ROOT`. `project.json` records the
+outline, immutable composition versions, builds, previews, review locations and
+remote preview IDs. `workspace status`, `history`, `build` and `restore` work
+with either project kind.
+
+Composition studio edits change source text and recompile it, preserving native
+grouping and connector semantics. Geometry controls are disabled for these
+projects; ask the agent to change the source layout. Restoring recompiles the
+saved source as a new version, without transferring review or user acceptance.
+Keep the entire project folder when moving/resuming. Older compiled folders need
+recompilation to gain source-aware studio/history support. Neutral inputs and
+all local images are copied into the compiled build; brand templates/libraries
+remain hashed authorities that must still be available.
+
 Each workspace owns an immutable `inputs/` source copy, `workspace.json`, and
 sequential `versions/v000001/` scenes, previews and native build artifacts.
 Saving adds a version; it never overwrites an earlier one. Restoring creates a

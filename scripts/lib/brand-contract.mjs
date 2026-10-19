@@ -47,7 +47,7 @@ export function brandTheme(contract) {
   return {font:fontFamily,background:c.canvasPrimary,text:c.inkDeep,accent:c.accentAqua,muted:c.canvasSecondary,titleSize:s.typography.title.size,bodySize:s.typography[contract.medium.delivery==='live'?'body':'bodyReference'].size};
 }
 
-export async function neutralBrandContract(){
+export async function neutralBrandContract({delivery='reading'}={}){
   const path=fileURLToPath(new URL('../../guidance/unbranded-design.json',import.meta.url)),bytes=await readFile(path);
-  const c={schema:1,identity:{id:'unbranded',variant:'default'},medium:{kind:'slides',delivery:'reading'},sources:[{path,kind:'neutral design defaults',sha256:hash(bytes)}],design:JSON.parse(bytes),language:{organization:{toneStatus:'unspecified; follow the supplied brief'},authorVoice:{status:'unselected'}}};c.revision=contractRevision(c);return validateBrandContract(c);
+  const c={schema:1,identity:{id:'unbranded',variant:'default'},medium:{kind:'slides',delivery},sources:[{path,kind:'neutral design defaults',sha256:hash(bytes)}],design:JSON.parse(bytes),language:{organization:{toneStatus:'unspecified; follow the supplied brief'},authorVoice:{status:'unselected'}}};c.revision=contractRevision(c);return validateBrandContract(c);
 }

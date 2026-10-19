@@ -4,6 +4,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { readFile, writeFile, lstat, mkdir, mkdtemp, open, rename, rm, readdir } from 'node:fs/promises';
 import { join, resolve, dirname, basename } from 'node:path';
 import { tmpdir } from 'node:os';
+import { homedir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { getApprovedDesign, requireSceneDesign } from './design-session.mjs';
 import {auditNativeReview,assessNativeCritique,auditCompositionReview,categorizeReview} from './native-quality.mjs';
@@ -124,7 +125,7 @@ export async function renderGoogle({ file, output, selected, title, fileId, driv
   let remote = null;
   try {
     try {
-      remote = fileId ? await d.updateDeck({ fileId, file }, google) : await d.importDeck({ file, name: `${previewPrefix}${title || 'Review'}` }, google);
+      remote = fileId ? await d.updateDeck({ fileId, file }, google) : await d.importDeck({ file, name: `${previewPrefix}${title || 'Review'}`, preview: true }, google);
       await d.exportPdf({ fileId: remote.id, output: pdf }, google);
     } catch (error) { throw refuse(`Google Slides could not render the deck: ${String(error.message).split('\n')[0]}`, { code: 'provider-failed', provider: 'google' }); }
     const { stdout } = await run(pdfinfo, [pdf], { timeout: 30000, maxBuffer: 1024 * 1024 });
@@ -140,11 +141,12 @@ function stranded(error, remote) {
   return error;
 }
 
-async function renderSignature(options) {
+export async function renderSignature(options) {
   const run = options.run ?? exec, google = options.renderer === 'google';
   const versions = [];
   const poppler = [[options.pdftoppm || process.env.HARNESS_PDFTOPPM || 'pdftoppm', ['-v'], 'poppler'], [options.pdfinfo || process.env.HARNESS_PDFINFO || 'pdfinfo', ['-v'], 'poppler']];
-  for (const [name, args, provider] of google ? poppler : [[options.soffice || process.env.HARNESS_SOFFICE || 'soffice', ['--version'], 'libreoffice'], ...poppler]) {
+  const office=[options.soffice || process.env.HARNESS_SOFFICE || 'soffice', ['--version'], 'libreoffice'];
+  for (const [name, args, provider] of google ? poppler : options.popplerFirst?[...poppler,office]:[office,...poppler]) {
     // A missing renderer is named before anything is rendered or uploaded, so the caller can install it and retry.
     const result = await run(name, args, { timeout: 10000 }).catch(error => {
       if (error.code !== 'ENOENT') throw error;
@@ -163,7 +165,13 @@ async function renderSignature(options) {
       const info = await lstat(file);
       versions.push([file, info.size, info.mtimeMs]);
     }
-  } catch { versions.push(['font inventory unavailable', randomUUID()]); }
+  } catch {
+    if(process.platform==='darwin'){
+      const fonts=[];const walk=async dir=>{for(const e of await readdir(dir,{withFileTypes:true}).catch(()=>[])){const file=join(dir,e.name);if(e.isDirectory())await walk(file);else if(e.isFile()&&/\.(ttf|otf|ttc|dfont)$/i.test(e.name)){const s=await lstat(file);fonts.push([file,s.size,s.mtimeMs]);}}};
+      for(const dir of ['/System/Library/Fonts','/Library/Fonts',join(homedir(),'Library/Fonts')])await walk(dir);
+      versions.push(...(fonts.length?fonts.sort((a,b)=>a[0].localeCompare(b[0])):[['font inventory unavailable',randomUUID()]]));
+    }else versions.push(['font inventory unavailable',randomUUID()]);
+  }
   return hash(JSON.stringify(versions));
 }
 
@@ -178,7 +186,7 @@ export async function prepareReview({ file, previews, compiled, output, designPr
   return locked(output, async (dir, previous) => {
     if(previous?.creativeReviewRequired&&!designProject)throw new Error('Retain the design project and native/scene quality inputs; creative review cannot be downgraded');
     let source, revision, label, pages, images, rendererKey, remote;
-    let temp, build;
+    let temp, build, bundleTemp, bundlePreview;
     try {
       if (compiled) {
         // Review renders the build itself, so the deck it reviews is the deck it binds. An unchanged build keeps its deck and receipts.
@@ -189,14 +197,25 @@ export async function prepareReview({ file, previews, compiled, output, designPr
         if (build.report.designRevision !== approved.revision) throw refuse('This build was compiled against an older design revision. Compile the composition again against the approved design, then review it', { code: 'review-stale', next: 'Compile the composition again with --design-project, then prepare the review' });
         await requireSceneDesign(build.scene, designProject, approved.revision);
         await verifyBuiltAssets(build.dir);
+        if(!render&&!renderComposition)await signature({...options,renderer});
         file = join(dir, 'deck.pptx');
         let current = null; try { current = hash(await bytes(file)); } catch (error) { if (error.code !== 'ENOENT') throw error; }
         build.native = previous?.compiled?.binding === build.binding && recordedLocation(dir, previous.source?.file) === file && current === previous.source.sha256 ? previous.compiled.native : null;
         if (!build.native) {
           const scratch = await mkdtemp(join(tmpdir(), 'harness-compose-review-'));
           try {
-            const draw = renderComposition ?? (await import('./compose-file.mjs')).renderCompositionDir;
-            const built = await draw({ file: build.dir, output: join(scratch, 'deck.pptx') });
+            let built;
+            if(!render&&!renderComposition){
+              // Composition preview and review consume exactly one editable
+              // artifact and its verified native pixels, across output folders.
+              bundleTemp=await mkdtemp(join(tmpdir(),'harness-bundle-review-'));
+              bundlePreview=await (await import('./compose-preview.mjs')).previewComposition({file:build.dir,output:join(bundleTemp,'render'),renderer,'file-id':fileId,'design-project':designProject,fonts:options.fonts,soffice:options.soffice,pdftoppm:options.pdftoppm,pdfinfo:options.pdfinfo,register:false},{run:options.run,drive:options.drive,google:options.google});
+              built={...bundlePreview,sha256:bundlePreview.deckSha256};
+              await writeFile(join(scratch,'deck.pptx'),await bytes(bundlePreview.deck));
+            }else{
+              const draw = renderComposition ?? (await import('./compose-file.mjs')).renderCompositionDir;
+              built = await draw({ file: build.dir, output: join(scratch, 'deck.pptx') });
+            }
             build.native = built.native ?? [];
             await atomic(file, await bytes(join(scratch, 'deck.pptx')));
           } finally { await rm(scratch, { recursive: true, force: true }); }
@@ -216,6 +235,7 @@ export async function prepareReview({ file, previews, compiled, output, designPr
         label = renderer === 'google' ? 'Google Slides PDF export / Poppler; verify fidelity in the target editor' : 'LibreOffice PDF / Poppler; verify fidelity in the target editor';
         pages = deck.slides;
         images = async selected => {
+          if(bundlePreview){if(bundlePreview.fileId)remote={provider:'google',fileId:bundlePreview.fileId,url:bundlePreview.url};return number=>bundlePreview.slides.find(s=>s.number===number).image;}
           const draw = render ?? (renderer === 'google' ? renderGoogle : renderPptx);
           const result = await draw({ file: snapshot, output: temp, selected, ...options, ...(renderer === 'google' ? { title: build?.scene.title ?? basename(file).replace(/\.pptx$/i, ''), fileId } : {}) });
           remote = result.remote;
@@ -283,8 +303,10 @@ export async function prepareReview({ file, previews, compiled, output, designPr
         }
         if(previous?.revision===record.revision&&previous?.creativeQuality?.revision===record.creativeQuality.revision)record.creativeAssessment=previous.creativeAssessment;
       }else if(nativeSnapshot||decisions||qualityReport)throw new Error('Creative inputs need --design-project');
-      return await save(dir,record);
-    } finally { if (temp) await rm(temp, { recursive: true, force: true }); }
+      const result=await save(dir,record);
+      if(compiled)await (await import('./composition-project.mjs')).recordCompositionArtifact(resolve(compiled,build.report.project??'.'),compiled,'review',{path:dir});
+      return result;
+    } finally { if (temp) await rm(temp, { recursive: true, force: true }); if(bundleTemp)await rm(bundleTemp,{recursive:true,force:true}); }
   });
 }
 

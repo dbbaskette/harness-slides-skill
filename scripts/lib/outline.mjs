@@ -169,9 +169,9 @@ for(const el of document.querySelectorAll('.fit')){let n=0;while(el.scrollHeight
 
 const load=async(file,brand)=>{
   if(!file)throw new Error('Provide --file outline.json');
-  const bytes=await readFile(file),contract=brand?JSON.parse(await readFile(brand)):await neutralBrandContract();
+  const bytes=await readFile(file),outline=JSON.parse(bytes),contract=brand?JSON.parse(await readFile(brand)):await neutralBrandContract({delivery:outline.delivery});
   await checkBrandSources(contract);
-  return {bytes,outline:JSON.parse(bytes),contract};
+  return {bytes,outline,contract};
 };
 const fontsOf=async fonts=>fonts?JSON.parse(await readFile(fonts)):undefined;
 
@@ -196,8 +196,8 @@ const sections=run=>{const count=Math.ceil(run.length/4),size=Math.ceil(run.leng
 
 export async function startOutlineFile({file,brand,output,fonts}) {
   if(!output)throw new Error('Provide a new --output directory for the build');
-  if(!brand)throw new Error('Provide --brand brand-contract.json; the build needs the brand');
   const {bytes,outline,contract}=await load(file,brand),checked=await checkOutline(outline,contract,{fonts:await fontsOf(fonts)});
+  if(!contract.design.nativeTemplate)outline.layouts={cover:'Cover',section:'Section',closing:'Closing',...outline.layouts};
   // What a draft may leave open, a build may not.
   const blocking=checked.findings.filter(f=>f.code==='title-too-long').map(f=>`${f.slide}: ${f.detail}`);
   for(const kind of new Set(outline.slides.filter(s=>s.kind!=='content').map(s=>s.kind)))if(!outline.layouts?.[kind])blocking.push(`outline: name the template layout for ${kind} slides in layouts.${kind} (run compose layouts)`);
@@ -205,6 +205,7 @@ export async function startOutlineFile({file,brand,output,fonts}) {
   if(blocking.length)throw new Error(blocking.length===1?blocking[0]:`${blocking.length} problems to fix:\n${blocking.join('\n')}`);
   output=resolve(output);await mkdir(output,{mode:0o700});await mkdir(join(output,'briefs'),{mode:0o700});
   const save=(name,text)=>writeFile(join(output,name),text,{flag:'wx',mode:0o600}),parts=[],table=[];
+  if(!brand){brand=join(output,'brand-contract.json');await save('brand-contract.json',JSON.stringify(contract,null,2)+'\n');}
   const composition=slides=>JSON.stringify({version:1,title:outline.title,direction:outline.direction,slides},null,2)+'\n';
   const fixed=s=>({id:s.id,title:s.title,layout:outline.layouts[s.kind],...(s.subtitle?{subtitle:s.subtitle}:{}),...(s.detail?{detail:s.detail}:{}),...(s.notes?{notes:s.notes}:{}),sources:['outline'],brief:{rhythm:'anchor'}});
   const runtime=resolve(dirname(fileURLToPath(import.meta.url)),'..','..'),house=outline.house??[];
@@ -297,5 +298,6 @@ ${house.length?house.map(line=>`\n- ${line}`).join(''):'\nNone given beyond the 
 | --- | --- | --- |
 ${table.join('\n')}
 `);
-  return {output,slides:outline.slides.length,parts,sections:number,briefs:Array.from({length:number},(_,i)=>join(output,'briefs',`section-${i+1}.md`)),outlineSha256:hash(bytes),next:number>1?'Hand each brief to a worker, or build the sections yourself in order; then compose merge --file parts.json':'Build the section, then compose merge --file parts.json'};
+  await save('project.json',JSON.stringify({schema:1,tool:'harness-slides-project',outline:'outline.json',outlineSha256:hash(bytes),versions:[]},null,2)+'\n');
+  return {output,brand:resolve(brand),project:join(output,'project.json'),slides:outline.slides.length,parts,sections:number,briefs:Array.from({length:number},(_,i)=>join(output,'briefs',`section-${i+1}.md`)),outlineSha256:hash(bytes),next:number>1?'Hand each brief to a worker, or build the sections yourself in order; then compose merge --file parts.json':'Build the section, then compose merge --file parts.json'};
 }

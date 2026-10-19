@@ -21,9 +21,9 @@ test('routed instruction links and sections resolve', async () => {
   }
 });
 
-test('reported paths count each input once and README reflects the tested instructions', async () => {
-  const data = await measureContext(), readme = await readFile(new URL('README.md', root), 'utf8');
-  assert.ok(readme.includes(renderReport(data)));
+test('reported paths count each input once and context guide reflects the tested instructions', async () => {
+  const data = await measureContext(), report = await readFile(new URL('docs/context-usage.md', root), 'utf8');
+  assert.ok(report.includes(renderReport(data)));
   for (const route of [...Object.values(data.readingPaths), ...Object.values(data.standalone)]) {
     assert.equal(new Set(route.files.map(x => x.path)).size, route.files.length);
     assert.equal(new Set(route.helpers.map(x => x.name)).size, route.helpers.length);

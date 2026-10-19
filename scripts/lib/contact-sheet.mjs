@@ -42,6 +42,16 @@ export function encodePng({width,height,rgb}) {
   return Buffer.concat([signature,chunk('IHDR',header),chunk('IDAT',deflateSync(raw)),chunk('IEND',Buffer.alloc(0))]);
 }
 
+// Derive contact-sheet thumbnails from the verified render, avoiding another
+// native rasterization process for every slide. Nearest sampling is sufficient
+// for the overview; the original full-size PNG remains the review evidence.
+export function thumbnailPng(bytes,maxWidth=480){
+  const image=decodePng(bytes);if(image.width<=maxWidth)return bytes;
+  const width=maxWidth,height=Math.max(1,Math.round(image.height*width/image.width)),rgb=Buffer.alloc(width*height*3);
+  for(let y=0;y<height;y++)for(let x=0;x<width;x++){const at=(Math.floor(y*image.height/height)*image.width+Math.floor(x*image.width/width))*3;image.rgb.copy(rgb,(y*width+x)*3,at,at+3);}
+  return encodePng({width,height,rgb});
+}
+
 // Slide numbers in a 3×5 dot face, so a reviewer can name a slide without counting.
 const digits=['111101101101111','010110010010111','111001111100111','111001111001111','101101111001001','111100111001111','111100111101111','111001001001001','111101111101111','111101111001111'];
 function stamp(sheet,x,y,number) {

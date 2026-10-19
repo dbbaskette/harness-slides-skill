@@ -198,6 +198,17 @@ function googleRoute(pages,{importFails,exportFails,noPoppler}={}){
 const googleOptions=(f,route,more={})=>({...f.options,render:undefined,signature:undefined,renderer:'google',...route.deps,...more});
 const problemOf=async promise=>{try{await promise;}catch(error){return problemsOf(error)[0];}assert.fail('expected a refusal');};
 
+test('composition preview and design review share the exact native bundle without transferring critique',async t=>{
+  const f=await built(t),route=googleRoute(f.plan.slides.length),{previewComposition}=await import('../scripts/lib/compose-preview.mjs');
+  const preview=await previewComposition({file:f.compiled,output:join(f.project,'preview'),'design-project':f.project},route.deps);
+  const reviewed=await prepareReview(googleOptions(f,route)),recorded=await record(f);
+  assert.equal(recorded.source.sha256,preview.deckSha256);assert.equal(route.uploads.length,1);
+  assert.equal(reviewed.visualReviewComplete,false);assert.equal(reviewed.creativeReviewComplete,false);
+  await markReview({output:f.options.output,revision:reviewed.revision,numbers:[1,2,3],note:'SCRIPTED FIXTURE inspected native pixels'});await assessReview({output:f.options.output,revision:reviewed.revision,assessment:assessment(recorded.creativeQuality)});
+  const {compositionStatus}=await import('../scripts/lib/composition-project.mjs');assert.equal((await compositionStatus(f.compiled)).readyForUserReview,false);
+  const answers=join(f.project,'critique-answers.json');await writeFile(answers,JSON.stringify({deckSha256:preview.deckSha256,reviewer:'author',slides:preview.slides.map(s=>({id:s.id,answers:Array(8).fill(true),note:'SCRIPTED FIXTURE inspected '+s.id})),findings:[]}));await (await import('../scripts/lib/compose-preview.mjs')).recordCritique({file:preview.output,assessment:answers});assert.equal((await compositionStatus(f.compiled)).readyForUserReview,true);
+});
+
 test('review --compiled renders through Google Drive, binding the receipts to the exact deck it uploaded',async t=>{
   const f=await built(t),route=googleRoute(f.plan.slides.length),first=await prepareReview(googleOptions(f,route));
   const r=await record(f),deck=await readFile(join(f.options.output,'deck.pptx'));

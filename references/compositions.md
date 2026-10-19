@@ -1,6 +1,6 @@
 # Compose slides
 
-For new slides in a brand template. You describe each slide's structure; the
+For new slides with a brand template or neutral defaults. You describe each slide's structure; the
 compiler places it, fits the text and builds editable native objects. Get the
 [draft](draft.md) approved first, or [the per-slide proposal](design-walkthrough.md)
 where there is no draft, and decide what each slide must make the audience
@@ -256,9 +256,15 @@ the result shows how much of each slide's height the content needs. Then add
 `--output`. Shorten the wording, split the slide or restructure. Text is never
 shrunk to fit.
 
-`preview` builds the deck, renders it and returns the slide image with findings.
-The first preview creates one Drive file named `Preview: …`; pass its ID as
-`--file-id` afterwards so the same file is reused. Use `--renderer local` when
+`preview` returns native images with findings. Verified bundles reuse the exact
+editable PPTX and pixels when input dependencies are unchanged; no critique or
+user approval is copied. A changed deck may still need full native PDF conversion,
+but unaffected page images can be reused and thumbnails come from those images.
+Google previews are named `Preview: …`. `--file-id` checks its saved ownership
+and remote version, then creates a fresh preview while preserving the previous
+file. Use the returned ID; a missing receipt or remote edit requires omitting
+`--file-id`. A cached local render does not verify a live deck's current state.
+Use `--renderer local` when
 LibreOffice is installed and Google is unavailable.
 
 Record the user's actual approval of the per-slide design in
@@ -308,6 +314,13 @@ subagent, answer them yourself and record the reviewer as `author`.
 node scripts/harness-slides.mjs compose critique --file PREVIEW_DIR --assessment critique.json
 ```
 
+Fill the `answer` template from `critic.json`: `slides` must list every slide
+once with eight boolean `answers` and a slide-specific inspection `note`. Every
+false answer needs a matching finding; true answers have none. An all-pass review
+still answers every question. The command verifies the actual deck and image
+hashes. Legacy packets need a new preview; missing/changed artifacts cannot be
+certified by an empty findings list.
+
 Each no is a finding: `critical` when the slide misleads or its point cannot be
 found, `major` when it is clearly weaker than it should be, `minor` otherwise.
 The critique also names the three weakest slides. A critical finding blocks
@@ -333,9 +346,10 @@ user the contact sheet and the images and wait, as
 describes. The preview file and the delivered file are imports of the same
 build.
 
-The deck is built inside the brand template: the title is the layout's
-placeholder, labels sit inside their shapes, arrows are attached, and each card
-is one group. All of that survives the import into Google Slides. Read
+With a native brand template, titles use layout placeholders. Neutral decks use
+editable titles and neutral layouts. Both use the same writer for native groups,
+attached/routed arrows, tables and charts. Google import preservation still needs
+live acceptance for the actual deck; fixture/package checks do not establish it. Read
 [review](review.md) for a design-bound review, a requested PDF export or an
 editability check.
 

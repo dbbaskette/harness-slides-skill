@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { readFile, realpath, writeFile } from 'node:fs/promises';
-import { basename, resolve } from 'node:path';
+import { readFile, realpath, writeFile, mkdir, rename, lstat } from 'node:fs/promises';
+import { basename, resolve, join } from 'node:path';
+import { homedir } from 'node:os';
 import { parseArgs, promisify } from 'node:util';
 import { pathToFileURL } from 'node:url';
 
@@ -117,19 +118,20 @@ export function multipartPptx(bytes, metadata, boundary = `harness-${randomUUID(
   return { body: Buffer.concat([before, bytes, after]), contentType: `multipart/related; boundary=${boundary}` };
 }
 
-export async function importDeck({ file, name, folderId }, deps = {}) {
+export async function importDeck({ file, name, folderId, preview = false }, deps = {}) {
   if (!file?.toLowerCase().endsWith('.pptx')) throw new Error('Input must be a .pptx path.');
   if (folderId) validId(folderId, 'Folder ID');
   const bytes = await readFile(file);
   if (!isZip(bytes)) throw new Error('Input is not a PPTX ZIP.');
   const title = name ?? basename(file).replace(/\.pptx$/i, '');
   if (!title.trim()) throw new Error('Presentation name must not be empty.');
-  const metadata = { name: title, mimeType: slidesType, ...(folderId ? { parents: [folderId] } : {}) };
+  const owner=preview?randomUUID():null;
+  const metadata = { name: title, mimeType: slidesType, ...(owner?{appProperties:{harnessPreviewOwner:owner}}:{}), ...(folderId ? { parents: [folderId] } : {}) };
   const { body, contentType } = multipartPptx(bytes, metadata);
   const url = new URL('https://www.googleapis.com/upload/drive/v3/files');
   url.searchParams.set('uploadType', 'multipart');
   url.searchParams.set('supportsAllDrives', 'true');
-  url.searchParams.set('fields', 'id,name,mimeType,webViewLink');
+  url.searchParams.set('fields', 'id,name,mimeType,webViewLink,version');
   let response;
   try {
     response = await request(url, { method: 'POST', headers: { 'Content-Type': contentType }, body }, deps);
@@ -140,29 +142,34 @@ export async function importDeck({ file, name, folderId }, deps = {}) {
   try { created = await response.json(); }
   catch { throw new Error('Drive returned an unreadable upload response. Inspect Drive before retrying.'); }
   if (!created.id || created.mimeType !== slidesType) throw new Error('Upload response did not confirm a native Google Slides file. Inspect Drive before retrying.');
+  if(preview)await savePreview({fileId:created.id,owner,version:created.version??null},deps).catch(error=>{throw new Error(`Preview created (${created.id}), but its ownership receipt could not be saved. Preserve that file; omit --file-id to create a new preview. ${error.message}`);});
   return { id: created.id, name: created.name ?? title, url: created.webViewLink ?? `https://docs.google.com/presentation/d/${created.id}/edit` };
 }
 
 export const previewPrefix = 'Preview: ';
 
-// Replace an existing native deck's content in place, so repeated previews reuse one Drive file.
+function previewState(deps){return deps.previewState??process.env.HARNESS_PREVIEW_STATE??join(homedir(),'.local','share','harness-slides','previews');}
+async function savePreview(receipt,deps){
+  validId(receipt.fileId,'Preview ID');const dir=resolve(previewState(deps));await mkdir(dir,{recursive:true,mode:0o700});
+  const stat=await lstat(dir);if(!stat.isDirectory()||stat.isSymbolicLink()||(stat.mode&0o077)!==0)throw new Error('Preview receipt directory must be private');
+  const temporary=join(dir,`${receipt.fileId}.${randomUUID()}.tmp`);await writeFile(temporary,JSON.stringify(receipt),{flag:'wx',mode:0o600});await rename(temporary,join(dir,`${receipt.fileId}.json`));
+}
+
+// Validate the previous preview, then preserve it and create a fresh native deck.
 export async function updateDeck({ fileId, file }, deps = {}) {
   validId(fileId, 'Presentation ID');
   if (!file?.toLowerCase().endsWith('.pptx')) throw new Error('Input must be a .pptx path.');
   const bytes = await readFile(file);
   if (!isZip(bytes)) throw new Error('Input is not a PPTX ZIP.');
-  // Replacing content is destructive, so only a file this tool created for previews may be overwritten.
-  const current = await (await request(`https://www.googleapis.com/drive/v3/files/${fileId}?supportsAllDrives=true&fields=id,name,mimeType`, {}, deps)).json();
+  let receipt;try{receipt=JSON.parse(await readFile(join(previewState(deps),`${fileId}.json`),'utf8'));}catch{throw new Error('No preview ownership receipt. Omit --file-id to create a new preview; existing files are preserved.');}
+  const current = await (await request(`https://www.googleapis.com/drive/v3/files/${fileId}?supportsAllDrives=true&fields=id,name,mimeType,appProperties,version`, {}, deps)).json();
   if (current.mimeType !== slidesType || !String(current.name ?? '').startsWith(previewPrefix)) throw new Error(`Refusing to overwrite a Drive file that is not a "${previewPrefix}…" Google Slides deck. Omit --file-id to create a new preview file.`);
-  const url = new URL(`https://www.googleapis.com/upload/drive/v3/files/${fileId}`);
-  url.searchParams.set('uploadType', 'media');
-  url.searchParams.set('supportsAllDrives', 'true');
-  url.searchParams.set('fields', 'id,name,mimeType,webViewLink');
-  let updated;
-  try { updated = await (await request(url, { method: 'PATCH', headers: { 'Content-Type': pptxType }, body: bytes }, deps)).json(); }
-  catch (error) { throw new Error(`${error.message} Inspect the preview file in Drive before retrying.`, { cause: error }); }
-  if (updated.id !== fileId || updated.mimeType !== slidesType) throw new Error('Drive did not confirm the native Google Slides file was updated. Inspect Drive before retrying.');
-  return { id: updated.id, name: updated.name, url: updated.webViewLink ?? `https://docs.google.com/presentation/d/${updated.id}/edit` };
+  if(!receipt.owner||current.appProperties?.harnessPreviewOwner!==receipt.owner)throw new Error('Preview ownership differs; omit --file-id to create a new preview.');
+  if(!receipt.version||String(current.version)!==String(receipt.version))throw new Error('Preview changed remotely or its version is unverified; preserve it and omit --file-id to create a new preview.');
+  // Drive media replacement has no established atomic version guard here. Even
+  // after checking the receipt, preserve the old deck: a collaborator could edit
+  // it between this read and a write. Return the new ID for subsequent renders.
+  return {...await importDeck({file,name:current.name,preview:true},deps),previousFileId:fileId,preservedPrevious:true};
 }
 
 // Google's own render of a native deck, as PDF.

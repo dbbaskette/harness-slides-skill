@@ -79,6 +79,11 @@ or reused. A runtime without `capabilities` (0.13.1 and earlier) has none of the
 | `assets` | [The asset manifest](#the-asset-manifest): `assets add-supplied`, `assets icon`, `assets status` and `assets check`, images recorded by `images generate` and `images download`, and asset IDs in a composition compiled with `--asset-project` |
 | `assets-approved-candidates` | `assets status\|check --design-project` reading the candidates of every slide in the stored plan, pending or approved. Without it they see only the slides of the question `design status` is waiting on, and none once the design is approved |
 | `canonical-digests` | Intents, slide approvals and plan revisions that [ignore key order](#key-order) |
+| `compose-projects` | `project.json` links versioned composition sources, builds, previews and reviews; studio text edits recompile the source, and workspace status/history/build/restore operate on the project |
+| `compose-verified-critique` | Critic packet schema 2 binds the deck and each image hash; assessments answer all eight questions for every slide and give an inspection note |
+| `neutral-native-composition` | Neutral live/reading contracts and Cover/Section/Closing layouts, with the same native writer for groups, tables, routed/attached connectors and chart data |
+| `owned-google-previews` | Preview creation stores ownership and remote version receipts; a stale/unowned file is refused, and an owned unchanged preview is preserved while a fresh file is created |
+| `render-bundles` | Verified immutable native PPTX/PDF/PNG bundles shared by composition preview and design-bound review; cached artifacts contain no critique or user approval |
 | `compose-icon-assets` | `{type:icon,asset:ID}` in a composition, resolved through the asset manifest and listed in `compose-report.json` `inputs.assets` ([the asset manifest](#the-asset-manifest)) |
 | `compose-review` | `review --compiled COMPILED --design-project DIR`, the [design-bound review of a composition](#design-bound-review-of-a-composition) |
 | `compose-section` | `--section` on `compose compile` and `compose preview` ([sections](#sections)), `--design-project` on `compose preview`, and `compose compile --design-project` checking without `--output` |
@@ -382,7 +387,7 @@ again. A changed deck, image, build file or design revision is refused as
 `compose preview --renderer google` takes. It works for `--compiled` and `--file`.
 Poppler (`pdfinfo`, `pdftoppm`) is checked first, before anything is uploaded.
 The exact bytes of `REVIEW/deck.pptx` that the review hashes are imported into
-Drive as `Preview: <deck title>`, or replace the content of the `Preview: …` file
+Drive as `Preview: <deck title>`. In 0.15.0, preserve the previous preview and create a new one after checking the ownership/version of the file
 named by `--file-id`. Drive exports that file as a PDF, and Poppler cuts it into
 the pictures. The receipts do not change: `builtArtifactDigest` is the hash of the
 uploaded bytes, and `artifactDigest` binds the pictures Google drew. The Drive
@@ -745,7 +750,7 @@ release that raises `minimumRuntime` (issue #51), and not before:
 - `references/parallel-build.md`, for workers: "Use only asset IDs that `assets
   status` lists. Do not copy image files into a section."
 - `SKILL.md` task table, beside *Custom image generation or image setup*: a row
-  "Supplied images, brand icons or generated art a deck uses | [Images](references/images.md)".
+  "Supplied images, brand icons or generated art a deck uses | [Images](../../references/images.md)".
 
 ## Guidance for the release: exact icons
 
@@ -783,17 +788,17 @@ release that raises `minimumRuntime` (issue #51), and not before:
   > review. Deliver `REVIEW/deck.pptx`. The independent `compose critique`
   > still applies.
 
-- `references/compositions.md`, in "Deliver", replace "Read [review](review.md)
+- `references/compositions.md`, in "Deliver", replace "Read [review](../../references/review.md)
   only for a requested PDF export or an editability check." with:
 
-  > Read [review](review.md) for a design-bound review, a requested PDF export
+  > Read [review](../../references/review.md) for a design-bound review, a requested PDF export
   > or an editability check.
 
 - `references/review.md`, the table row for Compositions, "Before delivery"
   column, replace it with:
 
   > `compose preview` of the whole build, every image opened. With an approved
-  > design, also `review --compiled` and [native critique](native-critique.md)'s
+  > design, also `review --compiled` and [native critique](../../references/native-critique.md)'s
   > assessment. Nothing else is required unless a PDF export or an
   > editability check was asked for
 
@@ -853,17 +858,17 @@ that the Google import is unchecked; replace that sentence with its findings.
 - `references/compositions.md`, replace "Native charts and hyperlinks are not
   available in compositions yet. Show a few numbers as bars drawn to scale or as
   a table. A deck that needs a real chart is built with [another
-  method](authoring.md); the methods cannot yet be mixed in one build." with:
+  method](../../references/authoring.md); the methods cannot yet be mixed in one build." with:
 
   > Hyperlinks are not available in compositions yet. A chart is written as a
   > native chart with its own workbook, so its data can be edited in
   > PowerPoint.
 
 - `references/content-components.md`, replace "Prefer
-  [compositions](compositions.md) for new slides. Use these typed components
+  [compositions](../../references/compositions.md) for new slides. Use these typed components
   for charts, which compositions do not yet express." with:
 
-  > Prefer [compositions](compositions.md) for new slides, charts included. Use
+  > Prefer [compositions](../../references/compositions.md) for new slides, charts included. Use
   > these typed components for a deck already built with them, or for a chart
   > linked to Google Sheets.
 
@@ -899,3 +904,38 @@ which raised `minimumRuntime` to 0.14.1:
   > Show them with the slides, and record the person's answer with
   > `design respond`. Never answer it for them.
 
+
+## Workflow integrity in 0.15.0 (unreleased)
+
+Composition compilation now stores `composition.json` with copied image paths and a
+`project.json` record. `--project ROOT` on `compose compile` registers builds under
+an outline project. Output must lie inside that project; standalone compiled
+folders are projects themselves. `studio --project ROOT` opens either project
+kind. Composition studio edits change source text and recompile; geometry changes
+belong in the composition source. Older compiled folders need recompilation to
+use composition history/studio.
+
+`compose preview` writes a schema-2 `critic.json`. Its `answer.slides` template has
+`{id, answers:[eight booleans], note}` per slide. Fill every answer, provide an
+inspection note for that slide, and list a finding for each false answer. A true
+answer cannot also have a finding. The command verifies `deck.pptx` and every
+image hash before storing a receipt. Legacy packets need a new preview.
+
+Native bundles live under the compiled folder's parent in
+`.harness-slides/render-bundles`. Input content, brand authorities, fonts,
+renderer signature, runtime code and dependencies determine reuse. Unchanged
+builds reuse the exact PPTX and pixels across output locations. Equivalent slide
+fingerprints can reuse unaffected page images after a changed deck has been
+converted; native PDF conversion may still require the full deck. Thumbnailing
+uses existing PNGs. Corruption or missing cached files triggers a new render.
+Review receives the same bytes as preview; neither new output locations nor
+cache hits transfer inspection notes or user acceptance.
+
+Google preview ownership receipts live in `HARNESS_PREVIEW_STATE`, or
+`~/.local/share/harness-slides/previews`, with private permissions. Receipts bind
+the file ID, random ownership marker and Drive version. `--file-id` validates the
+receipt and remote marker/version, then creates a fresh preview to preserve the
+previous file: atomic conditional media replacement has not been established.
+Always use the returned ID. A lost receipt, missing version or intervening edit
+requires a new preview without `--file-id`. No cached local render certifies a
+live Drive deck's current state.

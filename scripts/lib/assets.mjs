@@ -271,7 +271,7 @@ export async function iconAssetProblems(icons,contract){
   return lines;
 }
 
-// The images of a compiled scene. A file named by src keeps its absolute path, as before. A manifest asset is copied into
+// The images of a compiled scene. Every local source and manifest asset is copied into
 // OUTPUT/assets and named relatively, so the build and its previews resolve it wherever the project goes.
 export async function placeImages(scene,{base,uses=new Map()}){
   const assets=[],copies=new Map();
@@ -279,7 +279,8 @@ export async function placeImages(scene,{base,uses=new Map()}){
     const use=uses.get(e.id);
     if(!use){
       const path=resolve(base,e.src),image=await readFile(path).catch(error=>{throw error.code==='ENOENT'?refuse(`${s.id}/${e.id}: image ${e.src} is missing (${path})`,{code:'asset-missing',slide:s.id,asset:e.id}):error;});
-      e.src=path;assets.push({object:e.id,path,sha256:hash(image)});continue;
+      const sha256=hash(image);e.src=`assets/${sha256}${extname(path).toLowerCase()}`;copies.set(e.src,image);
+      assets.push({object:e.id,slide:s.id,path:e.src,sha256});continue;
     }
     const bytes=await readFile(use.path).catch(error=>{throw error.code==='ENOENT'?refuse(`${s.id}/${e.id}: asset ${use.assetId} file ${use.source} is missing from the project`,{code:'asset-file-missing',slide:s.id,asset:use.assetId}):error;});
     if(hash(bytes)!==use.sha256)throw refuse(`${s.id}/${e.id}: asset ${use.assetId} file ${use.source} changed since it was recorded`,{code:'asset-hash-changed',slide:s.id,asset:use.assetId});
@@ -293,7 +294,7 @@ export async function verifyBuiltAssets(dir){
   let report;try{report=JSON.parse(await readFile(join(dir,'compose-report.json'),'utf8'));}catch(error){if(error.code==='ENOENT')return;throw error;}
   for(const a of report.inputs?.assets??[]){
     // An icon is drawn from the brand library at render, so the build holds no copy of it.
-    if(!a.asset||a.kind==='icon')continue;
+    if(a.kind==='icon')continue;
     const slide=a.slide??null;let bytes;
     try{bytes=await readFile(await regularInside(dir,a.path));}catch(error){throw error.code==='ENOENT'?refuse(`${a.object}: asset ${a.asset} copy ${a.path} is missing from the build`,{code:'asset-file-missing',slide,asset:a.asset,next:'Compile the composition again'}):error;}
     if(hash(bytes)!==a.sha256)throw refuse(`${a.object}: asset ${a.asset} copy ${a.path} changed since it was compiled`,{code:'asset-hash-changed',slide,asset:a.asset,next:'Compile the composition again'});

@@ -8,7 +8,10 @@ round of changes to built slides takes minutes a slide.
 node scripts/harness-slides.mjs outline contract --brand brand-contract.json
 ```
 
-With `--brand` the contract ends with what this brand allows: how long a title
+Branding is optional. Without `--brand`, outline checking uses neutral typography
+for its live/reading delivery profile, and starting the build writes a neutral
+brand contract plus Cover, Section and Closing layouts. Use the returned brand
+path for subsequent compilation. With `--brand` the contract ends with what this brand allows: how long a title
 may be and how many words a slide carries.
 
 ## Write the outline
@@ -85,8 +88,8 @@ approves what the deck says; it does not choose a look.
 node scripts/harness-slides.mjs compose sheet --image A/slide-01.png --image B/slide-01.png --image C/slide-01.png --output looks.png
 ```
 
-Previews that share one Drive file run one after another; the file then holds
-the last look, which does not matter.
+Keep the returned preview ID for each look. Google previews preserve prior files;
+a later call validates the ownership/version receipt and returns a fresh ID.
 
 Showing looks is not choosing one. Choose for the user only when they asked
 you to work on your own, and then say which you chose and why. Skip this step
@@ -107,6 +110,11 @@ node scripts/harness-slides.mjs outline start --file outline.json --brand brand-
 `start` writes the build's starting files: the cover, section and closing
 slides, `parts.json`, one brief per section of three or four content slides,
 and `presentation-brief.md`, which carries the outline's `approval`.
+
+`start` also writes `project.json`, linking the outline and later build versions.
+Register the merged build with `compose compile --file composition.json
+--brand BRAND_FROM_START --output NEW_DIR_INSIDE_PROJECT --project PROJECT`.
+The studio and workspace status/history/build/restore commands accept that project.
 
 Then build each section from its brief, following
 [compositions](compositions.md): hand the briefs to workers for a

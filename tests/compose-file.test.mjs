@@ -21,7 +21,7 @@ test('compose compile writes a scene, structure, report and brand contract into 
   const {stdout}=await exec('node',[cli,'compose','compile','--file',example,'--output',output]);
   const result=JSON.parse(stdout);
   assert.equal(result.slides,1);assert.equal(result.groups,1);assert.equal(result.connectors,2);
-  assert.deepEqual((await readdir(output)).sort(),['brand-contract.json','compose-report.json','scene.json','structure.json']);
+  assert.deepEqual((await readdir(output)).sort(),['brand-contract.json','compose-report.json','composition.json','project.json','scene.json','structure.json']);
   const scene=JSON.parse(await readFile(join(output,'scene.json')));
   validateScene(scene);
   const rendered=await renderPptxScene(scene,join(dir,'deck.pptx'));
