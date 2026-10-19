@@ -105,7 +105,8 @@ test('text on a filled card is judged against the card, and an icon the color of
     {type:'box',id:'dark_card',fill:'headingPrimary',children:[{type:'icon',id:'dark_icon',icon:'fi-test'},{type:'text',id:'dark_text',text:'White on blue',color:'canvasPrimary'}]},
     {type:'box',id:'pale_card',fill:'canvasSecondary',children:[{type:'text',id:'pale_text',text:'White on grey',color:'canvasPrimary'}]}]})]};
   const {scene,structure}=await compileComposition(comp,c);
-  const findings=await screenComposition({scene,structure,native:[{id:'card_slide',unattached:[],icons:[{id:'dark_icon',colors:['2867B2','FFFFFF']}]}]}),codes=id=>findings.filter(f=>f.object===id).map(f=>f.code);
+  // Font availability is screened separately; this fixture checks background contrast.
+  const findings=await screenComposition({scene,structure,native:[{id:'card_slide',unattached:[],icons:[{id:'dark_icon',colors:['2867B2','FFFFFF']}]}]}),codes=id=>findings.filter(f=>f.object===id&&f.code!=='font-unavailable').map(f=>f.code);
   assert.deepEqual(codes('dark_text'),[]);assert.deepEqual(codes('pale_text'),['contrast']);assert.deepEqual(codes('dark_icon'),['icon-blends-into-fill']);
 });
 

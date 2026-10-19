@@ -42,6 +42,14 @@ conversion timings or a production latency guarantee.
 Local full gate: **297 tests, 295 passed, two skipped, zero failures**. The two
 skips are the native-render and exact-font checks. Both real-browser tests ran.
 
+GitHub Actions [native job on `4ae6444`](https://github.com/dbbaskette/harness-slides-skill/actions/runs/39292682801/job/118197101829):
+**297 passed, zero failures or skips**, including real browser, LibreOffice/Poppler
+rendering and exact Arial checks. The same run exposed two core-test assumptions
+about Arial availability. The contrast fixture now permits the separate missing-font
+warning; the shape-fit fixture checks the same explicit lines against rectangle
+and diamond bounds, including a deliberately unavailable font. These changes
+preserve the production missing-font warnings and fallback behavior.
+
 The records below are historical evidence for their named revisions.
 
 Host milestone, October 7, 2026: 26/26 tests passed with both real-browser and

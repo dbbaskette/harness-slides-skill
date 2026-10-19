@@ -168,11 +168,14 @@ test('the wider native shape set compiles and reaches every emitter',async t=>{
 
 test('non-rectangular shapes measure text against their smaller inner text area',async()=>{
   const cell=(shape,text)=>deck({type:'grid',columns:4,children:[{type:'box',id:'shape_box',shape,text},{type:'spacer'},{type:'spacer'},{type:'spacer'}]});
-  // A 202pt-wide cell: one long word fits a rectangle's 166pt text width but not a diamond's 101pt.
-  const word='Observability';
-  await compileComposition(cell('rect',word),brand());
-  const tall=(await compileComposition(cell('diamond','A diamond holds only a few short words of text'),brand()).catch(e=>e));
-  assert.match(String(tall.message??''),/slide_one\/shape_box: needs [\d.]+pt of height but has 360pt/);
+  // Explicit lines fit a rectangle's height but exceed a diamond's inner height,
+  // with both exact-font metrics and the portable fallback estimator.
+  const text=Array(7).fill('Short line').join('\n'),missing=brand();
+  missing.design.fontFamily='Harness Test Missing Font';missing.revision=contractRevision(missing);
+  for(const contract of [brand(),missing]){
+    await compileComposition(cell('rect',text),contract);
+    await assert.rejects(()=>compileComposition(cell('diamond',text),contract),/slide_one\/shape_box: needs [\d.]+pt of height but has 360pt/);
+  }
   await assert.rejects(()=>compileComposition(deck({type:'grid',columns:6,gap:'wide',children:Array.from({length:6},(_,i)=>({type:'box',id:`tiny_box${i}`,shape:'diamond',text:'Observability and tracing for every service in the fleet'}))}),brand()),/needs [\d.]+pt of height/);
 });
 
