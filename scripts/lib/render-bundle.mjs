@@ -40,7 +40,7 @@ function relocate(value,from,to){if(typeof value==='string'&&(value===from||valu
 export async function cachedCompositionArtifact(file){
   const {sourceKey}=await nativeIdentity(file),cache=join(dirname(resolve(file)),'.harness-slides','render-bundles');
   for(const name of (await readdir(cache).catch(e=>{if(e.code==='ENOENT')return [];throw e;})).filter(n=>/^[a-f0-9]{64}$/.test(n))){
-    try{const dir=join(cache,name),record=await verify(dir);if(record.sourceKey===sourceKey)return {file:join(dir,'deck.pptx'),result:record.result};}catch{/* A corrupt bundle cannot supply the deliverable. */}
+    try{const dir=join(cache,name),hint=await json(await regularInside(dir,'bundle.json'));if(hint.sourceKey!==sourceKey)continue;const record=await verify(dir);return {file:join(dir,'deck.pptx'),result:record.result};}catch{/* A corrupt bundle cannot supply the deliverable. */}
   }
   return null;
 }
@@ -56,7 +56,22 @@ export async function compositionRenderBundle(options,deps,render){
     if(!record){
       const pixels=new Map();
       // Only equivalent slide/dependency fingerprints may reuse a previous page.
-      for(const name of (await readdir(cache)).filter(n=>/^[a-f0-9]{64}$/.test(n))){try{const old=await verify(join(cache,name));if(old.shared!==id.shared)continue;for(const [i,fp] of old.fingerprints.entries()){const slide=old.result.slides.find(s=>s.number===i+1);if(slide)pixels.set(fp,join(cache,name,relative(old.original,slide.image)));}}catch{/* An unverified bundle contributes no evidence. */}}
+      const needed=new Set(id.fingerprints);
+      for(const name of (await readdir(cache)).filter(n=>/^[a-f0-9]{64}$/.test(n))){
+        if([...needed].every(fp=>pixels.has(fp)))break;
+        try{
+          const dir=join(cache,name),hint=await json(await regularInside(dir,'bundle.json'));
+          // Metadata is only a search hint. No pixel or artifact is accepted until
+          // the complete matching bundle has passed verification below.
+          if(hint.shared!==id.shared||!Array.isArray(hint.fingerprints)||!hint.fingerprints.some(fp=>needed.has(fp)&&!pixels.has(fp)))continue;
+          const old=await verify(dir);
+          for(const [i,fp] of old.fingerprints.entries()){
+            if(!needed.has(fp)||pixels.has(fp))continue;
+            const slide=old.result.slides.find(s=>s.number===i+1);
+            if(slide)pixels.set(fp,join(dir,relative(old.original,slide.image)));
+          }
+        }catch{/* An unverified bundle contributes no evidence. */}
+      }
       const stage=join(cache,'.stage-'+randomUUID());
       try{
         const result=await render({...options,output:stage},{...deps,reuseImages:new Map(id.fingerprints.map((fp,i)=>[i+1,pixels.get(fp)]).filter(([,path])=>path))});
@@ -71,12 +86,13 @@ export async function materializeRenderBundle(bundle,output,{slide}={}){
   output=resolve(output);await mkdir(output,{mode:0o700});
   try{
     const result=relocate(bundle.record.result,bundle.record.original,output);result.reused=bundle.reused;
+    result.renderEvidence={schema:1,shared:bundle.record.shared,deckSha256:bundle.record.result.deckSha256,slides:bundle.record.result.slides.map(s=>({id:s.id,number:s.number,fingerprint:bundle.record.fingerprints[s.number-1],imageSha256:bundle.record.files[relative(bundle.record.original,s.image)]}))};
     const wanted=slide?result.slides.find(s=>s.id===slide):null;
     for(const file of Object.keys(bundle.record.files)){
       if(slide&&(file==='critic.json'||file==='contact-sheet.png'||/^slide-.*\.png$/.test(file)&&file!==relative(output,wanted.image)))continue;
       await mkdir(dirname(join(output,file)),{recursive:true});await cp(await regularInside(bundle.dir,file),join(output,file),{errorOnExist:true,force:false});
     }
-    if(slide){result.slides=[wanted];delete result.critic;delete result.contactSheet;delete result.contactSheetError;}
+    if(slide){result.renderEvidence.slides=result.renderEvidence.slides.filter(s=>s.id===wanted.id);result.slides=[wanted];delete result.critic;delete result.contactSheet;delete result.contactSheetError;}
     // No critique or user decision is ever part of a cached bundle.
     await writeFile(join(output,'preview.json'),JSON.stringify(result,null,2)+'\n');return result;
   }catch(error){await rm(output,{recursive:true,force:true});throw error;}

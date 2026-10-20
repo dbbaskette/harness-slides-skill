@@ -2,7 +2,7 @@
 
 | Built with | While building | Before delivery |
 | --- | --- | --- |
-| [Compositions](compositions.md) | `compose preview` after each slide | `compose preview` of the whole build, every image opened. With an approved design, also `review --compiled` and [native critique](native-critique.md)'s assessment. Nothing else is required unless a PDF export or an editability check was asked for |
+| [Compositions](compositions.md) | `compose preview` after each batch of up to three slides; inspect every changed image | `compose preview` of the whole build, every image opened. With an approved design, also `review --compiled` and [native critique](native-critique.md)'s assessment. Nothing else is required unless a PDF export or an editability check was asked for |
 | Typed components or scenes | Render each changed slide | This page, plus [font screening and critique](quality.md) |
 | Native template tools | Render each changed slide | This page, plus [native critique](native-critique.md) |
 | Scoped edits to an existing deck | Render each changed slide | This page; compare with the source |
@@ -94,3 +94,9 @@ dense legitimate reference appendix and a text-focused slide are valid; neither
 needs artwork for approval. Save the completeness judgment with delivered hashes
 and target revision. Changed scenes, companions, assets or exports need fresh
 review of affected evidence.
+
+A studio may reuse a prior clear slide inspection only when verified native
+render fingerprints, pixels, shared dependencies and order still match. Inspect
+changed slides and their neighbors, check the current whole-deck contact sheet,
+and retain explicit per-slide coverage with reuse provenance. This carries no
+user approval. Missing or mismatched evidence requires fresh inspection.

@@ -50,6 +50,7 @@ test('a draft is one self-contained wireframe page that never fails on length',a
     content('long_slide',{points:[{label:'One',text:long},{label:'Two',text:'<b>tag</b>'}],caveat:'A caveat',source:'Source: a guide'}),
     {id:'close_slide',kind:'closing',title:'End',notes:'Thank the room.'}],{minutes:20,direction:{focal:'headingPrimary',neutral:'canvasSecondary',meanings:{accentAqua:'the product'}}});
   const {html,slides,words}=await draftOutline(deck,c);
+  assert.match(html,/<foreignObject width=/);assert.match(html,/max-width:100%/);assert.match(html,/minmax\(min\(100%/);
   assert.equal(slides,7);assert.ok(words>200);assert.match(html,/^<!doctype html><!-- harness-slides draft -->/);
   assert.equal((html.match(/<figure /g)??[]).length,7);assert.match(html,/Draft: wording and structure only/);
   assert.doesNotMatch(html,/https?:\/\//);assert.doesNotMatch(html,/<b>tag<\/b>/);assert.match(html,/&lt;b&gt;tag&lt;\/b&gt;/);

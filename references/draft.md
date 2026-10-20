@@ -66,9 +66,15 @@ approve, add what they said to the outline's `approval`, in their words.
 
 ## Choose the look from real slides
 
-The draft settled the words. Settle the look the same way, by seeing it, before
-the deck is built in a look the user did not choose. Approving the draft
-approves what the deck says; it does not choose a look.
+The draft settles the story. Reuse an already approved brand, direction and
+artwork. Confirm brand identity with its cover when needed. A rendered content
+sample is useful only when a meaningful treatment, emphasis or color-role choice
+remains unresolved; do not ask for the same unchanged choice again. In
+Presentation Studio the runner owns the outline/brand checkpoint; record the
+actual answer there and bind that same answer to any engine design session.
+A cover confirms identity, not one layout to repeat across content slides.
+
+When a visual choice remains open, use this optional comparison:
 
 1. Pick one content slide that will show the look well: one with a relation to
    draw and a point to mark.
