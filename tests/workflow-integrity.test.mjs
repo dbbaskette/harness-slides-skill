@@ -60,7 +60,9 @@ test('native bundles reuse unchanged pixels across locations and invalidate corr
   const before=fixture.calls.filter(c=>c[0]==='soffice'&&c[1]!=='--version').length;
   await writeFile(join(dir,'answers.json'),JSON.stringify(assessment(first)));await recordCritique({file:join(dir,'one'),assessment:join(dir,'answers.json')});
   const second=await previewComposition({file:output,output:join(dir,'two'),renderer:'local'},fixture.deps);
-  assert.equal(second.reused,true);assert.equal(second.deckSha256,first.deckSha256);assert.equal(fixture.calls.filter(c=>c[0]==='soffice'&&c[1]!=='--version').length,before);
+  assert.equal(second.reused,true);assert.equal(second.deckSha256,first.deckSha256);
+  assert.equal(first.renderEvidence.schema,1);assert.deepEqual(second.renderEvidence,first.renderEvidence);assert.equal(first.renderEvidence.slides[0].id,'flow_slide');assert.match(first.renderEvidence.slides[0].imageSha256,/^[a-f0-9]{64}$/);
+assert.equal(fixture.calls.filter(c=>c[0]==='soffice'&&c[1]!=='--version').length,before);
   const selected=await previewComposition({file:output,output:join(dir,'selected'),slide:'flow_slide',renderer:'local'},fixture.deps);assert.equal(selected.reused,true);assert.equal(fixture.calls.filter(c=>c[0]==='soffice'&&c[1]!=='--version').length,before);assert.equal(selected.critic,undefined);
   const deliverable=await renderCompositionDir({file:output,output:join(dir,'deliver.pptx')});assert.equal(deliverable.sha256,first.deckSha256);assert.equal(deliverable.reused,true);
   await assert.rejects(()=>readFile(join(dir,'two','critique.json')),/ENOENT/);
