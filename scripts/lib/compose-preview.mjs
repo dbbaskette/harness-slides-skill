@@ -76,7 +76,8 @@ export async function screenComposition({scene,structure={groups:[],connectors:[
     if(index>0&&body.length>1&&!templated.has(scene.slides[index-1].id)&&signature(slide)===signature(scene.slides[index-1])&&!findings.some(f=>f.slide===slide.id&&f.code==='similar-geometry'))findings.push({slide:slide.id,severity:'info',code:'repeats-previous-layout',relatedSlides:[scene.slides[index-1].id],detail:'Same geometry as the previous slide. Keep it only when the two slides are meant to be compared.'});
     for(const icon of (structure.icons??[]).filter(i=>i.slide===slide.id)) {
       const card=backdrop(slide,icon),drawn=native.find(n=>n.id===slide.id)?.icons?.find(i=>i.id===icon.id);
-      if(card&&drawn?.colors?.includes(color(card.fill,theme).slice(1).toUpperCase()))findings.push({slide:slide.id,object:icon.id,severity:'warn',code:'icon-blends-into-fill',detail:`Part of this icon is the same color as the ${card.id} fill behind it, so that part disappears. Use a different fill for the card.`});
+      // A solid icon's glyph sits on its own disc, so only its other colors can disappear into the card.
+      if(card&&drawn?.colors?.filter(c=>!icon.glyph||c.toUpperCase()!==icon.glyph.slice(1).toUpperCase()).includes(color(card.fill,theme).slice(1).toUpperCase()))findings.push({slide:slide.id,object:icon.id,severity:'warn',code:'icon-blends-into-fill',detail:`Part of this icon is the same color as the ${card.id} fill behind it, so that part disappears. Use a different fill for the card.`});
     }
     // An icon has a job: it marks one thing, and the words that say what are right beside it.
     const here=(structure.icons??[]).filter(i=>i.slide===slide.id),counts=new Map();

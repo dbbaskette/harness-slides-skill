@@ -391,3 +391,21 @@ const unchanged={exact:{
   'references/gallery/overlap.json':'f3f4bf4a8f6dec49d4b3f928f48a83f37a3430b53b3682bb48e0569359f29c21',
   'references/gallery/quantity.json':'65229fc752730608e1de2f08b8c56ef18430c8777737334b1b33216e0ed33c2b',
 }};
+
+test('a failed box\'s badge is big enough for its own ×, and a solid icon\'s glyph is not judged against the card',async()=>{
+  // Found in the live Google check: the 26pt badge was 1.3pt short of the × it holds, so the engine flagged its own badge.
+  const c=brand(),{scene,structure}=await compileComposition(deck({type:'box',id:'zone_gone',state:'failed',children:[{type:'text',id:'zone_words',text:'Zone A'}]}),c);
+  const {auditSceneQuality}=await import('../scripts/lib/slide-quality.mjs'),{findings}=await auditSceneQuality(scene);
+  const badge=byId(scene,'zone_gone_state');assert.equal(badge.width,badge.height);
+  // With Arial the × needs 27.3pt in the caption size; without it the estimate is smaller and the audit cannot measure.
+  if(await fontMode()==='exact'){assert.ok(badge.width>=28,`badge ${badge.width}pt`);assert.ok(!findings.some(f=>f.object==='zone_gone_state'&&f.code==='measured-text-overflow'),JSON.stringify(findings.filter(f=>f.object==='zone_gone_state')));}
+  // A solid icon is a white glyph on a colored disc: on a white card only the disc can blend in.
+  const iconBrand=brand({icon:{size:54,library:{path:'/x',index:'/y'}}});
+  const card=await compileComposition(deck({type:'box',id:'white_card',fill:'canvasPrimary',children:[{type:'icon',id:'disc_icon',icon:'fi-test',style:'solid',color:'statusCritical'},{type:'text',id:'disc_label',text:'Zone A'}]}),iconBrand);
+  const glyph=card.structure.icons[0].glyph.slice(1).toUpperCase();assert.equal(glyph,'FFFFFF');
+  const screened=await screenComposition({scene:card.scene,structure:card.structure,native:[{id:'slide_one',unattached:[],icons:[{id:'disc_icon',colors:['CC092F',glyph]}]}]});
+  assert.ok(!screened.some(f=>f.code==='icon-blends-into-fill'));
+  const red=await compileComposition(deck({type:'box',id:'white_card',fill:'accentPurple',children:[{type:'icon',id:'disc_icon',icon:'fi-test',style:'solid',color:'accentPurple'},{type:'text',id:'disc_label',text:'Zone A'}]}),iconBrand);
+  const blended=await screenComposition({scene:red.scene,structure:red.structure,native:[{id:'slide_one',unattached:[],icons:[{id:'disc_icon',colors:['6C4B94',red.structure.icons[0].glyph.slice(1).toUpperCase()]}]}]});
+  assert.ok(blended.some(f=>f.code==='icon-blends-into-fill'),'a disc the color of the card still blends');
+});
