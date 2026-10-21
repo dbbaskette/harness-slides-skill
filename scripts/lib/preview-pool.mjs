@@ -209,13 +209,13 @@ export async function poolPreview({file,size,fileId,render},deps={}){
       if(!chosen)return null;
       // The generation goes up now, before Drive is touched: whatever happens next, older receipts no longer match.
       chosen[1].generation=(chosen[1].generation??0)+1;chosen[1].lease={token,until:t+leaseMs,pid:process.pid,host};
-      return {slot:Number(chosen[0]),fileId:chosen[1].fileId,generation:chosen[1].generation,folderId:pool.folderId};
+      return {slot:Number(chosen[0]),fileId:chosen[1].fileId,generation:chosen[1].generation,folderId:pool.folderId,failures:chosen[1].failures??0};
     });
     if(picked)break;
     if(now()>deadline)throw refuse(receipt?.generation!==undefined?'That preview pool file is in use by another preview; retry when it finishes':`All ${size} preview pool files are in use by other previews; retry when one finishes, raise --pool-size, or use --new-preview-file`,{code:'provider-failed',provider:'google'});
     await sleep(deps.pollMs??1000);
   }
-  let id=null,route=null,retired=null,trash=null,generation=picked.generation,modified=null;
+  let id=null,route=null,retired=null,trash=null,generation=picked.generation,modified=null,serverFailed=false;
   try{
     let current=picked.fileId?await metadata(picked.fileId,g):null,folderId=picked.folderId;
     if(current&&!isPoolFile(current,picked.slot,folderId))current=null;
@@ -230,9 +230,15 @@ export async function poolPreview({file,size,fileId,render},deps={}){
     const properties={harnessPreviewPoolSlot:String(picked.slot),harnessPreviewGeneration:String(generation)};
     let written;
     if(current){
-      try{written=await replaceInPlace(current.id,bytes,properties,g);route='drive-update';}
-      catch{
-        // Drive would not convert in place: a new converted file takes the slot, and the old one goes to the trash.
+      try{
+        // A file Drive has failed to update three previews running is replaced instead of tried again.
+        if(picked.failures>=3)throw Object.assign(new Error('Drive kept failing to update this pool file'),{stuck:true});
+        written=await replaceInPlace(current.id,bytes,properties,g);route='drive-update';
+      }catch(error){
+        // A server error that outlasted the retries says nothing about the file: a new file then might duplicate one
+        // that half-landed, so the preview fails instead, and the next preview takes another file.
+        if(!error.stuck&&/HTTP 5\d\d/.test(error.message)){serverFailed=true;throw new Error(`${error.message} Drive is having trouble; preview again in a moment.`,{cause:error});}
+        // Drive refused to convert in place: a new converted file takes the slot, and the old one goes to the trash.
         written=await createFile(bytes,picked.slot,folderId,properties,g);route='replace-and-trash';retired=current.id;
         try{await request(`https://www.googleapis.com/drive/v3/files/${current.id}?supportsAllDrives=true&fields=id,trashed`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({trashed:true})},g);trash='trashed';}
         catch{trash='kept: Drive refused to move it to the trash';}
@@ -255,8 +261,8 @@ export async function poolPreview({file,size,fileId,render},deps={}){
       slot.generation=Math.max(slot.generation??0,generation);
       if(id&&slot.fileId===picked.fileId){
         if(retired&&retired!==id)pool.retired[retired]={slot:picked.slot,generation:picked.generation-1};
-        Object.assign(slot,{fileId:id,lastUsed:now(),route,modifiedTime:modified});
-      }
+        Object.assign(slot,{fileId:id,lastUsed:now(),route,modifiedTime:modified,failures:0});
+      }else if(serverFailed&&slot.fileId===picked.fileId)Object.assign(slot,{lastUsed:now(),failures:(slot.failures??0)+1});
     });
   }
 }

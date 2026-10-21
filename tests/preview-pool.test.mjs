@@ -146,7 +146,9 @@ test('the generation rises before Drive is touched, so a failed or uncertain rep
   const first=await poolPreview({file,size:1},deps);
   // The upload may have landed although Drive answered with errors, and the fallback could not create a file either.
   const failing=fakeDrive({files:drive.files,serverErrors:9,refuseCreate:true,prefix:'x_'});
-  await assert.rejects(()=>poolPreview({file,size:1},depsFor(failing,join(dir,'pool'),{retryMs:1})),/HTTP 500/);
+  await assert.rejects(()=>poolPreview({file,size:1},depsFor(failing,join(dir,'pool'),{retryMs:1})),/HTTP 500.*Drive is having trouble; preview again/);
+  // Server errors never start the new-file fallback, which could duplicate a file that half-landed.
+  assert.ok(!failing.calls.some(([method,path])=>method==='POST'&&path==='/upload/drive/v3/files'));assert.equal(failing.calls.filter(([method,path])=>method==='PATCH'&&path.startsWith('/upload/')).length,3);
   await assert.rejects(()=>assertReceiptCurrent(first.pool.receipt,deps),/replaced by a newer one/);
   // A render that fails after the upload leaves a receipt for exactly that upload, which retry advice names.
   const broken=await poolPreview({file,size:1,render:async()=>{throw new Error('export failed');}},deps).catch(e=>e);assert.match(broken.message,/export failed/);
@@ -195,4 +197,21 @@ test('a review render that fails after the upload names the pool file by its rec
   const error=await renderGoogle({file,output:dir,selected:[1],title:'Deck',drive,run:async()=>({stdout:''})}).catch(e=>e);
   assert.match(error.message,/The review deck is in Drive \(https:\/\/docs.google.com\/presentation\/d\/pool_file_7\/edit\); retry with --renderer google --file-id pool_file_7:3\.$/);
   assert.match(error.message,/(?:--renderer google )?--file-id (\S+?)\.$/);
+});
+
+test('a pool file Drive keeps failing to update does not block the pool: previews move on, and it is replaced after three failures',async t=>{
+  const dir=await temporary(t),file=join(dir,'deck.pptx');await writeFile(file,pptx('deck'));
+  const drive=fakeDrive(),deps=depsFor(drive,join(dir,'pool'),{retryMs:1});
+  const one=await poolPreview({file,size:2},deps),two=await poolPreview({file,size:2},deps);drive.brokenFiles.add(one.id);
+  // The failure counts as a use, so the next preview takes the other file.
+  await assert.rejects(()=>poolPreview({file,size:2},deps),/Drive is having trouble/);
+  assert.equal((await poolPreview({file,size:2},deps)).id,two.id);
+  await assert.rejects(()=>poolPreview({file,size:2},deps),/Drive is having trouble/);
+  assert.equal((await poolPreview({file,size:2},deps)).id,two.id);
+  await assert.rejects(()=>poolPreview({file,size:2},deps),/Drive is having trouble/);
+  assert.equal((await poolPreview({file,size:2},deps)).id,two.id);
+  // Three failures running: the next preview of that slot makes a new file and trashes the broken one.
+  const healed=await poolPreview({file,size:2},deps);
+  assert.notEqual(healed.id,one.id);assert.equal(healed.pool.slot,1);assert.equal(healed.pool.route,'replace-and-trash');assert.equal(drive.files.get(one.id).trashed,true);
+  assert.equal(drive.live().length,2);assert.ok(!drive.calls.some(([method])=>method==='DELETE'));
 });

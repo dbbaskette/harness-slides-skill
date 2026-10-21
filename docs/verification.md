@@ -59,6 +59,17 @@ and a cached re-preview of the first deck kept its images and left out the
 replaced Drive link. The `replace-and-trash` fallback is covered by fixtures
 only; Drive did not refuse an in-place conversion.
 
+After the code review, later the same day, Drive answered most uploads with HTTP
+500 for over half an hour (reads also failed now and then). That period showed
+three things the pool now handles. Drive's `version` rose on its own (13 to 14
+with no write and `modifiedTime` unchanged), so the cross-computer check uses
+`modifiedTime`. A multipart update that answered 500 had still written its
+metadata. One pool file failed every upload while the other succeeded about
+one time in three. One hardened preview (generation stamp, then the upload, then
+the `modifiedTime` check after export) completed in place on slot 1. Every other
+attempt failed with "Drive is having trouble; preview again in a moment." The
+folder still held exactly the two pool files, nothing trashed and no stray file.
+
 Host (macOS, Node 22): **331 tests, 327 passed, four skipped, zero failures**,
 with a failing `gcloud` on `PATH` to show no test reaches Google (it was never
 called) and the real pool state unchanged; `context:check` and `docs:check` pass.

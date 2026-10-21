@@ -19,8 +19,8 @@ const slides='application/vnd.google-apps.presentation',folderType='application/
 // A stand-in for Drive that keeps files in memory and records every request. It never deletes anything,
 // and the test checks that nothing ever asks it to. Every write gets a new modifiedTime, as in Drive.
 // serverErrors: how many upload PATCHes answer HTTP 500 first. onExport(id): runs before an export is served.
-// accountFor(authorization): the account a token belongs to.
-export function fakeDrive({account='person@example.invalid',refuseUpdate=false,files=new Map(),prefix='',serverErrors=0,refuseCreate=false,onExport,accountFor}={}){
+// accountFor(authorization): the account a token belongs to. brokenFiles: IDs whose uploads always answer HTTP 500.
+export function fakeDrive({account='person@example.invalid',refuseUpdate=false,files=new Map(),prefix='',serverErrors=0,refuseCreate=false,brokenFiles=new Set(),onExport,accountFor}={}){
   let next=0,clock=Date.UTC(2026,9,21);const calls=[],stamp=()=>new Date(clock+=1000).toISOString();
   const state={serverErrors};
   const send=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}});
@@ -39,6 +39,7 @@ export function fakeDrive({account='person@example.invalid',refuseUpdate=false,f
     const parts=u.pathname.split('/'),id=parts[parts.indexOf('files')+1],file=files.get(id);
     if(u.pathname.startsWith('/upload/drive/v3/files/')&&method==='PATCH'){
       if(state.serverErrors>0){state.serverErrors--;return send({error:{code:500}},500);}
+      if(brokenFiles.has(id))return send({error:{code:500}},500);
       if(refuseUpdate)return send({error:{errors:[{reason:'forbidden'}]}},403);
       if(!file)return send({},404);file.content=Buffer.from(options.body).toString('latin1');file.modifiedTime=stamp();return send(file);
     }
@@ -54,5 +55,5 @@ export function fakeDrive({account='person@example.invalid',refuseUpdate=false,f
   };
   // Another computer's preview writing into a file, as Drive would record it.
   const writeAsAnother=(id,content)=>{const file=files.get(id);file.content=content;file.modifiedTime=stamp();};
-  return {files,calls,fetcher,state,writeAsAnother,live:()=>[...files.values()].filter(f=>f.mimeType===slides&&!f.trashed)};
+  return {files,calls,fetcher,state,writeAsAnother,brokenFiles,live:()=>[...files.values()].filter(f=>f.mimeType===slides&&!f.trashed)};
 }
