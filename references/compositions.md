@@ -132,9 +132,21 @@ When the build knows the outline, `compile` refuses a reading deck whose
 point is split across nodes and a live deck's preview reports it: pass
 `--outline outline.json`, or `--project ROOT` for a project made by `outline start`.
 
-Show a state, not a drawing of one. `state` on a box or text is `muted`,
-`struck` (its words struck through) or `failed` (a box, with a status-colored
-dashed edge and an × badge); what a box holds is muted with it. An edge's
+Show a state, not a drawing of one. `state` on a box or text says what the
+item is:
+
+| State | Use it for | Drawn as |
+| --- | --- | --- |
+| `muted` | Present but secondary: a default, an optional part, background | The neutral panel, secondary ink |
+| `struck` | Absent or ruled out, when the absence is the point: no replicas, a rejected option | A card: the neutral panel, readable words in secondary ink and a quiet × badge. A text: struck through |
+| `failed` | Something that broke: a lost zone, a failed check | A box only: a status-colored dashed edge and an × badge |
+
+A struck or failed box is a rectangle or `roundRect`, so its badge sits inside it.
+
+Leave a thing out when its absence says nothing; strike it only when the
+reader needs to see that it is missing. What a box holds is muted with it. A
+muted or struck card is never a bare outline, and a brand that forbids tints
+gets only its own colors. An edge's
 `style` is `dashed` or `dotted` for a weaker link, such as asynchronous
 replication. Never type `- - >` or box-drawing characters, and never draw lines
 across words to cross them out. `compile` refuses words drawn over other words
@@ -157,6 +169,20 @@ no minimum, and put the labels beside them.
 
 Give every content slide `notes`: what the presenter says, and the source
 behind the claim. A deck presented live without them gets a `no-notes` finding.
+
+## Code in slide text
+
+Write a configuration field, command, API or file name as a code span in
+backticks: `` `highAvailability` ``, `` `kubectl get pods` ``,
+`` `values.yaml` ``. Lead with plain English the first time a name appears:
+"High availability (`highAvailability`) is empty or omitted". The span is set
+in the brand's code font (`compose contract --brand` names it; Courier New when
+the brand names none) at the size of its words, as runs in the same text box,
+and is measured in that font, so a long name can be refused as wider than its
+line. Texts, boxes, `subtitle`, `detail`, `caveat` and `source` take code
+spans. Titles, edge labels, badges, tables and charts do not: a title is a
+plain-English claim. A pair of backticks on one line is always a code span;
+write `` \` `` for a literal backtick.
 
 ## Slide furniture
 

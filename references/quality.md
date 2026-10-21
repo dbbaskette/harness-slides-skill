@@ -16,7 +16,9 @@ For a font outside the normal system locations, pass `--fonts fonts.json`:
 {"regular":{"path":"/absolute/Brand-Regular.ttf","sha256":"HASH"},"bold":{"path":"/absolute/Brand-Bold.ttf","sha256":"HASH"}}
 ```
 
-The hash is optional on input and recorded on output. Font bytes are not copied
+Add `code` and `codeBold` records the same way for a brand monospace face
+outside those locations; text in code spans is measured in it. The hash is
+optional on input and recorded on output. Font bytes are not copied
 or bundled. The model uses conservative font line metrics, 125% paragraph line
 spacing and 3.6 pt text insets. Native table padding, fallback glyphs, tab stops,
 language-specific breaks and target-editor wrapping still require native review.

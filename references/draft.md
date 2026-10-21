@@ -37,6 +37,12 @@ minutes a content slide. Then for each content slide:
 - **`provenance`**: finding, objective or research IDs behind the slide. It is
   never drawn; the build adds it to the notes. `check` reports a source line
   that reads like provenance.
+- **Names as code:** write a configuration field, command, API or file name as
+  a code span in backticks, with plain English first the time it appears:
+  "High availability (`highAvailability`) is empty or omitted". A title says it
+  in words and takes no code span. `check` reports `unmarked-code` for a
+  camelCase or snake_case name, a path or a configuration file name left
+  unmarked; the draft shows code spans in a monospace face.
 - **`notes`**: what the presenter says, and the source behind the claim. They
   go into the built slide's notes.
 - **`sources`:** what the slide rests on, as IDs: a section of the source

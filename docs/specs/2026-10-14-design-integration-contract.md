@@ -87,6 +87,7 @@ or reused. A runtime without `capabilities` (0.13.1 and earlier) has none of the
 | `owned-google-previews` | Preview creation stores ownership and remote version receipts; a stale/unowned file is refused, and an owned unchanged preview is preserved while a fresh file is created |
 | `preview-repair-clusters` | `compose preview` returns `repair`: each slide's warning and error findings grouped by slide, blocking slides first, with codes and object IDs ([visual vocabulary](#visual-vocabulary-in-0160-unreleased)) |
 | `render-bundles` | Verified immutable native PPTX/PDF/PNG bundles shared by composition preview and design-bound review; cached artifacts contain no critique or user approval |
+| `compose-code-spans` | Code spans in backticks in composition texts, boxes, `subtitle`, `detail`, `caveat` and `source`, set in the brand contract's `design.slides.typography.code.fontFamily` (Courier New without one) as runs in every writer and measured in that font; scene element `code` ranges and `theme.codeFont`; titles, edge labels, badges, tables and charts refuse them; `unmarked-code` findings from `outline check` ([code spans](#code-spans-in-0160-unreleased)) |
 | `compose-icon-assets` | `{type:icon,asset:ID}` in a composition, resolved through the asset manifest and listed in `compose-report.json` `inputs.assets` ([the asset manifest](#the-asset-manifest)) |
 | `compose-review` | `review --compiled COMPILED --design-project DIR`, the [design-bound review of a composition](#design-bound-review-of-a-composition) |
 | `compose-section` | `--section` on `compose compile` and `compose preview` ([sections](#sections)), `--design-project` on `compose preview`, and `compose compile --design-project` checking without `--output` |
@@ -957,7 +958,7 @@ words drawn over other words are now refused and an arrow to a text now attaches
 | --- | --- |
 | `style: "tint"` on a box | A light surface of its `fill` (the neutral by default); the focal node keeps a focal edge. Guidance now makes `tint` or `bar` the supporting card and keeps `outline` for boundaries. A brand contract with `design.slides.fills: {tints: false}` forbids lightening its colors: there `tint` compiles as a neutral bar card with a strip of its fill color (or a plain neutral card without a fill), and `compose contract --brand` says to use `bar` |
 | Supporting fills | A direction without `meanings` may fill with up to three brand colors: its chart colors, then other `accent*` roles, minus the focal and the neutral. `compose contract --brand` lists them; `compile` reports `supportingColors`; `structure.json` records `supporting` |
-| `state` on a box or text | `muted`, `struck` (strikethrough) or `failed` (a box: status-colored dashed edge and a grouped `<id>_state` × badge). A box's state carries to what it holds. The focal node cannot take one |
+| `state` on a box or text | `muted` (the neutral panel, secondary ink), `struck` (a box: the neutral panel, readable words and a grouped secondary-ink `<id>_state` × badge; a text: strikethrough) or `failed` (a box: status-colored dashed edge and a grouped `<id>_state` × badge). A muted or struck card has no outline; on a neutral surface it takes the canvas color. A struck or failed box is a `rect` or `roundRect`. A box's state mutes what it holds. The focal node cannot take one |
 | Edge `style` | `dashed` or `dotted`, written as a native dash in PPTX and Google Slides |
 | Edges to texts | A text an edge points at is sized to its words, and the connector attaches to it |
 | Labelled cards | Two or more cards in a row, column or grid, each headed by a `label` text, draw `dependency` without edges |
@@ -989,3 +990,25 @@ What a caller does:
   `direction`), take the look from that step.
 - Detect support with the `compose-visual-vocabulary`, `compose-split-point`,
   `compose-provenance` and `preview-repair-clusters` capabilities.
+
+## Code spans in 0.16.0 (unreleased)
+
+Configuration fields, commands, API and file names in slide text are written
+as code spans in backticks and drawn in a monospace face, so a reader can tell
+`highAvailability` the field from the prose around it.
+
+| Addition | What it does |
+| --- | --- |
+| Code spans | `` `name` `` in a composition text, box text, `subtitle`, `detail`, `caveat` text or `source`. A pair of backticks on one line is a span; `` \` `` is a literal backtick and a lone backtick stays one. Titles, edge labels, badges, caveat labels, tables and charts refuse them, and so does a studio edit of a title |
+| Brand code role | `design.slides.typography.code: {fontFamily, size?, bold?, colorRole?}` in a brand contract names the monospace family. Only `fontFamily` is used: a span takes the size, weight and color of the words around it. Without the role the family is Courier New. A runtime before 0.16.0 ignores the role |
+| Scene | An element's `text` holds the words without backticks and `code` the `[start,end)` ranges (JavaScript string offsets) in the code font; `theme.codeFont` names the family. A scene without code is unchanged |
+| Writers | One text box of runs in every writer: HTML (`<code>`, then Menlo, Consolas and Courier New), Google Slides (a `FIXED_RANGE` `fontFamily` update, read back per run), PptxGenJS (one `<a:pPr>` per paragraph) and the native writer (`<a:latin>` with `pitchFamily="49"`, so an editor without the font substitutes a monospace one) |
+| Measurement | Code runs are measured in the code font; without it, at 0.6 em a character. A fonts record for `compose compile` and the quality audit may add `code` and `codeBold` `{path,sha256?}` files. `compose-report.json` gives `codeMeasurement` when a deck has code |
+| `unmarked-code` | An `outline check` finding for a camelCase or snake_case name, a path or a configuration file name in visible text that is not in a code span, and for one in a title |
+
+What a caller does:
+
+- A brand add-on with a monospace face exports it as the `code` type role.
+- Treat `unmarked-code` as wording to fix in the draft: put the name in
+  backticks and lead with plain English the first time.
+- Detect support with the `compose-code-spans` capability.

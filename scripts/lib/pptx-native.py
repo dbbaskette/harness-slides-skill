@@ -133,20 +133,41 @@ def dash(e):
     return {'dash': '<a:prstDash val="dash"/>', 'dot': '<a:prstDash val="sysDot"/>'}.get(e.get('dash'), '')
 
 
-def paragraphs(e, font):
+def face(font, code=False):
+    """A run's typeface. A code run says it is fixed pitch, so an editor without the font substitutes a monospace one."""
+    pitch = ' pitchFamily="49" charset="0"' if code else ''
+    return f'<a:latin typeface={quoteattr(font)}{pitch}/><a:cs typeface={quoteattr(font)}{pitch}/>'
+
+
+def lines_of(e):
+    """The text as lines of (words, is_code) runs. Text without code is one plain run per line, as before."""
+    lines = [[]]
+    for run in e.get('runs') or [{'text': e['text'], 'code': False}]:
+        for index, part in enumerate(run['text'].split('\n')):
+            if index:
+                lines.append([])
+            if part:
+                lines[-1].append((part, bool(run['code'])))
+    return [line or [('', False)] for line in lines]
+
+
+def paragraphs(e, font, code_font=None):
     align = {'left': 'l', 'center': 'ctr', 'right': 'r'}[e.get('align', 'left')]
     strike = ' strike="sngStrike"' if e.get('strike') else ''
-    run = (f'<a:rPr lang="en-US" sz="{int(round(e["fontSize"] * 100))}" b="{1 if e.get("bold") else 0}"{strike} dirty="0">'
-           f'{fill(e["color"])}<a:latin typeface={quoteattr(font)}/><a:cs typeface={quoteattr(font)}/></a:rPr>')
+
+    def run(code):
+        return (f'<a:rPr lang="en-US" sz="{int(round(e["fontSize"] * 100))}" b="{1 if e.get("bold") else 0}"{strike} dirty="0">'
+                f'{fill(e["color"])}{face(code_font or font, True) if code else face(font)}</a:rPr>')
     props = (f'<a:pPr marL="0" indent="0" algn="{align}"><a:lnSpc><a:spcPct val="125000"/></a:lnSpc>'
              '<a:spcBef><a:spcPts val="0"/></a:spcBef><a:spcAft><a:spcPts val="0"/></a:spcAft><a:buNone/></a:pPr>')
-    return ''.join(f'<a:p>{props}<a:r>{run}<a:t>{text(line)}</a:t></a:r></a:p>' for line in e['text'].split('\n'))
+    return ''.join(f'<a:p>{props}' + ''.join(f'<a:r>{run(code)}<a:t>{text(words)}</a:t></a:r>' for words, code in line) + '</a:p>'
+                   for line in lines_of(e))
 
 
-def body(e, font, inset, anchor):
+def body(e, font, inset, anchor, code_font=None):
     pad = emu(inset)
     return (f'<p:txBody><a:bodyPr wrap="square" lIns="{pad}" tIns="{pad}" rIns="{pad}" bIns="{pad}" anchor="{anchor}">'
-            f'<a:noAutofit/></a:bodyPr><a:lstStyle/>{paragraphs(e, font)}</p:txBody>')
+            f'<a:noAutofit/></a:bodyPr><a:lstStyle/>{paragraphs(e, font, code_font)}</p:txBody>')
 
 
 def non_visual(tag, number, name, extra='', inner='', descr=''):
@@ -366,15 +387,17 @@ class Slide:
                 f'<p:nvPr><p:ph type="{self.title_type}"/></p:nvPr></p:nvSpPr><p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/>{lines}</p:txBody></p:sp>')
 
     def placeholder(self, e):
-        """Text written into one of the layout's own subtitle placeholders, inheriting its position and style."""
-        lines = ''.join(f'<a:p><a:r><a:rPr lang="en-US" dirty="0"/><a:t>{text(line)}</a:t></a:r></a:p>' for line in e['text'].split('\n'))
+        """Text written into one of the layout's own subtitle placeholders, inheriting its position and style; code keeps its font."""
+        def run(code):
+            return f'<a:rPr lang="en-US" dirty="0">{face(self.plan.get("codeFont", "Courier New"), True)}</a:rPr>' if code else '<a:rPr lang="en-US" dirty="0"/>'
+        lines = ''.join('<a:p>' + ''.join(f'<a:r>{run(code)}<a:t>{text(words)}</a:t></a:r>' for words, code in line) + '</a:p>' for line in lines_of(e))
         return (f'<p:sp><p:nvSpPr><p:cNvPr id="{self.numbers[e["id"]]}" name={quoteattr(e["id"])}/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr>'
                 f'<p:nvPr><p:ph type="subTitle" idx="{self.placeholders[e["id"]]}"/></p:nvPr></p:nvSpPr><p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/>{lines}</p:txBody></p:sp>')
 
     def textbox(self, e):
         names = non_visual('Sp', self.numbers[e['id']], e['id'], ' txBox="1"')
         return (f'<p:sp>{names}<p:spPr>{xfrm(e)}'
-                f'<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>{fill(e.get("fill"))}</p:spPr>{body(e, self.plan["font"], 3.6, "t")}</p:sp>')
+                f'<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>{fill(e.get("fill"))}</p:spPr>{body(e, self.plan["font"], 3.6, "t", self.plan.get("codeFont"))}</p:sp>')
 
     def shape(self, e):
         preset = e.get('shape', 'rect')
@@ -382,7 +405,7 @@ class Slide:
             raise ValueError(f'{e["id"]}: unsupported shape {preset}')
         # Rectangles pad text by the brand inset; other presets already confine text to an inner area.
         inset = self.plan.get('shapeInset', 3.6) if preset in ('rect', 'roundRect') else 3.6
-        inner = body(e, self.plan['font'], inset, 'ctr') if e.get('text') else ''
+        inner = body(e, self.plan['font'], inset, 'ctr', self.plan.get('codeFont')) if e.get('text') else ''
         # A chevron's point depth follows its shorter side by default; pin it to a fifth of the width so text has room.
         guides = ''
         if preset == 'chevron':

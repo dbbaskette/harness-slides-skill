@@ -141,10 +141,10 @@ test('fit errors name the box, and nesting that leaves no room fails clearly',as
   await assert.rejects(()=>compileComposition(deck({type:'stack',direction:'row',gap:'wide',children:many(12,i=>({type:'stack',direction:'row',gap:'wide',children:many(5,j=>({type:'box',id:`tiny_${i}_${j}`,text:'x'}))}))}),brand()),/has no usable room/);
 });
 
-test('fonts use the regular/bold {path,sha256} records the quality audit uses',async()=>{
+test('fonts use the regular, bold, code and codeBold {path,sha256} records the quality audit uses',async()=>{
   const comp=deck({type:'box',id:'only_box',text:'x'});
   await assert.rejects(()=>compileComposition(comp,brand(),{fonts:{regular:{path:'/nonexistent/font.ttf'}}}),/ENOENT|font/i);
-  await assert.rejects(()=>compileComposition(comp,brand(),{fonts:{regular:{file:'/x.ttf'}}}),/Fonts use regular\/bold/);
+  await assert.rejects(()=>compileComposition(comp,brand(),{fonts:{regular:{file:'/x.ttf'}}}),/Fonts use regular, bold, code and codeBold/);
 });
 
 test('a group with one member is not recorded',async()=>{

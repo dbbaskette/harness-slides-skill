@@ -32,6 +32,8 @@ export function compileGoogleScene(scene,deck,{localImages=false}={}) {
     const selector=cellLocation?{cellLocation}:{};
     return [{insertText:{objectId:e.id,...selector,insertionIndex:0,text:e.text}},
       {updateTextStyle:{objectId:e.id,...selector,textRange:{type:'ALL'},style:{...(e.href?{link:{url:e.href}}:{}),fontFamily:t.font,fontSize:{magnitude:e.fontSize??(e.role==='title'?t.titleSize:t.bodySize),unit:'PT'},bold:e.bold??false,...(e.strike?{strikethrough:true}:{}),foregroundColor:{opaqueColor:solid(e.color??'text')}},fields:'fontFamily,fontSize,bold,foregroundColor'+(e.strike?',strikethrough':'')+(e.href?',link':'')}},
+      // Code runs are restyled in the code font after the whole text is set; Google counts characters as JavaScript does.
+      ...(e.code??[]).map(([startIndex,endIndex])=>({updateTextStyle:{objectId:e.id,...selector,textRange:{type:'FIXED_RANGE',startIndex,endIndex},style:{fontFamily:t.codeFont},fields:'fontFamily'}})),
       {updateParagraphStyle:{objectId:e.id,...selector,textRange:{type:'ALL'},style:{alignment:({left:'START',center:'CENTER',right:'END'})[e.align??'left'],lineSpacing:125,spaceAbove:{magnitude:0,unit:'PT'},spaceBelow:{magnitude:0,unit:'PT'}},fields:'alignment,lineSpacing,spaceAbove,spaceBelow'}}];
   }
   for(const s of scene.slides) {
@@ -103,7 +105,7 @@ export function verifyGoogleSceneReadback(scene,after) {
   const t=themeFor(scene),pt=d=>d?.unit==='PT'?d.magnitude:d?.unit==='EMU'?d.magnitude/12700:NaN,close=(a,b)=>Number.isFinite(a)&&Math.abs(a-b)<=1;
   const fail=detail=>{throw new Error(`Update sent but native ${detail} readback failed; inspect native deck`);};
   const content=o=>(o?.textElements??[]).map(e=>e.textRun?.content??'').join('').replace(/\n$/,'');
-  const checkText=(native,expected)=>{if(content(native)!==(expected.text??''))fail('text content');const runs=(native?.textElements??[]).filter(x=>x.textRun?.content?.trim()).map(x=>x.textRun);for(const r of runs)if(r.style?.fontFamily!==t.font||!close(pt(r.style?.fontSize),expected.fontSize??(expected.role==='title'?t.titleSize:t.bodySize)))fail('text typography');};
+  const checkText=(native,expected)=>{if(content(native)!==(expected.text??''))fail('text content');const runs=(native?.textElements??[]).filter(x=>x.textRun?.content?.trim());const family=x=>(expected.code??[]).some(([a,b])=>(x.startIndex??0)>=a&&(x.startIndex??0)<b)?t.codeFont:t.font;for(const x of runs){const r=x.textRun;if(r.style?.fontFamily!==family(x)||!close(pt(r.style?.fontSize),expected.fontSize??(expected.role==='title'?t.titleSize:t.bodySize)))fail('text typography');}};
   for(const s of scene.slides){if(s.notes!==undefined&&(!notesShape(after,s.id)?.shape||content(notesShape(after,s.id)?.shape?.text)!==s.notes))fail('speaker notes');for(const e of s.elements){const item=after.slides.find(x=>x.objectId===s.id)?.pageElements?.find(x=>x.objectId===e.id),kind=({text:'shape',shape:'shape',line:'line',table:'table',image:'image',chart:'sheetsChart'})[e.type];if(!item?.[kind])fail('object type');
     const tr=item.transform??{},w=pt(item.size?.width),h=pt(item.size?.height),tx=tr.unit==='EMU'?tr.translateX/12700:tr.translateX,ty=tr.unit==='EMU'?tr.translateY/12700:tr.translateY;
     if(e.type==='table'){

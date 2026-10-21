@@ -3,9 +3,10 @@ import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {resolve,dirname,join,basename} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {validateBrandContract,checkBrandSources,neutralBrandContract} from './brand-contract.mjs';
-import {validateComposition,titleLines,relationNames,rhythmNames} from './compose.mjs';
+import {validateComposition,titleLines,relationNames,rhythmNames,codeFamily} from './compose.mjs';
 import {hash,escape} from './common.mjs';
-import {internalSource} from './compose-audit.mjs';
+import {internalSource,unmarkedCode} from './compose-audit.mjs';
+import {codeSpans,codeFallback} from './scene.mjs';
 
 const idPattern=/^[a-zA-Z_][a-zA-Z0-9_-]{4,40}$/,kinds=['cover','section','content','closing'];
 const str=v=>typeof v==='string'&&v.trim()&&v.length<=20000;
@@ -26,6 +27,7 @@ focal names the point of the slide in words. Give the label of one of the points
 rhythm: anchor for structure, dense for information (the default), breathing for a pause. Four dense slides in a row is a finding; lighten one and mark it breathing, or put a section slide between.
 points are the real units, counted from the content: a label, a line of text, or both. For quantity the first point's label is the figure. parts are optional short labels (a few words each) a diagram may put in separate nodes, such as the three prerequisites a sentence lists; the sentence itself is shown whole or kept in the notes, never split across nodes.
 caveat is one line, and source is one line naming where the claim comes from; both are shown at the foot of the slide. source is a citation the audience can follow, such as a document title; finding, objective or research IDs go in provenance, which is never drawn and joins the speaker notes. notes are for the speaker and are shown under the slide in the draft. sources are one or more IDs naming what the slide rests on: a section of the source material, or one ID such as request or author_knowledge.
+Write configuration fields, commands, API and file names as code spans in backticks, with a plain-English lead the first time: "High availability (\`highAvailability\`) is empty or omitted". A title names things in words and takes no code span. Unmarked camelCase or snake_case names, paths and configuration file names are reported as unmarked-code.
 minutes is the length of the talk; the draft shows what that leaves for each content slide.
 DIRECTION is the composition's: {focal,neutral,meanings?,motif?}, in brand color roles. A draft is drawn without it; the build uses it.
 layouts name the brand template layouts for cover, section and closing slides (run compose layouts); the build needs them.
@@ -69,6 +71,7 @@ export async function checkOutline(outline,contract,{fonts}={}) {
     if(!kinds.includes(s.kind)){fail(where,`kind is one of ${kinds.join('|')}`);continue;}
     for(const key of Object.keys(s))if(!['id','kind','title','notes',...fields[s.kind]].includes(key))fail(where,`a ${s.kind} slide has no ${key}`);
     if(!str(s.title))fail(where,'provide the title');
+    else if(codeSpans(s.title).code.length)fail(where,'a title is a plain-English claim: name the setting in words, and show the field, command or file name as a code span in the points');
     for(const key of ['subtitle','detail','notes','caveat','source','focal','provenance'])if(s[key]!==undefined&&!str(s[key]))fail(where,`provide ${key} text or omit it`);
     if(s.detail!==undefined&&s.subtitle===undefined)fail(where,'detail needs a subtitle before it');
     if(s.kind!=='content')continue;
@@ -99,6 +102,12 @@ export async function checkOutline(outline,contract,{fonts}={}) {
   if(run.length>=4)findings.push({slide:run[3],code:'dense-run',detail:`${run.length} dense slides in a row from ${run[0]}. Lighten one and mark it breathing, or put a section slide between.`});
   if(delivery==='live')for(const s of content)if(!s.notes)findings.push({slide:s.id,code:'no-notes',detail:'A slide presented live needs speaker notes: what the presenter says, and the source behind the claim.'});
   for(const s of content)if(s.focal===undefined&&!['contrast','parallel','none'].includes(s.relation))findings.push({slide:s.id,code:'no-focal',detail:'Nothing is named as the point of this slide. Name it, unless the slide compares equals.'});
+  // A configuration field, command, API or file name reads as code: it is marked as a code span, with plain English first.
+  for(const s of outline.slides) {
+    const shown=[s.subtitle,s.detail,s.caveat,s.source,typeof s.focal==='string'?s.focal:undefined,...(s.points??[]).flatMap(p=>[p.label,p.text,...(p.parts??[])])],named=unmarkedCode(shown.join('\n')),titled=unmarkedCode(s.title);
+    if(titled.length)findings.push({slide:s.id,code:'unmarked-code',detail:`The title names ${titled.map(x=>`"${x}"`).join(', ')}. A title is a plain-English claim: say what it is in words, and show the name in the slide as a code span.`});
+    if(named.length)findings.push({slide:s.id,code:'unmarked-code',detail:`${named.map(x=>`"${x}"`).join(', ')} read${named.length===1?'s':''} as ${named.length===1?'a configuration field, command, API or file name':'configuration fields, commands, API or file names'}. Write ${named.length===1?'it as a code span':'each as a code span'} in backticks, such as \`${named[0]}\`, with a plain-English lead the first time: "High availability (\`highAvailability\`) is empty or omitted".`});
+  }
   for(const s of content)if(internalSource(s.source))findings.push({slide:s.id,code:'internal-source',detail:`The source line "${s.source}" reads as internal provenance. Cite what the audience can look up, such as a document title, and move finding or objective IDs to provenance, which goes into the speaker notes.`});
   return {delivery,budget,counts,findings};
 }
@@ -135,6 +144,8 @@ function arrange(s,area) {
   return {shapes,arrows};
 }
 
+// Words with their code spans shown in a monospace face, as the build will set them.
+const rich=value=>{const {text,code}=codeSpans(value);let out='',at=0;for(const [a,b] of code){out+=escape(text.slice(at,a))+`<code>${escape(text.slice(a,b))}</code>`;at=b;}return out+escape(text.slice(at));};
 export async function draftOutline(outline,contract,{fonts}={}) {
   const checked=await checkOutline(outline,contract,{fonts}),sl=contract.design.slides,t=sl.typography,W=sl.canvas.width,H=sl.canvas.height,scale=.6;
   const body=t[checked.delivery==='live'?'body':'bodyReference'].size,flagged=id=>checked.findings.filter(f=>f.slide===id);
@@ -144,11 +155,11 @@ export async function draftOutline(outline,contract,{fonts}={}) {
     if(s.kind==='content') {
       const {shapes,arrows}=arrange(s,sl.contentBox);
       inner=`<div class="title" style="${place({x:sl.titleBox.x,y:sl.titleBox.y,w:sl.titleBox.width,h:sl.titleBox.height})};font-size:${t.title.size}px">${escape(s.title)}</div>`+
-        shapes.map(o=>`<div class="shape fit ${o.kind??'box'}${o.focal?' focal':''}${o.round?' round':''}${o.h<110&&!o.kind?' inline':''}" style="${place(o)}">${o.label?`<b style="font-size:${o.kind==='figure'?t.metric.size:t.label.size}px">${escape(o.label)}</b>`:''}${o.text?`<span style="font-size:${o.kind==='caveat'?t.caption.size:body}px">${escape(o.text)}</span>`:''}</div>`).join('')+
+        shapes.map(o=>`<div class="shape fit ${o.kind??'box'}${o.focal?' focal':''}${o.round?' round':''}${o.h<110&&!o.kind?' inline':''}" style="${place(o)}">${o.label?`<b style="font-size:${o.kind==='figure'?t.metric.size:t.label.size}px">${rich(o.label)}</b>`:''}${o.text?`<span style="font-size:${o.kind==='caveat'?t.caption.size:body}px">${rich(o.text)}</span>`:''}</div>`).join('')+
         (arrows.length?`<svg class="arrows" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}"><defs><marker id="tip${index}" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#555"/></marker></defs>${arrows.map(a=>`<line x1="${round(a.x1)}" y1="${round(a.y1)}" x2="${round(a.x2)}" y2="${round(a.y2)}" stroke="#555" stroke-width="2" marker-end="url(#tip${index})"/>`).join('')}</svg>`:'');
-    } else inner=`<div class="plate"><small>${s.kind}</small><b style="font-size:${t.section?.size??40}px">${escape(s.title)}</b>${s.subtitle?`<span style="font-size:${body}px">${escape(s.subtitle)}</span>`:''}${s.detail?`<span style="font-size:${body}px">${escape(s.detail)}</span>`:''}</div>`;
+    } else inner=`<div class="plate"><small>${s.kind}</small><b style="font-size:${t.section?.size??40}px">${escape(s.title)}</b>${s.subtitle?`<span style="font-size:${body}px">${rich(s.subtitle)}</span>`:''}${s.detail?`<span style="font-size:${body}px">${rich(s.detail)}</span>`:''}</div>`;
     const notes=flagged(s.id),count=checked.counts[s.id];
-    return `<figure id="${escape(s.id)}"><figcaption><b>${index+1}</b> ${escape(s.id)} · ${s.kind==='content'?`${s.relation}${s.rhythm?` · ${s.rhythm}`:''} · ${count} words`:s.kind}${notes.map(f=>` <mark>${escape(f.code)}</mark>`).join('')}</figcaption><svg class="frame" viewBox="0 0 ${W} ${H}" style="width:${px(W*scale)};height:auto;max-width:100%;aspect-ratio:${W}/${H}"><foreignObject width="${W}" height="${H}"><section style="width:${px(W)};height:${px(H)}">${inner}</section></foreignObject></svg>${s.kind==='content'?`<p class="understand">${escape(s.understand)}</p>`:''}${s.notes?`<p class="notes">Notes: ${escape(s.notes)}</p>`:''}${notes.map(f=>`<p class="finding">${escape(f.detail)}</p>`).join('')}</figure>`;
+    return `<figure id="${escape(s.id)}"><figcaption><b>${index+1}</b> ${escape(s.id)} · ${s.kind==='content'?`${s.relation}${s.rhythm?` · ${s.rhythm}`:''} · ${count} words`:s.kind}${notes.map(f=>` <mark>${escape(f.code)}</mark>`).join('')}</figcaption><svg class="frame" viewBox="0 0 ${W} ${H}" style="width:${px(W*scale)};height:auto;max-width:100%;aspect-ratio:${W}/${H}"><foreignObject width="${W}" height="${H}"><section style="width:${px(W)};height:${px(H)}">${inner}</section></foreignObject></svg>${s.kind==='content'?`<p class="understand">${rich(s.understand)}</p>`:''}${s.notes?`<p class="notes">Notes: ${rich(s.notes)}</p>`:''}${notes.map(f=>`<p class="finding">${rich(f.detail)}</p>`).join('')}</figure>`;
   };
   const total=Object.values(checked.counts).reduce((a,b)=>a+b,0);
   const html=`<!doctype html>${marker}<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Draft: ${escape(outline.title)}</title><style>
@@ -164,6 +175,7 @@ figure{margin:0}figcaption{font-size:12px;color:#555;margin-bottom:6px}mark{back
 .plate{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;gap:14px;padding:0 70px;border:14px solid #ddd;box-sizing:border-box}.plate small{text-transform:uppercase;letter-spacing:.12em;color:#777;font-size:16px}
 .notes{font-size:12px;color:#555;margin:6px 0 0;max-width:${px(W*scale)}}.understand{font-size:13px;margin:8px 0 0;max-width:${px(W*scale)}}.finding{font-size:12px;margin:4px 0 0;color:#222;max-width:${px(W*scale)}}.finding::before{content:"▲ "}
 footer{max-width:1180px;margin:28px auto 0;color:#777;font-size:12px}
+code{font-family:${[...new Set([codeFamily(contract),...codeFallback])].map(f=>`'${f}'`).join(',')},monospace;font-size:inherit}
 </style><header><h1>${escape(outline.title)}</h1><p>${[outline.audience?`For ${escape(outline.audience)}`:'',`delivered ${checked.delivery==='live'?'live':'for reading'}`,`${outline.slides.length} slides`,outline.minutes?`${outline.minutes} minutes, about ${round(outline.minutes/Math.max(1,Object.keys(checked.counts).length)).toFixed(1)} a content slide`:'',`${total} body words`,`${checked.findings.length} finding${checked.findings.length===1?'':'s'}`].filter(Boolean).join(' · ')}</p><p>Draft: wording and structure only. The heavy outline marks the point of each slide. Nothing here is a design; every slide is redrawn in the build.</p>${outline.direction?`<p>For the build: ${escape(outline.direction.focal)} marks the point of a slide, on ${escape(outline.direction.neutral)} panels${Object.entries(outline.direction.meanings??{}).map(([role,meaning])=>`; ${escape(role)} means ${escape(meaning)}`).join('')}.</p>`:''}</header><main>${outline.slides.map(slide).join('')}</main><footer>Draft: wording and structure only · outline ${hash(JSON.stringify(outline)).slice(0,12)}</footer><script>
 for(const el of document.querySelectorAll('.fit')){let n=0;while(el.scrollHeight>el.clientHeight+1&&n++<40)for(const c of el.children)c.style.fontSize=Math.max(8,parseFloat(c.style.fontSize)*.94)+'px';if(n)el.title='Text shrunk to fit';}
 </script></html>`;

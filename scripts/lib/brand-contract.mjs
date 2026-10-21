@@ -30,6 +30,9 @@ export function validateBrandContract(contract, { medium } = {}) {
       const t=s.typography[role];
       if (!record(t) || !Number.isFinite(t.size) || t.size<1 || t.size>120 || typeof t.bold!=='boolean' || !hex(design.colors[t.colorRole])) throw new Error(`Invalid brand typography: ${role}`);
     }
+    // An optional code role names the monospace family inline code is set in; it takes the size of the words around it.
+    const code=s.typography.code;
+    if (code !== undefined && (!record(code) || Object.keys(code).some(k => !['fontFamily','size','bold','colorRole'].includes(k)) || typeof code.fontFamily !== 'string' || !/^[\p{L}\p{N} _-]{1,100}$/u.test(code.fontFamily) || code.size !== undefined && (!Number.isFinite(code.size) || code.size < 1 || code.size > 120) || code.bold !== undefined && typeof code.bold !== 'boolean' || code.colorRole !== undefined && !hex(design.colors[code.colorRole]))) throw new Error('Invalid brand typography: code is {fontFamily, size?, bold?, colorRole?}, naming a monospace font family');
     if (!Array.isArray(s.chart?.seriesRoles) || !s.chart.seriesRoles.length || s.chart.seriesRoles.some(role=>!hex(design.colors[role]))) throw new Error('Brand charts need selected series roles');
     for(const role of [s.table?.headerFillRole,s.table?.headerTextRole]) if(!hex(design.colors[role]))throw new Error('Brand table roles are unresolved');
     if (s.fills !== undefined && (!record(s.fills) || Object.keys(s.fills).some(k => k !== 'tints') || typeof s.fills.tints !== 'boolean')) throw new Error('Brand slides.fills.tints must be true or false');
