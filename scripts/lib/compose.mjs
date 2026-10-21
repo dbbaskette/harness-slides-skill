@@ -1,6 +1,6 @@
 // Model-authored relative layout, compiled into absolute brand-constrained scene objects.
 // The model chooses structure; this module owns arithmetic, fit and brand roles.
-import {validateScene,shapeKinds} from './scene.mjs';
+import {validateScene,shapeKinds,codeSpans,defaultTheme} from './scene.mjs';
 import {brandTheme,validateBrandContract} from './brand-contract.mjs';
 import {resolveFont,measureText} from './text-metrics.mjs';
 
@@ -25,6 +25,8 @@ const common=['id','type','weight','at'],gapNames=['none','tight','normal','wide
 const round=n=>Math.round(n*100)/100;
 const fail=(where,message)=>{throw new Error(`${where}: ${message}`);};
 const str=v=>typeof v==='string'&&v.trim()&&v.length<=20000;
+// Code spans are drawn in texts, boxes and the slide's furniture; elsewhere the backticks would be drawn as they are.
+const ticked=v=>typeof v==='string'&&codeSpans(v).code.length>0,plainHere='write it plainly here; code spans (`name`) are set in texts, boxes, the subtitle, caveat and source';
 // Whether two nodes are set side by side (true) or one above the other (false) by the container that holds them both;
 // undefined where that container places its children freely.
 function axisBetween(canvas,from,to) {
@@ -96,7 +98,8 @@ sources name what a slide rests on: a document section, a finding, or one ID suc
 Any node may set weight (relative share, above 0 up to 10, default 1). A node never goes below the size its content needs; when that overrides a weight you set, compile and preview report it as weight-overridden. An empty box has no minimum, so use empty boxes for bars drawn to scale.
 An icon keeps the library's own colors unless you set color (a brand color role) or style: solid is a light icon on a colored disc, outline a colored icon in a ring, plain a colored icon with no container, drawn a little larger. On a filled card use plain or outline with a color that reads on the fill.
 A box is solid by default. style tint is a light surface of its fill (the neutral when it sets none): the supporting card, filled, in the color of what it stands for; a brand whose contract sets fills.tints false draws it as a neutral bar card instead, so use bar there. style bar draws a neutral card with a strip of color down the left edge. style outline draws it as a line on whatever is behind it; keep it for what is secondary, empty or a boundary. The line or strip is the focal color on the slide's focal node, the box's fill where it sets one, and secondary ink otherwise; a tint on the focal node gets a focal edge.
-state on a box or text: muted quiets it (light surface, secondary ink), struck also strikes its words through, failed (a box) adds a status-colored dashed edge and an × badge. What a muted, struck or failed box holds is muted with it. Never draw lines across words to cross something out.
+state on a box or text: muted is present but secondary (the neutral panel, secondary ink); struck is absent or ruled out (a box keeps its words readable and gets a quiet × badge; a text is struck through); failed (a box) broke, with a status-colored dashed edge and an × badge. What a box holds is muted with it. Leave a thing out unless its absence is the point. Never draw lines across words to cross something out.
+Code spans: configuration fields, commands, API and file names go in backticks, such as \`highAvailability\`, and are set in the brand's code font. Lead with plain English the first time: "High availability (\`highAvailability\`) is empty or omitted". Texts, boxes, subtitle, caveat and source take them; titles, edge labels, badges, tables and charts do not.
 metric is a number with its label beneath, in the brand's metric size: {type:metric,id,value:"42%",label:"of teams"}. badge is a small numbered or lettered disc for steps and references. rule is a thin line between the parts of a column or a row.
 A card's content sits inside its shape's text area, so a diamond, ellipse or hexagon holds much less than a rectangle of the same size. Containers may set group:true and an id.
 gap: none|tight|normal|wide. align: start|center|end|stretch. In a row, stretch (the default) makes every child fill the row's height; start, center or end gives each child the height its content needs. On a text, or a box with text, align sets the text left, centered or right. In a row an icon takes its own width unless you give it a weight. On a box with children, align (start|center|end) places its content vertically. fill/color: a brand color role name. textRole: a brand typography role name.
@@ -111,7 +114,7 @@ BRIEF, per content slide: {relation:order|dependency|hierarchy|membership|contra
 The title is the claim. The relation must be drawn: edges, chevrons or a column of steps for order, edges or labelled cards in reading order for dependency, edges, nesting or layers for hierarchy, a box holding two or more members for membership, side by side for contrast, a grid, row or column of like nodes for parallel, intersecting shapes for overlap, the metric text role for quantity.
 The focal node is a box or text; the compiler gives it the focal color and no other node, text or edge may use it. Text inside a filled box is given a readable color unless you set one.
 A labelled edge needs room: its label must fit the gap between the two nodes, so put a spacer between them.
-Generated IDs are reserved: <box with style bar>_bar and _text, <failed box>_state and _group, <metric>_label, <chart with source>_source, <slide>_rule1 and up, <slide>_title, <slide>_subtitle, <slide>_detail, <slide>_caveat, <slide>_caveat_label, <slide>_caveat_rule, <slide>_source, <box with children>_group, <labelled edge>_label.
+Generated IDs are reserved: <box with style bar>_bar and _text, <failed or struck box>_state, _text and _group, <metric>_label, <chart with source>_source, <slide>_rule1 and up, <slide>_title, <slide>_subtitle, <slide>_detail, <slide>_caveat, <slide>_caveat_label, <slide>_caveat_rule, <slide>_source, <box with children>_group, <labelled edge>_label.
 A card's align has no effect when it holds a box, grid or image, because those fill the spare space.
 IDs match [a-zA-Z_][a-zA-Z0-9_-]{4,40} and are unique across the deck.
 Nest at most 8 levels. Run compose contract --brand brand-contract.json for the brand's content area, gap, padding and line sizes.
@@ -154,7 +157,7 @@ export function validateComposition(comp,contract,{collect}={}) {
     if(Object.keys(s).some(k=>!['id','title','sources','canvas','connect','notes','intent','layoutId','layout','subtitle','detail','picture','brief','caveat','source','provenance'].includes(k)))fail(s.id,'unsupported slide field');
     if(s.picture!==undefined&&s.layout===undefined)fail(s.id,'picture fills a template layout\'s picture slot; on a content slide use an image node in the canvas');
     claim(s.id,'slide');claim(`${s.id}_title`,s.id);
-    attempt(()=>{if(!str(s.title))fail(s.id,'provide a slide title');});
+    attempt(()=>{if(!str(s.title))fail(s.id,'provide a slide title');if(ticked(s.title))fail(s.id,'a title is a plain-English claim: name the setting in words, and show the field, command or file name as a code span in the slide body');});
     attempt(()=>{if(!Array.isArray(s.sources)||!s.sources.length||s.sources.some(x=>!str(x)))fail(s.id,'provide source references: one or more IDs naming what the slide rests on, such as request or author_knowledge');});
     attempt(()=>{if(s.provenance!==undefined&&!str(s.provenance))fail(s.id,'provide provenance text or omit it; it goes into the speaker notes and is never drawn');});
     const local=new Set(),fills=new Set(),leaves=new Set(),facts={edges:0,chevrons:0,members:false,pair:false,peers:false,nested:false,layers:false,metric:false,chart:false,labelled:false},brief=s.brief,focalId=brief?.focal;let nodes=0,rules=0;
@@ -163,6 +166,7 @@ export function validateComposition(comp,contract,{collect}={}) {
       const label=v=>typeof v==='string'&&v.trim()&&v.length<=60,pie=n.kind==='pie';
       if(!chartKinds.includes(n.kind))fail(where,'kind is bar, line or pie');
       for(const key of ['title','units','source'])if(n[key]!==undefined&&!str(n[key]))fail(where,`provide chart ${key} text or omit it`);
+      if([n.title,n.units,n.source,...(Array.isArray(n.data?.categories)?n.data.categories:[]),...(Array.isArray(n.data?.series)?n.data.series.map(x=>x?.name):[])].some(ticked))fail(where,`a chart has no code span; ${plainHere}`);
       if(pie&&n.units!==undefined)fail(where,'a pie shows shares; put the units in its title');
       const data=n.data;
       if(!data||typeof data!=='object'||Array.isArray(data)||Object.keys(data).some(k=>!['categories','series'].includes(k)))fail(where,'data is {categories,series}: the category labels, and one or more {name,values} series');
@@ -196,6 +200,7 @@ export function validateComposition(comp,contract,{collect}={}) {
       if(n.type==='table') {
         const r=n.rows;
         if(!Array.isArray(r)||r.length<2||r.length>12||!Array.isArray(r[0])||r[0].length<2||r[0].length>6||r.some(row=>!Array.isArray(row)||row.length!==r[0].length||row.some(c=>typeof c!=='string')))fail(where,'a table has 2–12 rows of 2–6 text cells each, the first row being the header');
+        if(r.flat().some(ticked))fail(where,`a table cell has no code span; ${plainHere}`);
         if(n.widths!==undefined&&(!Array.isArray(n.widths)||n.widths.length!==r[0].length||n.widths.some(w=>!Number.isFinite(w)||w<=0||w>10)))fail(where,'widths gives one relative width per column');
       }
       if(n.type==='ring') {
@@ -204,6 +209,7 @@ export function validateComposition(comp,contract,{collect}={}) {
       }
       if(n.type==='badge') {
         if(!str(n.text)||n.text.trim().length>3)fail(where,'a badge holds one to three characters');
+        if(ticked(n.text))fail(where,`a badge has no code span; ${plainHere}`);
         if(dir&&n.fill!==undefined&&(n.fill===dir.focal||!allowedFills.includes(n.fill)))fail(where,`fill ${n.fill} is not in the deck direction (${allowedFills.join(', ')})`);
       }
       if(needsId||n.id!==undefined){claim(n.id,where);local.add(n.id);}
@@ -211,8 +217,8 @@ export function validateComposition(comp,contract,{collect}={}) {
         if(!states.includes(n.state))fail(where,'state is normal, muted, struck or failed');
         if(n.state==='failed'&&n.type!=='box')fail(where,'failed marks a box; put the words in a box, or use struck');
         if(n.id===focalId&&n.state!=='normal')fail(where,'the focal node is the point of the slide; it cannot be muted, struck or failed');
-        // A failed box carries an × badge, grouped with it.
-        if(n.state==='failed'){claim(`${n.id}_state`,where);if(n.children===undefined&&n.style!=='bar'){claim(`${n.id}_group`,where);claim(`${n.id}_text`,where);}}
+        // A failed or struck box carries an × badge, grouped with it.
+        if(n.type==='box'&&['failed','struck'].includes(n.state)){claim(`${n.id}_state`,where);if(n.children===undefined&&n.style!=='bar'){claim(`${n.id}_group`,where);claim(`${n.id}_text`,where);}}
       }
       if(n.type==='chart')checkChart(n,where);
       if(n.group!==undefined&&typeof n.group!=='boolean')fail(where,'group must be boolean');
@@ -223,7 +229,7 @@ export function validateComposition(comp,contract,{collect}={}) {
       if(n.align!==undefined&&!aligns.includes(n.align))fail(where,`align must be one of ${aligns.join('|')}`);
       for(const key of ['fill','color'])if(n[key]!==undefined&&!Object.hasOwn(colors,n[key]))fail(where,`${key} must be a brand color role: ${Object.keys(colors).join(', ')}`);
       if(dir&&n.color!==undefined){if(n.id===focalId&&n.type==='text')fail(where,'the focal node takes the focal color; remove its color');if(n.color===dir.focal)fail(where,`only the focal node may use the focal color${focalId?'':'; name it in brief.focal'}`);}
-      if(n.textRole!==undefined&&!Object.hasOwn(roles,n.textRole))fail(where,`textRole must be one of ${Object.keys(roles).join(', ')}`);
+      if(n.textRole!==undefined&&(!Object.hasOwn(roles,n.textRole)||n.textRole==='code'))fail(where,`textRole must be one of ${Object.keys(roles).filter(r=>r!=='code').join(', ')}${n.textRole==='code'?'; code is set inline: put the name in backticks, such as `highAvailability`':''}`);
       if(n.type==='stack'&&!['row','column'].includes(n.direction))fail(where,'stack needs direction row|column');
       if(n.type==='grid'&&(!Number.isInteger(n.columns)||n.columns<1||n.columns>6))fail(where,'grid needs 1–6 columns');
       if(n.type==='text'&&!str(n.text))fail(where,'provide text');
@@ -284,6 +290,7 @@ export function validateComposition(comp,contract,{collect}={}) {
     attempt(()=>{if(s.caveat!==undefined){
       const c=s.caveat,plain=typeof c==='string';
       if(plain?!str(c):!c||typeof c!=='object'||Array.isArray(c)||Object.keys(c).some(k=>!['label','text'].includes(k))||!str(c.text)||c.label!==undefined&&(!str(c.label)||c.label.length>24))fail(s.id,'caveat is a line of text, or {label,text} with a label of a word or two');
+      if(!plain&&ticked(c.label))fail(s.id,`a caveat label has no code span; ${plainHere}`);
       claim(`${s.id}_caveat`,s.id);claim(`${s.id}_caveat_rule`,s.id);if(!plain&&c.label!==undefined)claim(`${s.id}_caveat_label`,s.id);
     }});
     attempt(()=>{if(brief!==undefined) {
@@ -307,7 +314,7 @@ export function validateComposition(comp,contract,{collect}={}) {
       if(c.route!==undefined&&!['straight','elbow','curve'].includes(c.route))fail(`${s.id}/${c.id}`,'route is straight, elbow or curve');
       claim(c.id,`${s.id}/edge`);
       if(!local.has(c.from)||!local.has(c.to)||c.from===c.to)fail(`${s.id}/${c.id}`,'edges connect two distinct nodes on this slide');
-      if(c.label!==undefined){if(!str(c.label))fail(`${s.id}/${c.id}`,'provide an edge label or omit it');claim(`${c.id}_label`,`${s.id}/${c.id}`);}
+      if(c.label!==undefined){if(!str(c.label))fail(`${s.id}/${c.id}`,'provide an edge label or omit it');if(ticked(c.label))fail(`${s.id}/${c.id}`,`an edge label has no code span; ${plainHere}`);claim(`${c.id}_label`,`${s.id}/${c.id}`);}
       if(c.color!==undefined&&!Object.hasOwn(colors,c.color))fail(`${s.id}/${c.id}`,'edge color must be a brand color role');
       if(dir&&c.color===dir.focal)fail(`${s.id}/${c.id}`,'an edge cannot use the focal color; it belongs to the focal node');
       if(c.arrow!==undefined&&typeof c.arrow!=='boolean')fail(`${s.id}/${c.id}`,'arrow must be boolean');
@@ -321,24 +328,31 @@ export function validateComposition(comp,contract,{collect}={}) {
   return {slides:summary,...(supporting.length?{supporting}:{})};
 }
 
+// The monospace family a brand sets inline code in: its code type role, or the fallback every target editor has.
+export const codeFamily=contract=>{const r=contract?.design?.slides?.typography?.code;return r?.fontFamily??defaultTheme.codeFont;};
 async function measurer(contract,options) {
-  const family=contract.design.fontFamily,fonts={};
+  const family=contract.design.fontFamily,fonts={},codeFonts={};
   if(options!==undefined&&(!options||typeof options!=='object'||Array.isArray(options)||Object.entries(options).some(([k,v])=>!['regular','bold'].includes(k)||!v?.path||Object.keys(v).some(f=>!['path','sha256'].includes(f)))))throw new Error('Fonts use regular/bold {path,sha256?} records');
   for(const bold of [false,true]){const spec=options?.[bold?'bold':'regular'];fonts[bold]=(await resolveFont(family,{bold,file:spec?.path,expectedHash:spec?.sha256})).font;}
+  // The code font is looked up only when some text has a code span; without it, code is estimated as monospace.
+  let looked=false;const code=async()=>{if(!looked){looked=true;for(const bold of [false,true])codeFonts[bold]=(await resolveFont(codeFamily(contract),{bold})).font;}};
   const exact=Boolean(fonts.false&&fonts.true);
+  // Text is author text, with code spans in backticks, or {text,code} as a scene element holds it.
+  const parse=value=>typeof value==='string'?codeSpans(value):{text:value.text,code:value.code??[]};
+  const units=({text,code})=>{const out=[];let i=0;for(const c of text){out.push(c==='\n'?null:code.some(([a,b])=>i>=a&&i<b)?.6:/[MW@%]/.test(c)?.85:/[il., ']/.test(c)?.27:.53);i+=c.length;}return out;};
   const height=(value,style,width)=>{
-    const font=fonts[style.bold];
-    if(font)return measureText(value,{font,fontSize:style.size,width,height:1e6}).requiredHeight;
-    const available=Math.max(1,width-7.2),lines=value.split('\n').reduce((n,line)=>n+Math.max(1,Math.ceil([...line].reduce((w,c)=>w+(/[MW@%]/.test(c)?.85:/[il., ']/.test(c)?.27:.53),0)*style.size/available)),0);
-    return lines*style.size*1.25+7.2;
+    const words=parse(value),font=fonts[style.bold];
+    if(font)return measureText(words.text,{font,fontSize:style.size,width,height:1e6,code:words.code,codeFont:codeFonts[style.bold]}).requiredHeight;
+    const available=Math.max(1,width-7.2),lines=[[]];for(const u of units(words))u===null?lines.push([]):lines.at(-1).push(u);
+    return lines.reduce((n,line)=>n+Math.max(1,Math.ceil(line.reduce((w,u)=>w+u,0)*style.size/available)),0)*style.size*1.25+7.2;
   };
   // Natural single-line width including the text insets, for labels that must fit a gap.
   const width=(value,style)=>{
-    const font=fonts[style.bold];
-    if(font)return measureText(value,{font,fontSize:style.size,width:1e6,height:1e6}).maxWidth+7.2;
-    return [...value].reduce((w,c)=>w+(/[MW@%]/.test(c)?.85:/[il., ']/.test(c)?.27:.53),0)*style.size+7.2;
+    const words=parse(value),font=fonts[style.bold];
+    if(font)return measureText(words.text,{font,fontSize:style.size,width:1e6,height:1e6,code:words.code,codeFont:codeFonts[style.bold]}).maxWidth+7.2;
+    return units(words).reduce((w,u)=>w+(u??0),0)*style.size+7.2;
   };
-  return {height,width,exact};
+  return {height,width,exact,code,codeExact:()=>Boolean(codeFonts.false&&codeFonts.true)};
 }
 
 // The brand's own numbers, so fit can be planned instead of found by failed compiles.
@@ -357,7 +371,8 @@ export async function composeSizes(contract,{fonts}={}) {
   return `Sizes for ${contract.identity.id}, in points.
 Content area ${round(sl.contentBox.width)} wide by ${round(sl.contentBox.height)} high. The title holds ${lines} line${lines>1?'s':''} at ${t.title.size}pt across ${round(sl.titleBox.width)}.
 Gaps: tight ${inset/2}, normal ${inset}, wide ${sp.column??28}. A box pads its content by ${inset} on each side. An icon is ${sl.icon?.size??48} square, a badge ${Math.round((sl.icon?.size??48)*.6)}, and a rule takes ${inset/2}.
-One line of text needs: ${Object.keys(t).filter(k=>k!=='title').map(k=>`${k} ${line(k)}`).join(', ')}. Text with no textRole uses ${body}, the size for a deck delivered ${contract.medium.delivery==='live'?'live':'for reading'}. Do not step below it to make content fit.
+One line of text needs: ${Object.keys(t).filter(k=>!['title','code'].includes(k)).map(k=>`${k} ${line(k)}`).join(', ')}. Text with no textRole uses ${body}, the size for a deck delivered ${contract.medium.delivery==='live'?'live':'for reading'}. Do not step below it to make content fit.
+Code spans (\`name\`) are set in ${codeFamily(contract)}${t.code?', the brand\'s code type':', as the brand names no code type'}, at the size of the words around them.
 Supporting fills for a direction that names no meanings, with ${t.title.colorRole} as its focal: ${supportingRoles(contract,{focal:t.title.colorRole,neutral:'canvasSecondary'}).join(', ')||'none; this palette has no other accent'}. Tint and bar cards take them; give them meanings for a long deck.${sl.fills?.tints===false?'\nThis brand does not allow tints: a tint card is drawn as a neutral bar card with a strip of its fill color. Use bar cards.':''}`;
 }
 export async function compileComposition(comp,contract,{fonts}={}) {
@@ -368,14 +383,17 @@ export async function compileComposition(comp,contract,{fonts}={}) {
   const gapSize={none:0,tight:inset/2,normal:inset,wide:sp.column??28};
   const bodyRole=contract.medium.delivery==='live'?'body':'bodyReference',measure=await measurer(contract,fonts);
   const iconSize=sl.icon?.size??48;
+  // Author text becomes the words drawn and the ranges set in the code font. The code font is found only when needed.
+  let usedCode=false;const say=raw=>{const {text,code}=codeSpans(raw);if(!code.length)return {text};usedCode=true;return {text,code};};
+  if(JSON.stringify(comp).includes('`'))await measure.code();
   const scene={version:2,title:comp.title,mode:'new',canvas:sl.canvas,theme:brandTheme(contract),slides:[]},structure={groups:[],connectors:[],icons:[],layouts:[],adjusted:[],reading:[],unspoken:[],direction:comp.direction??null,...(summary.supporting?.length?{supporting:summary.supporting}:{}),briefs:[]},room=[],dir=comp.direction;
 
   const style=n=>roles[n.textRole??bodyRole];
   // Text and icons keep their own size; everything else shares the space that is left.
   const badgeSize=Math.round(iconSize*.6),ruleSpace=inset/2,barWidth=6;
-  // A failed box's × badge sits in its top-right corner; its words and children keep clear of that column.
+  // A failed or struck box's × badge sits in its top-right corner; its words and children keep clear of that column.
   // The badge is never smaller than the × it holds needs, in the brand's caption type.
-  const stateSide=Math.max(Math.round(badgeSize*.8),Math.ceil(measure.height('×',{...roles.caption,bold:true},1e4))),reserveFor=n=>n.type==='box'&&n.state==='failed'&&(shapeKinds[n.shape??'rect'][3]===1&&shapeKinds[n.shape??'rect'][4]===1)?Math.max(0,stateSide+inset/4-inset+2):0;
+  const stateSide=Math.max(Math.round(badgeSize*.8),Math.ceil(measure.height('×',{...roles.caption,bold:true},1e4))),reserveFor=n=>n.type==='box'&&['failed','struck'].includes(n.state)&&(shapeKinds[n.shape??'rect'][3]===1&&shapeKinds[n.shape??'rect'][4]===1)?Math.max(0,stateSide+inset/4-inset+2):0;
   const flexible=n=>!['text','icon','badge','rule','table'].includes(n.type);
   // A table is set in the brand's table style; each row is as tall as its tallest cell.
   const tableStyle={size:sl.table?.fontPt??roles.bodyReference?.size??18,pad:sl.table?.paddingPt??8};
@@ -446,10 +464,12 @@ export async function compileComposition(comp,contract,{fonts}={}) {
       return onColor&&inks.includes(wanted)&&contrastRatio(onColor,surface)>contrastRatio(wanted,surface)?onColor:wanted;
     };
     const fillRole=n=>dir&&n.id===focalId?dir.focal:n.fill??dir?.neutral??'canvasSecondary';
-    // A muted, struck or failed node is quieted: a light surface and secondary ink. The point of the slide is never quieted.
+    // A muted, struck or failed node is quieted: secondary ink, and a muted or struck card is the neutral panel, never a bare
+    // outline. Only a struck text is struck through; a struck card keeps its words readable and carries an × badge.
+    // The point of the slide is never quieted.
     const canvasHex=colors.canvasPrimary??'#FFFFFF',mutedInk=colors.inkSecondary??colors.inkDeep,neutralHex=colors[dir?.neutral??'canvasSecondary'];
     const alarm=colors.statusCritical&&!(dir&&colors.statusCritical.toUpperCase()===colors[dir.focal].toUpperCase())?colors.statusCritical:colors.inkDeep;
-    const quiet=n=>Boolean(n.state&&n.state!=='normal'&&n.id!==focalId),struck=n=>quiet(n)&&['struck','failed'].includes(n.state);
+    const quiet=n=>Boolean(n.state&&n.state!=='normal'&&n.id!==focalId),struck=n=>quiet(n)&&n.type==='text'&&n.state==='struck';
     const put=(element,members)=>{elements.push(element);members?.push(element.id);return element;};
     // Without the brand font, measurement is an estimate: a refusal that rests on it is reported to look at, not enforced.
     const unverified=detail=>{const [where]=detail.split(':');(structure.unverifiedFit??=[]).push({slide:s.id,id:where.split('/')[1]??s.id,detail});};
@@ -474,10 +494,10 @@ export async function compileComposition(comp,contract,{fonts}={}) {
     const textProps=(n,surface)=>{const st=style(n);return {fontSize:st.size,bold:st.bold,color:quiet(n)?ink(mutedInk,surface,st):n.color?colors[n.color]:dir&&n.id===focalId&&n.type==='text'?colors[dir.focal]:ink(roleColor(st),surface,st),...(n.align&&n.align!=='stretch'?{align:{start:'left',center:'center',end:'right'}[n.align]}:{}),...(struck(n)?{strike:true}:{})};};
     const box=r=>({x:round(r.x),y:round(r.y),width:round(r.width),height:round(r.height)});
 
-    // A state on a box carries to what it holds: a failed or muted box mutes its contents, a struck one strikes them through.
+    // A state on a box carries to what it holds: whatever the box's state, its contents are muted.
     const inherit=(n,mood)=>{
       if(!n||typeof n!=='object')return n;
-      const here=['box','text'].includes(n.type)?n.state??mood:undefined,pass=['box','text'].includes(n.type)?here==='struck'?'struck':here&&here!=='normal'?'muted':undefined:mood;
+      const here=['box','text'].includes(n.type)?n.state??mood:undefined,pass=['box','text'].includes(n.type)?here&&here!=='normal'?'muted':undefined:mood;
       return {...n,...(here&&here!=='normal'?{state:here}:{}),...(Array.isArray(n.children)?{children:n.children.map(k=>inherit(k,pass))}:{}),...(n.hub?{hub:inherit(n.hub,pass)}:{})};
     };
     const place=(n,rect,members,surface=colors.canvasPrimary??'#FFFFFF')=>{
@@ -491,14 +511,14 @@ export async function compileComposition(comp,contract,{fonts}={}) {
       // A word wider than its line would be broken mid-word by every renderer, so it is refused like any other shortfall.
       if(typeof n.text==='string'&&['text','box'].includes(n.type)) {
         const [,,,fx]=shapeKinds[n.shape??'rect'],room=n.type==='text'?rect.width:fx===1?rect.width-inset*2-reserveFor(n):rect.width*fx,st=style(n);
-        // A renderer may break at a space or a hyphen, never inside a word.
-        const word=n.text.split(/[\s-]+/).filter(Boolean).map(w=>({w,width:measure.width(w,st)})).sort((a,b)=>b.width-a.width)[0];
+        // A renderer may break at a space or a hyphen, never inside a word. A word in a code span is measured in the code font.
+        const all=codeSpans(n.text),word=[...all.text.matchAll(/[^\s-]+/g)].map(m=>{const a=m.index,b=a+m[0].length,code=all.code.filter(([x,y])=>y>a&&x<b).map(([x,y])=>[Math.max(x,a)-a,Math.min(y,b)-a]);return {w:m[0],width:measure.width({text:m[0],code},st)};}).sort((a,b)=>b.width-a.width)[0];
         if(word&&word.width>room+.5){const message=`${s.id}/${n.id}: the word "${word.w}" needs ${round(word.width)}pt but the text is ${round(room)}pt wide; widen the node, shorten the word or split it where a reader would`;if(measure.exact){tight.push(message);return;}unverified(message);}
       }
       if(n.id)rects.set(n.id,rect);
       const own=n.group?[]:members;
       if(n.type==='spacer')return;
-      if(n.type==='text'){sized(n);put({id:n.id,type:'text',...box(rect),text:n.text,...textProps(n,surface)},own);return;}
+      if(n.type==='text'){sized(n);put({id:n.id,type:'text',...box(rect),...say(n.text),...textProps(n,surface)},own);return;}
       if(n.type==='icon') {
         // Icons are copied from the brand library as native geometry at render time, so the scene only reserves a centred square.
         if(rect.width<iconSize-.5)fail(`${s.id}/${n.id}`,`needs ${round(iconSize)}pt of width for an icon but has ${round(rect.width)}pt`);
@@ -540,36 +560,39 @@ export async function compileComposition(comp,contract,{fonts}={}) {
       if(n.type==='box') {
         // Solid is a filled shape. Tint is a light surface of its color. Outline is a line in the box's color on whatever is behind it.
         // Bar is a neutral card with a strip of the color down its left edge.
-        const look=n.style??'solid',point=dir&&n.id===focalId,accent=point?dir.focal:n.fill??(colors.inkSecondary?'inkSecondary':'inkDeep'),soft=quiet(n),failed=soft&&n.state==='failed';
-        // A brand that forbids tints quiets a card with its plain canvas color, not a lightened one.
-        const surfaceFill=look==='bar'?neutralHex:soft?(sl.fills?.tints===false?canvasHex:mix(neutralHex,canvasHex,.45)):look==='tint'?tintOf(colors[fillRole(n)],canvasHex):colors[fillRole(n)];
-        // A quieted card keeps a hairline edge, so it still reads as a node on a surface of the same light grey.
-        const base=look==='outline'?{id:n.id,type:'shape',...box(rect),shape:n.shape??'rect',stroke:soft?mutedInk:colors[accent],strokeWeight:soft?1:point?3:1.5}
-          :{id:n.id,type:'shape',...box(rect),shape:n.shape??'rect',fill:surfaceFill,...(look==='tint'&&point?{stroke:colors[dir.focal],strokeWeight:2}:soft?{stroke:mutedInk,strokeWeight:1}:{})};
+        const look=n.style??'solid',point=dir&&n.id===focalId,accent=point?dir.focal:n.fill??(colors.inkSecondary?'inkSecondary':'inkDeep'),soft=quiet(n),failed=soft&&n.state==='failed',calm=soft&&!failed,marked=failed||soft&&n.state==='struck';
+        // A muted or struck card is the neutral panel, whatever its style, so it never reads as an empty wireframe box. On a
+        // surface of that same panel it takes the canvas color instead, so it still reads as a card. Both are brand colors.
+        const quietFill=contrastRatio(surface,neutralHex)<1.1?canvasHex:neutralHex;
+        // A brand that forbids tints draws a failed card on its plain canvas color, not a lightened one.
+        const surfaceFill=calm?quietFill:look==='bar'?neutralHex:soft?(sl.fills?.tints===false?canvasHex:mix(neutralHex,canvasHex,.45)):look==='tint'?tintOf(colors[fillRole(n)],canvasHex):colors[fillRole(n)];
+        const base=look==='outline'&&!calm?{id:n.id,type:'shape',...box(rect),shape:n.shape??'rect',stroke:soft?mutedInk:colors[accent],strokeWeight:soft?1:point?3:1.5}
+          :{id:n.id,type:'shape',...box(rect),shape:n.shape??'rect',fill:surfaceFill,...(look==='tint'&&point?{stroke:colors[dir.focal],strokeWeight:2}:failed?{stroke:mutedInk,strokeWeight:1}:{})};
         // A failed box keeps its words readable: a status-colored dashed edge and an × badge mark it, not lines drawn across it.
         if(failed)Object.assign(base,{stroke:alarm,strokeWeight:1.5,dash:'dash'});
         const behind=base.fill??surface,strip=look==='bar'?{id:`${n.id}_bar`,type:'shape',shape:'rect',x:round(rect.x),y:round(rect.y),width:barWidth,height:round(rect.height),fill:soft?mutedInk:colors[accent]}:null;
-        const reserve=reserveFor(n),badge=()=>{if(!failed)return null;const side=stateSide,st={...roles.caption,bold:true};return {id:`${n.id}_state`,type:'shape',shape:'ellipse',x:round(rect.x+rect.width-side-inset/4),y:round(rect.y+inset/4),width:side,height:side,fill:alarm,text:'×',fontSize:st.size,bold:true,color:ink(onColor??colors.inkDeep,alarm,st),align:'center'};};
+        // The badge is the status color on a failed card, and secondary ink on a struck one: "none here", not "broken".
+        const reserve=reserveFor(n),badge=()=>{if(!marked)return null;const side=stateSide,st={...roles.caption,bold:true},mark=failed?alarm:mutedInk;return {id:`${n.id}_state`,type:'shape',shape:'ellipse',x:round(rect.x+rect.width-side-inset/4),y:round(rect.y+inset/4),width:side,height:side,fill:mark,text:'×',fontSize:st.size,bold:true,color:ink(onColor??colors.inkDeep,mark,st),align:'center'};};
         if(n.text!==undefined) {
           sized(n);
-          if(!strip&&!failed){put({...base,text:n.text,...textProps(n,behind)},own);return;}
+          if(!strip&&!marked){put({...base,...say(n.text),...textProps(n,behind)},own);return;}
           const members=[];
           if(strip){
             // The words sit in their own box, clear of the strip, so every emitter insets them the same way.
             put(base,members);put(strip,members);
-            put({id:`${n.id}_text`,type:'text',x:round(rect.x+inset),y:round(rect.y),width:round(rect.width-inset*2-reserve),height:round(rect.height),text:n.text,...textProps(n,behind)},members);
+            put({id:`${n.id}_text`,type:'text',x:round(rect.x+inset),y:round(rect.y),width:round(rect.width-inset*2-reserve),height:round(rect.height),...say(n.text),...textProps(n,behind)},members);
           } else if(reserve) {
-            // The words of a failed box sit in their own box, centred as a box's words are and clear of the badge.
+            // The words of a failed or struck box sit in their own box, centred as a box's words are and clear of the badge.
             const width=rect.width-inset*2-reserve,height=Math.min(rect.height,measure.height(n.text,style(n),width));
-            put(base,members);put({id:`${n.id}_text`,type:'text',x:round(rect.x+inset),y:round(rect.y+(rect.height-height)/2),width:round(width),height:round(height),text:n.text,...textProps(n,behind)},members);
-          } else put({...base,text:n.text,...textProps(n,behind)},members);
-          if(failed)put(badge(),members);
+            put(base,members);put({id:`${n.id}_text`,type:'text',x:round(rect.x+inset),y:round(rect.y+(rect.height-height)/2),width:round(width),height:round(height),...say(n.text),...textProps(n,behind)},members);
+          } else put({...base,...say(n.text),...textProps(n,behind)},members);
+          if(marked)put(badge(),members);
           structure.groups.push({slide:s.id,id:`${n.id}_group`,members});own?.push(...members);return;
         }
         const inner=[];put(base,inner);if(strip)put(strip,inner);
         const [,,,fx,fy]=shapeKinds[base.shape],area=fx===1&&fy===1?{x:rect.x+inset,y:rect.y+inset,width:rect.width-inset*2-reserve,height:rect.height-inset*2}:{x:rect.x+rect.width*(1-fx)/2,y:rect.y+rect.height*(1-fy)/2,width:rect.width*fx,height:rect.height*fy};
         if(n.children)place({type:'stack',direction:'column',gap:n.gap,align:n.align,children:n.children,name:n.id},area,inner,behind);
-        if(failed)put(badge(),inner);
+        if(marked)put(badge(),inner);
         if(inner.length>1)structure.groups.push({slide:s.id,id:`${n.id}_group`,members:inner});
         own?.push(...inner);return;
       }
@@ -626,16 +649,16 @@ export async function compileComposition(comp,contract,{fonts}={}) {
         if(needs>one+.5)tight.push(`${s.id}/subtitle: runs past one line at ${sub.size}pt; shorten it`);
         titleBox={...titleBox,height:round(Math.min(titleBox.height,top))};
         const y=titleBox.y+titleBox.height;
-        furniture.push({id:`${s.id}_subtitle`,type:'text',x:titleBox.x,y:round(y),width:titleBox.width,height:round(one),text:s.subtitle,fontSize:sub.size,bold:false,color:muted});
+        furniture.push({id:`${s.id}_subtitle`,type:'text',x:titleBox.x,y:round(y),width:titleBox.width,height:round(one),...say(s.subtitle),fontSize:sub.size,bold:false,color:muted});
         structure.layouts.push({slide:s.id,layout:'@subtitled',placeholders:[`${s.id}_subtitle`]});
         const start=Math.max(area.y,y+one+gap);area.height-=start-area.y;area.y=start;
       }
-      if(s.source!==undefined){const h=measure.height(s.source,cap,area.width);area.height-=h;furniture.push({id:`${s.id}_source`,type:'text',x:area.x,y:round(area.y+area.height),width:area.width,height:round(h),text:s.source,fontSize:cap.size,bold:false,color:capColor});}
+      if(s.source!==undefined){const h=measure.height(s.source,cap,area.width);area.height-=h;furniture.push({id:`${s.id}_source`,type:'text',x:area.x,y:round(area.y+area.height),width:area.width,height:round(h),...say(s.source),fontSize:cap.size,bold:false,color:capColor});}
       if(s.caveat!==undefined) {
         const c=typeof s.caveat==='string'?{text:s.caveat}:s.caveat,strong={...cap,bold:true},lw=c.label?Math.min(area.width/3,measure.width(c.label,strong)+gap):0,h=measure.height(c.text,cap,area.width-lw);
         area.height-=h;const y=round(area.y+area.height);
         if(c.label)furniture.push({id:`${s.id}_caveat_label`,type:'text',x:area.x,y,width:round(lw),height:round(h),text:c.label,fontSize:cap.size,bold:true,color:colors.inkDeep});
-        furniture.push({id:`${s.id}_caveat`,type:'text',x:round(area.x+lw),y,width:round(area.width-lw),height:round(h),text:c.text,fontSize:cap.size,bold:false,color:capColor});
+        furniture.push({id:`${s.id}_caveat`,type:'text',x:round(area.x+lw),y,width:round(area.width-lw),height:round(h),...say(c.text),fontSize:cap.size,bold:false,color:capColor});
         area.height-=4;furniture.push({id:`${s.id}_caveat_rule`,type:'line',x:area.x,y:round(area.y+area.height+1),width:area.width,height:1,color:muted,weight:1,arrow:false,flipH:false,flipV:false});
       }
       if(s.source!==undefined||s.caveat!==undefined)area.height-=gap;
@@ -646,7 +669,7 @@ export async function compileComposition(comp,contract,{fonts}={}) {
     if(s.layout) {
       // The native emitter writes these into the layout's subtitle placeholders; the geometry here serves other emitters.
       const placeholders=[],body=roles[bodyRole];let y=sl.contentBox.y;
-      for(const key of ['subtitle','detail'])if(s[key]!==undefined){const height=measure.height(s[key],body,sl.contentBox.width);put({id:`${s.id}_${key}`,type:'text',x:sl.contentBox.x,y:round(y),width:sl.contentBox.width,height:round(height),text:s[key],fontSize:body.size,bold:body.bold,color:colors[body.colorRole]});placeholders.push(`${s.id}_${key}`);y+=height+inset;}
+      for(const key of ['subtitle','detail'])if(s[key]!==undefined){const height=measure.height(s[key],body,sl.contentBox.width);put({id:`${s.id}_${key}`,type:'text',x:sl.contentBox.x,y:round(y),width:sl.contentBox.width,height:round(height),...say(s[key]),fontSize:body.size,bold:body.bold,color:colors[body.colorRole]});placeholders.push(`${s.id}_${key}`);y+=height+inset;}
       // A picture goes into the layout's own picture slot, which gives it its place, shape and crop.
       const pictures=[];if(s.picture){put({id:`${s.id}_picture`,type:'image',x:0,y:0,width:sl.canvas.width,height:sl.canvas.height,src:s.picture.src,alt:s.picture.alt,fit:'cover'});pictures.push(`${s.id}_picture`);}
       structure.layouts.push({slide:s.id,layout:s.layout,placeholders,...(pictures.length?{pictures}:{})});
@@ -667,7 +690,7 @@ export async function compileComposition(comp,contract,{fonts}={}) {
         const st={size:e.fontSize,bold:e.bold},[,,,fx,fy]=shapeKinds[e.shape??'rect'],pad=e.type==='shape'&&fx===1&&fy===1?inset:0;
         const a=e.type==='shape'?{x:e.x+e.width*(1-fx)/2+pad,y:e.y+e.height*(1-fy)/2+pad,width:e.width*fx-pad*2,height:e.height*fy-pad*2}:e;
         if(!(a.width>7.2&&a.height>0))return null;
-        const h=Math.min(a.height,measure.height(e.text,st,a.width)),w=Math.min(a.width,measure.width(e.text,st));
+        const h=Math.min(a.height,measure.height(e,st,a.width)),w=Math.min(a.width,measure.width(e,st));
         return {x:a.x+({center:(a.width-w)/2,right:a.width-w}[e.align]??0),y:e.type==='shape'?a.y+(a.height-h)/2:a.y,width:w,height:h};
       };
       const worded=elements.map(e=>({e,r:reach(e)})).filter(x=>x.r);
@@ -752,6 +775,8 @@ export async function compileComposition(comp,contract,{fonts}={}) {
   } catch(error){problems.push(error.message.startsWith(`${s.id}`)?error.message:`${s.id}: ${error.message}`);}
   // Report every slide that does not fit in one pass, so the author fixes them together.
   if(problems.length)throw new Error(problems.length===1?problems[0]:`${problems.length} problems to fix:\n${problems.join('\n')}`);
+  // A scene with code names its code font; one without stays as it was.
+  if(usedCode)scene.theme={...scene.theme,codeFont:codeFamily(contract)};
   validateScene(scene);
-  return {scene,structure,report:{schema:1,brandRevision:contract.revision,measurement:measure.exact?'exact brand font':'estimated; brand font unavailable',slides:summary.slides,room}};
+  return {scene,structure,report:{schema:1,brandRevision:contract.revision,measurement:measure.exact?'exact brand font':'estimated; brand font unavailable',...(usedCode?{codeMeasurement:measure.codeExact()?`exact code font (${codeFamily(contract)})`:`estimated; ${codeFamily(contract)} unavailable`}:{}),slides:summary.slides,room}};
 }

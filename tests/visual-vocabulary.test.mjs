@@ -273,11 +273,38 @@ test('a preview of a build bound to its outline reports the split point and grou
   assert.deepEqual(JSON.parse(await readFile(join(dir,'preview','preview.json'),'utf8')).repair,result.repair);
 });
 
-test('a word wider than its box is refused rather than broken mid-word, and a muted card keeps a hairline edge',async()=>{
+test('a word wider than its box is refused rather than broken mid-word',async()=>{
   const c=brand(),narrow=deck({type:'stack',direction:'row',children:[{type:'box',id:'wide_box',text:'Zone B'},{type:'box',id:'thin_box',text:'Replica',weight:.35},{type:'box',id:'other_box',text:'Other',weight:2}]});
   await refusedOrWarned(narrow,c,/slide_one\/thin_box: the word "Replica" needs [\d.]+pt but the text is [\d.]+pt wide/);
-  const {scene}=await compileComposition(deck({type:'stack',direction:'row',children:[{type:'box',id:'quiet_box',state:'muted',style:'tint',text:'Standby'},{type:'box',id:'loud_box',text:'Primary'}]}),c);
-  assert.deepEqual([byId(scene,'quiet_box').stroke,byId(scene,'quiet_box').strokeWeight],['#53565A',1]);assert.equal(byId(scene,'loud_box').stroke,undefined);
+});
+
+test('a muted or struck card is the neutral panel in secondary ink, never a bare outline, and struck is marked with a badge',async()=>{
+  // Found in the live Google check: a struck card on a brand without tints was an empty white outline box with its
+  // words crossed out, which read as a wireframe typo rather than "there are no replicas".
+  for(const c of [brand(),brand({fills:{tints:false}})]) {
+    const row={type:'stack',direction:'row',children:[{type:'box',id:'one_node',style:'tint',text:'One node'},{type:'box',id:'quiet_box',state:'muted',style:'tint',text:'Standby'},{type:'box',id:'no_replicas',state:'struck',style:'tint',text:'Replicas'},{type:'box',id:'quiet_line',state:'muted',style:'outline',text:'Optional'}]};
+    const {scene,structure}=await compileComposition(deck(row),c),e=id=>byId(scene,id),neutral='#E2E3E4',secondary='#53565A';
+    for(const id of ['quiet_box','no_replicas','quiet_line']){const box=e(id);assert.equal(box.fill,neutral,`${id} is the neutral panel`);assert.equal(box.stroke,undefined,`${id} has no outline`);}
+    // Muted words are secondary ink; a struck card's words stay readable, with no line through them.
+    assert.equal(e('quiet_box').color,secondary);assert.equal(e('quiet_box').strike,undefined);
+    const words=e('no_replicas_text');assert.equal(words.text,'Replicas');assert.equal(words.color,secondary);assert.equal(words.strike,undefined);
+    // The badge says "none here": a secondary-ink disc with an ×, grouped with the card and clear of its words.
+    const badge=e('no_replicas_state');assert.deepEqual([badge.shape,badge.text,badge.fill],['ellipse','×',secondary]);
+    assert.ok(badge.x>=words.x+words.width-.5,'the badge sits beside the words, not over them');
+    assert.ok(structure.groups.find(g=>g.id==='no_replicas_group').members.includes('no_replicas_state'));
+    // Every color is the brand's own: nothing is lightened for a brand that forbids tints.
+    if(c.design.slides.fills?.tints===false){const own=new Set(Object.values(c.design.colors));for(const x of scene.slides[0].elements)for(const k of ['fill','stroke','color'])if(x[k])assert.ok(own.has(x[k].toUpperCase()),`${x.id}.${k} ${x[k]}`);}
+  }
+  // On a neutral surface a quiet card takes the canvas color, so it still reads as a card.
+  const c=brand(),{scene}=await compileComposition(deck({type:'box',id:'grey_card',children:[{type:'box',id:'quiet_inner',state:'muted',text:'Standby'},{type:'box',id:'gone_inner',state:'struck',children:[{type:'text',id:'gone_words',text:'Replicas'}]}]}),c);
+  assert.equal(byId(scene,'grey_card').fill,'#E2E3E4');assert.equal(byId(scene,'quiet_inner').fill,'#FFFFFF');assert.equal(byId(scene,'gone_inner').fill,'#FFFFFF');
+  // What a struck card holds is muted, not crossed out; a struck text is still struck through.
+  assert.equal(byId(scene,'gone_words').strike,undefined);assert.equal(byId(scene,'gone_words').color,'#53565A');assert.ok(byId(scene,'gone_inner_state'));
+  const text=(await compileComposition(deck({type:'text',id:'old_claim',state:'struck',text:'Local HA proves regional recovery'}),c)).scene;
+  assert.equal(byId(text,'old_claim').strike,true);assert.equal(byId(text,'old_claim_state'),undefined);
+  // A struck box reserves its badge's IDs, as a failed box does.
+  assert.throws(()=>validateComposition(deck({type:'stack',direction:'row',children:[{type:'box',id:'gone_box',state:'struck',text:'x'},{type:'box',id:'gone_box_state',text:'y'}]}),c),/repeated ID: gone_box_state/);
+  assert.throws(()=>validateComposition(deck({type:'stack',direction:'row',children:[{type:'box',id:'gone_box',state:'struck',text:'x'},{type:'box',id:'gone_box_text',text:'y'}]}),c),/repeated ID: gone_box_text/);
 });
 
 test('a brand that forbids tints gets a neutral card with a strip of the meaning color instead',async()=>{

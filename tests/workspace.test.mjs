@@ -31,6 +31,10 @@ test('studio supports object edits and rejects cross-origin, out-of-bounds and s
   assert.equal((await post(request)).status,200);assert.equal((await post(request)).status,400);
   assert.equal((await fetch(base+'/edit',{method:'POST',headers:{Origin:'https://untrusted.invalid','Content-Type':'application/json'},body:'{}'})).status,403);
   assert.equal((await fetch(origin+'/state')).status,404);
+  // Edited words take code spans in backticks, as an author writes them, and lose them when the backticks go.
+  const words=async text=>{const current=await(await fetch(base+'/state')).json();assert.equal((await post({id:'story_title',fields:{text},expectedDigest:current.current.sceneDigest})).status,200);return (await(await fetch(base+'/state')).json()).scene.slides[0].elements.find(e=>e.id==='story_title');};
+  const coded=await words('Set `highAvailability` first');assert.equal(coded.text,'Set highAvailability first');assert.deepEqual(coded.code,[[4,20]]);
+  assert.equal((await words('Set high availability first')).code,undefined);
 });
 test('shared installer links three harnesses to one verified version without replacing unrelated files',async t=>{
   const dir=await temporary(t),home=join(dir,'home'),shared=join(dir,'shared');const plan=await install({home,shared,dryRun:true});assert.equal(plan.targets.length,3);

@@ -3,8 +3,31 @@ import { digest, escape } from './common.mjs';
 
 export const defaultTheme = Object.freeze({
   font: 'Arial', background: '#FFFFFF', text: '#202124', accent: '#2867B2', muted: '#F0F2F5',
-  titleSize: 32, bodySize: 20,
+  titleSize: 32, bodySize: 20, codeFont: 'Courier New',
 });
+// Inline code (configuration fields, commands, API and file names) is set in a monospace family. A brand names its own
+// in a code type role; without one, files use Courier New, the monospace every target editor has, and HTML pages fall
+// back through Menlo and Consolas first.
+export const codeFallback = Object.freeze(['Menlo','Consolas','Courier New']);
+// Author text marks code with backticks: "High availability (`highAvailability`)". A lone backtick stays a backtick.
+export function codeSpans(raw) {
+  raw=String(raw);let text='',last=0;const code=[];
+  for (const m of raw.matchAll(/`([^`\n]+)`/g)) { text+=raw.slice(last,m.index); code.push([text.length,text.length+m[1].length]); text+=m[1]; last=m.index+m[0].length; }
+  return {text:text+raw.slice(last),code};
+}
+// The author form again, for editing: the visible words with their code spans in backticks.
+export function withCodeTicks(e) {
+  if (!Array.isArray(e?.code)||!e.code.length) return e?.text??'';
+  let out='',at=0;for (const [a,b] of e.code) { out+=e.text.slice(at,a)+'`'+e.text.slice(a,b)+'`'; at=b; }
+  return out+e.text.slice(at);
+}
+// The words of a text as runs: [{text,code}], in order, for writers that set code in its own font.
+export function textRuns(e) {
+  const runs=[];let at=0;
+  for (const [a,b] of e.code??[]) { if (a>at) runs.push({text:e.text.slice(at,a),code:false}); runs.push({text:e.text.slice(a,b),code:true}); at=b; }
+  if (at<e.text.length) runs.push({text:e.text.slice(at),code:false});
+  return runs;
+}
 const idPattern = /^[a-zA-Z_][a-zA-Z0-9_-]{4,49}$/;
 const types = new Set(['text','shape','line','image','table','chart']);
 // Native preset shapes every emitter can draw: [PowerPoint preset, Google Slides shape type, CSS preview radius,
@@ -17,7 +40,7 @@ export function themeFor(scene) {
   const t = {...defaultTheme, ...scene.theme};
   if (scene.theme && Object.keys(scene.theme).some(k=>!Object.hasOwn(defaultTheme,k))) throw new Error('Unsupported theme field');
   nonempty(t.font,'font');
-  if (!/^[\p{L}\p{N} _-]{1,100}$/u.test(t.font)) throw new Error('Use a font family name, not CSS');
+  for (const key of ['font','codeFont']) if (typeof t[key]!=='string' || !/^[\p{L}\p{N} _-]{1,100}$/u.test(t[key])) throw new Error('Use a font family name, not CSS');
   for (const key of ['background','text','accent','muted']) if (!/^#[0-9a-f]{6}$/i.test(t[key])) throw new Error(`Invalid theme ${key}`);
   for (const key of ['titleSize','bodySize']) positive(t[key],key,120);
   return t;
@@ -47,7 +70,7 @@ export function validateScene(scene) {
     if (!Array.isArray(s.elements) || !s.elements.length || s.elements.length>200) throw new Error('Provide 1–200 slide elements');
     if (s.notes !== undefined && typeof s.notes !== 'string') throw new Error('Notes must be text');
     for (const e of s.elements) {
-      const fields={text:['href','text','role','fontSize','color','fill','bold','align','strike'],shape:['href','shape','text','role','fontSize','color','fill','bold','align','stroke','strokeWeight','dash','strike'],line:['color','weight','arrow','flipH','flipV','route','lead','turns','dash'],image:['src','alt','fit'],table:['rows','fontSize','color','headerFill','headerColor','bodyFill','padding','columnWidths','rowHeights'],chart:['chartType','series','source','sheetsChart','colors','labelSize','title','units']};
+      const fields={text:['href','text','role','fontSize','color','fill','bold','align','strike','code'],shape:['href','shape','text','role','fontSize','color','fill','bold','align','stroke','strokeWeight','dash','strike','code'],line:['color','weight','arrow','flipH','flipV','route','lead','turns','dash'],image:['src','alt','fit'],table:['rows','fontSize','color','headerFill','headerColor','bodyFill','padding','columnWidths','rowHeights'],chart:['chartType','series','source','sheetsChart','colors','labelSize','title','units']};
       if (!types.has(e.type) || Object.keys(e).some(k=>!['id','type','x','y','width','height',...(fields[e.type]??[])].includes(k))) throw new Error(`Unsupported element field/type in ${e.id}; do not silently drop it`);
       claim(e.id);
       if (!types.has(e.type)) throw new Error(`Unsupported element type: ${e.type}; do not flatten it`);
@@ -68,6 +91,8 @@ export function validateScene(scene) {
       if(e.href!==undefined){let url;try{url=new URL(e.href);}catch{throw new Error('Use an absolute HTTP(S) hyperlink');}if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw new Error('Use an HTTP(S) hyperlink without credentials');}
       if (e.align !== undefined && !['left','center','right'].includes(e.align)) throw new Error('Invalid text alignment');
       if (e.type==='text') nonempty(e.text,'text');
+      // code lists the [start,end) character ranges of the text set in the code font, in order and apart.
+      if (e.code!==undefined) { if (typeof e.text!=='string' || !Array.isArray(e.code) || !e.code.length || e.code.some((r,i)=>!Array.isArray(r) || r.length!==2 || !r.every(Number.isInteger) || r[0]<(i?e.code[i-1][1]:0) || r[1]<=r[0] || r[1]>e.text.length)) throw new Error(`${e.id}: code is a list of [start,end) ranges within its text, in order`); }
       if (e.type==='shape') {if (!Object.hasOwn(shapeKinds,e.shape??'rect')) throw new Error(`Use one of: ${Object.keys(shapeKinds).join(', ')}`);if(e.text!==undefined)nonempty(e.text,'shape text');}
       if (e.type==='image') { nonempty(e.src,'image source'); nonempty(e.alt,'image alt text'); if (!['contain','cover'].includes(e.fit??'contain')) throw new Error('Invalid image fit'); }
       for(const key of ['headerFill','headerColor','bodyFill'])if(e[key]!==undefined)color(e[key],theme);
@@ -108,13 +133,16 @@ export function sceneFindings(scene) {
 }
 export function renderSceneHtml(scene) {
   validateScene(scene); const t=themeFor(scene);
+  // Code runs sit in one span with the words around them, so the flex box wraps them as one line of text.
+  const mono=[...new Set([t.codeFont,...codeFallback])].map(f=>`'${f}'`).join(',')+',monospace';
+  const words=e=>e.code?`<span>${textRuns(e).map(r=>r.code?`<code style="font-family:${mono};font-size:inherit">${escape(r.text)}</code>`:escape(r.text)).join('')}</span>`:escape(e.text??'');
   const view=e=>{
     const box=`left:${e.x}px;top:${e.y}px;width:${e.width}px;height:${e.height}px`, textStyle=`color:${color(e.color??'text',t)};font-size:${e.fontSize??(e.role==='title'?t.titleSize:t.bodySize)}px;font-weight:${e.bold?700:400};text-align:${e.align??'left'}${e.strike?';text-decoration:line-through':''}`;
     if (e.type==='image') return `<img class="object" data-object-id="${e.id}" alt="${escape(e.alt)}" src="${escape(e.src)}" style="${box};object-fit:${e.fit??'contain'}">`;
     if (e.type==='line') return `<svg class="object" data-object-id="${e.id}" style="${box}" viewBox="0 0 ${e.width} ${e.height}"><defs><marker id="a-${e.id}" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6Z" fill="${color(e.color??'accent',t)}"/></marker></defs><line x1="${e.flipH?e.width:0}" y1="${e.flipV?e.height:0}" x2="${e.flipH?0:e.width}" y2="${e.flipV?0:e.height}" stroke="${color(e.color??'accent',t)}" stroke-width="${e.weight??2}"${e.dash?` stroke-dasharray="${e.dash==='dot'?'2 4':'8 5'}"`:''} ${e.arrow?`marker-end="url(#a-${e.id})"`:''}/></svg>`;
     if (e.type==='table') return `<table class="object" data-object-id="${e.id}" style="${box};${textStyle}">${(e.columnWidths??e.rows[0].map(()=>e.width/e.rows[0].length)).map(w=>`<col style="width:${w}px">`).join('')}${e.rows.map((row,i)=>`<tr>${row.map(c=>`<${i?'td':'th'} style="padding:${e.padding??3.6}px;color:${color(i?(e.color??'text'):(e.headerColor??e.color??'text'),t)};background:${color(i?(e.bodyFill??'background'):(e.headerFill??'muted'),t)}">${escape(c)}</${i?'td':'th'}>`).join('')}</tr>`).join('')}</table>`;
     if (e.type==='chart') return `<div class="object chart" data-object-id="${e.id}" style="${box}"><strong>${escape(e.chartType)} chart${e.title?`: ${escape(e.title)}`:''}${e.units?` (${escape(e.units)})`:''} · native PowerPoint data</strong>${e.series.map(s=>`<p>${escape(s.name)}: ${s.values.map((v,i)=>`${escape(s.labels[i])} ${v}`).join(', ')}</p>`).join('')}<small>Chart geometry needs target-rendered review</small></div>`;
-    return `<div class="object text" data-object-id="${e.id}" style="${box};${textStyle};background:${e.fill?color(e.fill,t):'transparent'};${e.stroke?`border:${e.strokeWeight??1.5}px ${e.dash==='dot'?'dotted':e.dash?'dashed':'solid'} ${color(e.stroke,t)};`:''}border-radius:${shapeKinds[e.shape??'rect'][2]}">${escape(e.text??'')}</div>`;
+    return `<div class="object text" data-object-id="${e.id}" style="${box};${textStyle};background:${e.fill?color(e.fill,t):'transparent'};${e.stroke?`border:${e.strokeWeight??1.5}px ${e.dash==='dot'?'dotted':e.dash?'dashed':'solid'} ${color(e.stroke,t)};`:''}border-radius:${shapeKinds[e.shape??'rect'][2]}">${words(e)}</div>`;
   };
   return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escape(scene.title)}</title><style>body{background:#eee;margin:20px;font-family:${JSON.stringify(t.font)},sans-serif}section{position:relative;width:${scene.canvas.width}px;height:${scene.canvas.height}px;background:${t.background};margin:20px auto;overflow:hidden;box-shadow:0 2px 8px #0002}.object{position:absolute;box-sizing:border-box}.text{white-space:pre-wrap;display:flex;align-items:center;padding:3.6px;overflow:hidden}table{border-collapse:collapse;table-layout:fixed}td,th{padding:3.6px;border:1px solid #ccc}th{background:${t.muted}}.chart{border:1px dashed #999;padding:12px;overflow:auto}</style><p>Editable scene preview. Native editor metrics, charts and template artwork require final rendered review.</p>${scene.slides.map(s=>`<section data-slide-id="${s.id}" aria-label="${escape(s.title)}">${s.elements.map(view).join('')}</section>`).join('')}</html>`;
 }
@@ -124,11 +152,11 @@ export function coverage(scene, required=[]) {
   return {sceneDigest:digest(scene),covered:[...refs],missing,complete:!missing.length};
 }
 export const contract = `Scene v2 (AI-owned intermediate; users may supply a brief or source documents).
-{version:2,title,mode:new|redesign|rework,canvas:{width,height},theme?:{font,background,text,accent,muted,titleSize,bodySize},slides:[...]}
+{version:2,title,mode:new|redesign|rework,canvas:{width,height},theme?:{font,codeFont,background,text,accent,muted,titleSize,bodySize},slides:[...]}
 Coordinates are points. Stable IDs match [a-zA-Z_][a-zA-Z0-9_-]{4,49} and are unique across the scene.
 Slide: {id,title,sources:[evidence IDs],elements:[...],intent?:{takeaway,relationship,rationale,evidence,audienceQuestion,alternative:{treatment,reason},visual:{family,purpose,route?}},notes?:string,layoutId?:native Google layout ID,replace?:[existing object IDs],protect?:[existing object IDs]}.
 Element: {id,type:text|shape|line|table|image|chart,x,y,width,height,...}.
-Text/shape: text, href?:absolute HTTP(S) hyperlink, role?:title|body, fontSize, color/fill (hex or theme key), bold, strike?:boolean, align:left|center|right. Shape: rect|ellipse|roundRect|diamond|hexagon|chevron|can; stroke?:outline color, strokeWeight?:points, dash?:dash|dot.
+Text/shape: text, href?:absolute HTTP(S) hyperlink, role?:title|body, fontSize, color/fill (hex or theme key), bold, strike?:boolean, code?:[[start,end]] character ranges set in theme.codeFont (default Courier New), align:left|center|right. Shape: rect|ellipse|roundRect|diamond|hexagon|chevron|can; stroke?:outline color, strokeWeight?:points, dash?:dash|dot.
 Line: color, weight, arrow, dash?:dash|dot, flipH/flipV, route?:elbow|curve with lead?:horizontal|vertical and turns?:1 for a single corner. Table: rows (rectangular strings), fontSize, headerFill/headerColor/bodyFill, padding, columnWidths (points summing to width).
 Image: src (local path for PPTX, public HTTPS URL for Google), alt, fit:contain|cover.
 Chart: chartType:bar|line|pie, series:[{name,labels:[...],values:[...]}], source, colors?:[hex], labelSize?:points, title?, units?:value-axis title (not on a pie). Native editable chart data in PPTX; Google requires an existing linked Sheets chart via sheetsChart:{spreadsheetId,chartId}.
