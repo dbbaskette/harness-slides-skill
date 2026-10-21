@@ -37,6 +37,10 @@ test('backticks mark code spans; the visible words lose them and keep the ranges
   // A lone backtick is a backtick; a span does not cross a line.
   assert.deepEqual(codeSpans('Press ` to open').code,[]);assert.deepEqual(codeSpans('`a\nb`').code,[]);
   const words=codeSpans(lead);assert.equal(withCodeTicks(words),lead);
+  // \` is a literal backtick, inside or outside a span; the author form escapes literal backticks so it reads back the same.
+  assert.deepEqual(codeSpans('Press \\` then `a\\`b` and \\`x\\`'),{text:'Press ` then a`b and `x`',code:[[13,16]]});
+  for(const raw of ['Press \\` then `a\\`b`','Set `highAvailability` and \\`no\\`'])assert.equal(withCodeTicks(codeSpans(raw)),raw);
+  assert.equal(withCodeTicks({text:'Press `q` to quit'}),'Press \\`q\\` to quit');
   assert.deepEqual(textRuns(words).map(r=>[r.text,r.code]),[['High availability (',false],['highAvailability',true],[') is empty or omitted',false]]);
 });
 
@@ -47,6 +51,8 @@ test('a composition sets code spans in the brand code font, or in Courier New wh
   assert.equal(e('ha_text').text,'High availability (highAvailability) is empty or omitted');assert.deepEqual(e('ha_text').code,[[19,35]]);
   assert.deepEqual(e('ha_box').code,[[4,20],[24,28]]);assert.deepEqual(e('slide_one_caveat').code,[[0,22]]);assert.deepEqual(e('slide_one_subtitle').code,[[5,21]]);
   assert.equal(e('slide_one_source').code,undefined);
+  const cover=await compileComposition({version:1,title:'Code spans',slides:[{id:'cover_one',title:'Operating Tanzu for Postgres',sources:['s1'],layout:'Cover',subtitle:'Field guide',detail:'Covers `highAvailability`'}]},brand());
+  assert.deepEqual(cover.scene.slides[0].elements.find(x=>x.id==='cover_one_detail').code,[[7,23]]);
   assert.equal(plain.scene.theme.codeFont,'Courier New');assert.match(plain.report.codeMeasurement,/Courier New/);
   const branded=await compileComposition(deck(canvas),brand({code:{fontFamily:'Roboto Mono'}}));
   assert.equal(branded.scene.theme.codeFont,'Roboto Mono');assert.match(await composeSizes(brand({code:{fontFamily:'Roboto Mono'}})),/Code spans .* set in Roboto Mono, the brand's code type/);
@@ -68,6 +74,7 @@ test('code spans are refused where they cannot be drawn, and the code role is in
   for(const bad of [{fontFamily:'Mono; color:red'},{size:12},{fontFamily:'Roboto Mono',colorRole:'missing'},{fontFamily:'Roboto Mono',weight:400}])assert.throws(()=>validateBrandContract(brand({code:bad})),/Invalid brand typography: code/);
   assert.match(composeContract,/Code spans: configuration fields, commands, API and file names go in backticks/);
   assert.match(composeContract,/High availability \(`highAvailability`\) is empty or omitted/);
+  assert.match(composeContract,/Texts, boxes, subtitle, detail, caveat and source take them/);
 });
 
 test('a code span is measured in the code font, so a long name that fits as prose may not fit as code',async t=>{
@@ -111,6 +118,8 @@ test('every writer draws code as runs in one text box: HTML, Google Slides, pptx
   assert.match(xml,/<a:t>High availability \(<\/a:t>/);
   // A line break ends a paragraph; the code on the next line stays in that line's paragraph with its words.
   const paragraphs=[...xml.matchAll(/<a:p>(.*?)<\/a:p>/gs)].map(m=>[...m[1].matchAll(/<a:t>([^<]*)<\/a:t>/g)].map(x=>x[1]));
+  // A paragraph has one set of paragraph properties, first, however many runs it holds (PptxGenJS writes one per run).
+  for(const m of xml.matchAll(/<a:p>(.*?)<\/a:p>/gs)){const count=(m[1].match(/<a:pPr\b/g)??[]).length;assert.ok(count<=1,`${count} pPr in ${m[1].slice(0,120)}`);if(count)assert.match(m[1],/^<a:pPr\b/);}
   assert.ok(paragraphs.some(p=>p.join('|')==='Line one'));assert.ok(paragraphs.some(p=>p.join('|')==='with |field_two| here'),JSON.stringify(paragraphs));
   // Native: runs in one paragraph per line; the code run names Courier New as fixed pitch, so a missing font stays monospace.
   const nb=await nativeBrand(dir),built=await compileComposition(deck(canvas),nb),file=join(dir,'native.pptx');
@@ -126,6 +135,14 @@ test('the quality audit measures code in the code font, and a studio-style edit 
   const {scene}=await compileComposition(deck({type:'text',id:'ha_text',text:lead}),brand());
   const report=await auditSceneQuality(scene),measured=report.measurements.find(m=>m.object==='ha_text');
   if(measured){assert.match(measured.model,/text and code fonts/);assert.ok(report.fontEvidence.some(f=>/^code /.test(f.weight)));}
+  // A fonts record may name the code font's files too, for a brand monospace outside the system font folders.
+  // (The stand-in records what was asked for and resolves the installed font, so it runs with or without the files.)
+  const asked=[],resolve=async(family,{bold,file})=>{asked.push([family,bold,file]);return resolveFont(family,{bold});};
+  await auditSceneQuality(scene,{fonts:{code:{path:'/fonts/Mono-Regular.ttf'},codeBold:{path:'/fonts/Mono-Bold.ttf'}},resolve});
+  if((await resolveFont('Arial')).font)assert.ok(asked.some(([family,bold,file])=>family==='Courier New'&&!bold&&file==='/fonts/Mono-Regular.ttf'),JSON.stringify(asked));
+  await assert.rejects(()=>auditSceneQuality(scene,{fonts:{mono:{path:'/x.ttf'}}}),/regular, bold, code and codeBold/);
+  const compiled=await compileComposition(deck({type:'text',id:'ha_text',text:lead}),brand(),{fonts:{code:{path:'/no/such/Mono.ttf'}}}).catch(e=>e);
+  assert.ok(compiled instanceof Error,'a named code font file that cannot be read is an error, not a silent estimate');
   assert.equal(withCodeTicks(byId(scene,'ha_text')),lead);
 });
 
@@ -138,6 +155,9 @@ test('the outline check asks for code spans around names that read as code, and 
   // Marked names, product names, versions, URLs and ordinary slashes are fine.
   assert.equal((await codes(slide([{text:lead},{text:'vSphere, macOS, iPhone, JavaScript, PostgreSQL 18, Node.js, TCP/IP, and/or, 24/7'},{text:'See https://docs.example.com/a_b/c/d.yaml'}]))).length,0);
   assert.deepEqual(unmarkedCode('Use ~/.kube/config or ./bin/run'),['~/.kube/config','./bin/run']);
+  // A snake_case segment starts with a letter: architectures, standards and years are not code.
+  assert.deepEqual(unmarkedCode('x86_64 hosts, ISO_27001, COVID_19 and max_wal_size'),['max_wal_size']);
+  assert.deepEqual(unmarkedCode('Escaped \\`highAvailability\\` is still unmarked'),['highAvailability']);
   // A title names things in words: an unmarked name is a finding, and a code span is refused.
   const titled=await codes({...slide([{text:'x'}]),slides:[{...slide([{text:'x'}]).slides[0],title:'Set highAvailability first'}]});
   assert.match(titled[0].detail,/A title is a plain-English claim/);

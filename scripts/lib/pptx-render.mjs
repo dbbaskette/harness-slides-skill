@@ -36,7 +36,9 @@ export async function renderPptxScene(scene,output,{base=process.cwd(),brand}={}
       }
     }
   }
-  const bytes=await pptx.write({outputType:'nodebuffer'});
+  let bytes=await pptx.write({outputType:'nodebuffer'});
+  // Runs of text with code each get their own paragraph properties from PptxGenJS; a paragraph may hold only one.
+  if(scene.slides.some(s=>s.elements.some(e=>e.code)))bytes=await oneParagraphProperties(bytes);
   if(brand){
     const {checkBrandSources,validateBrandContract}=await import('./brand-contract.mjs');
     validateBrandContract(brand,{medium:'slides'});await checkBrandSources(brand);
@@ -52,6 +54,17 @@ export async function renderPptxScene(scene,output,{base=process.cwd(),brand}={}
   // This call created the file, so one that cannot be read back is removed rather than left under the output name.
   const inventory=await pptxTool('inspect',[output]).catch(async error=>{await rm(output,{force:true}).catch(()=>{});throw error;});
   return {output,slides:inventory.slides.length,sha256:inventory.sha256,editable:true,status:'unreviewed draft',inventory};
+}
+
+async function oneParagraphProperties(bytes) {
+  const {mkdtemp,rm}=await import('node:fs/promises'),{tmpdir}=await import('node:os'),{join}=await import('node:path'),{fileURLToPath}=await import('node:url'),{execFile}=await import('node:child_process'),{promisify}=await import('node:util');
+  const dir=await mkdtemp(join(tmpdir(),'harness-paragraphs-'));
+  try{
+    const from=join(dir,'runs.pptx'),to=join(dir,'fixed.pptx');await writeFile(from,bytes,{flag:'wx',mode:0o600});
+    try{await promisify(execFile)('python3',['-B',fileURLToPath(new URL('./pptx-paragraphs.py',import.meta.url)),from,to],{timeout:60000,maxBuffer:4*1024*1024});}
+    catch(error){throw new Error(error.code==='ENOENT'?'Python 3.9+ is required. Run harness-slides doctor.':error.stderr?.trim()||error.message);}
+    return await readFile(to);
+  }finally{await rm(dir,{recursive:true,force:true});}
 }
 
 // Reuse native slide XML, charts and related parts from explicit source templates.

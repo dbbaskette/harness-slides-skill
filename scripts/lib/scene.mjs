@@ -9,17 +9,28 @@ export const defaultTheme = Object.freeze({
 // in a code type role; without one, files use Courier New, the monospace every target editor has, and HTML pages fall
 // back through Menlo and Consolas first.
 export const codeFallback = Object.freeze(['Menlo','Consolas','Courier New']);
-// Author text marks code with backticks: "High availability (`highAvailability`)". A lone backtick stays a backtick.
+// Author text marks code with backticks: "High availability (`highAvailability`)". A pair of backticks on one line
+// is a code span; \` is a literal backtick, inside a span or out, and a lone backtick stays a backtick.
 export function codeSpans(raw) {
-  raw=String(raw);let text='',last=0;const code=[];
-  for (const m of raw.matchAll(/`([^`\n]+)`/g)) { text+=raw.slice(last,m.index); code.push([text.length,text.length+m[1].length]); text+=m[1]; last=m.index+m[0].length; }
-  return {text:text+raw.slice(last),code};
+  raw=String(raw);const items=[];
+  for (let i=0;i<raw.length;i++) {
+    if (raw[i]==='\\'&&raw[i+1]==='`') { items.push({c:'`'}); i++; }
+    else items.push(raw[i]==='`'?{tick:true}:{c:raw[i]});
+  }
+  let text='';const code=[];
+  for (let i=0;i<items.length;i++) {
+    if (!items[i].tick) { text+=items[i].c; continue; }
+    let j=i+1;while (j<items.length&&!items[j].tick&&items[j].c!=='\n') j++;
+    if (j<items.length&&items[j].tick&&j>i+1) { const inner=items.slice(i+1,j).map(x=>x.c).join(''); code.push([text.length,text.length+inner.length]); text+=inner; i=j; }
+    else text+='`';
+  }
+  return {text,code};
 }
-// The author form again, for editing: the visible words with their code spans in backticks.
+// The author form again, for editing: the visible words with their code spans in backticks and literal backticks escaped.
 export function withCodeTicks(e) {
-  if (!Array.isArray(e?.code)||!e.code.length) return e?.text??'';
-  let out='',at=0;for (const [a,b] of e.code) { out+=e.text.slice(at,a)+'`'+e.text.slice(a,b)+'`'; at=b; }
-  return out+e.text.slice(at);
+  const text=e?.text??'',esc=v=>v.replaceAll('`','\\`');let out='',at=0;
+  for (const [a,b] of e?.code??[]) { out+=esc(text.slice(at,a))+'`'+esc(text.slice(a,b))+'`'; at=b; }
+  return out+esc(text.slice(at));
 }
 // The words of a text as runs: [{text,code}], in order, for writers that set code in its own font.
 export function textRuns(e) {

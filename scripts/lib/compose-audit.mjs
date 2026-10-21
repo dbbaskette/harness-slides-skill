@@ -1,5 +1,6 @@
 // Audits that read a compiled deck against what was approved and what a slide can honestly show.
 // They find what a composer should repair; none of them approves a slide.
+import {codeSpans} from './scene.mjs';
 
 const words=text=>String(text??'').toLowerCase().normalize('NFKD').replace(/[^\p{L}\p{N}]+/gu,' ').trim();
 const contains=(whole,part)=>part&&` ${whole} `.includes(` ${part} `);
@@ -57,11 +58,12 @@ const faked=[/[─-╿]/u,/(?:^|\s)[-=]{1,3}\s?>/,/-\s+-\s*>/,/<\s?[-=]{1,3}(?:\
 export const asciiArt=text=>typeof text==='string'&&text.trim()!==''&&!/^[→←↑↓]+$/u.test(text.trim())&&faked.some(pattern=>pattern.test(text));
 
 // Words that read as code but are not marked as code spans: camelCase (two lowercase letters, then a capital and
-// lowercase, so highAvailability counts and vSphere, macOS or iPhone do not), snake_case and SCREAMING_CASE, paths of two
+// lowercase, so highAvailability counts and vSphere, macOS or iPhone do not), snake_case and SCREAMING_CASE whose parts start with a letter (so x86_64 and ISO_27001 do not count), paths of two
 // or more parts (/etc/postgresql, ~/.kube/config) and configuration file names (values.yaml). Code spans and URLs are left out.
-const codeLike=[/\b[a-z]{2,}[A-Z][a-z0-9]+(?:[A-Z][a-z0-9]*)*\b/g,/\b[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)+\b/g,/(?:^|[\s("'])((?:~|\.{1,2})?\/[\w.-]+(?:\/[\w.-]+)+\/?)/g,/\b[\w-]+\.(?:ya?ml|json|conf|cfg|ini|toml|xml|sh|py|sql|properties|env|tf)\b/g];
+const codeLike=[/\b[a-z]{2,}[A-Z][a-z0-9]+(?:[A-Z][a-z0-9]*)*\b/g,/\b[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z][A-Za-z0-9]*)+\b/g,/(?:^|[\s("'])((?:~|\.{1,2})?\/[\w.-]+(?:\/[\w.-]+)+\/?)/g,/\b[\w-]+\.(?:ya?ml|json|conf|cfg|ini|toml|xml|sh|py|sql|properties|env|tf)\b/g];
 export function unmarkedCode(text) {
-  const plain=String(text??'').replace(/`[^`\n]+`/g,' ').replace(/https?:\/\/\S+/g,' '),found=[];
+  const spans=codeSpans(text??'');let rest='',at=0;for(const [a,b] of spans.code){rest+=spans.text.slice(at,a)+' ';at=b;}
+  const plain=(rest+spans.text.slice(at)).replace(/https?:\/\/\S+/g,' '),found=[];
   for(const pattern of codeLike)for(const m of plain.matchAll(pattern)){const token=(m[1]??m[0]).trim();if(!found.includes(token))found.push(token);}
   return found;
 }

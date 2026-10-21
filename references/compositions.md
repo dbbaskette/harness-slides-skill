@@ -141,6 +141,8 @@ item is:
 | `struck` | Absent or ruled out, when the absence is the point: no replicas, a rejected option | A card: the neutral panel, readable words in secondary ink and a quiet × badge. A text: struck through |
 | `failed` | Something that broke: a lost zone, a failed check | A box only: a status-colored dashed edge and an × badge |
 
+A struck or failed box is a rectangle or `roundRect`, so its badge sits inside it.
+
 Leave a thing out when its absence says nothing; strike it only when the
 reader needs to see that it is missing. What a box holds is muted with it. A
 muted or struck card is never a bare outline, and a brand that forbids tints
@@ -177,8 +179,10 @@ backticks: `` `highAvailability` ``, `` `kubectl get pods` ``,
 in the brand's code font (`compose contract --brand` names it; Courier New when
 the brand names none) at the size of its words, as runs in the same text box,
 and is measured in that font, so a long name can be refused as wider than its
-line. Texts, boxes, `subtitle`, `caveat` and `source` take code spans. Titles,
-edge labels, badges, tables and charts do not: a title is a plain-English claim.
+line. Texts, boxes, `subtitle`, `detail`, `caveat` and `source` take code
+spans. Titles, edge labels, badges, tables and charts do not: a title is a
+plain-English claim. A pair of backticks on one line is always a code span;
+write `` \` `` for a literal backtick.
 
 ## Slide furniture
 

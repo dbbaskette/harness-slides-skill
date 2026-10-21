@@ -26,7 +26,7 @@ const round=n=>Math.round(n*100)/100;
 const fail=(where,message)=>{throw new Error(`${where}: ${message}`);};
 const str=v=>typeof v==='string'&&v.trim()&&v.length<=20000;
 // Code spans are drawn in texts, boxes and the slide's furniture; elsewhere the backticks would be drawn as they are.
-const ticked=v=>typeof v==='string'&&codeSpans(v).code.length>0,plainHere='write it plainly here; code spans (`name`) are set in texts, boxes, the subtitle, caveat and source';
+const ticked=v=>typeof v==='string'&&codeSpans(v).code.length>0,plainHere='write it plainly here; code spans (`name`) are set in texts, boxes, the subtitle, detail, caveat and source';
 // Whether two nodes are set side by side (true) or one above the other (false) by the container that holds them both;
 // undefined where that container places its children freely.
 function axisBetween(canvas,from,to) {
@@ -99,7 +99,7 @@ Any node may set weight (relative share, above 0 up to 10, default 1). A node ne
 An icon keeps the library's own colors unless you set color (a brand color role) or style: solid is a light icon on a colored disc, outline a colored icon in a ring, plain a colored icon with no container, drawn a little larger. On a filled card use plain or outline with a color that reads on the fill.
 A box is solid by default. style tint is a light surface of its fill (the neutral when it sets none): the supporting card, filled, in the color of what it stands for; a brand whose contract sets fills.tints false draws it as a neutral bar card instead, so use bar there. style bar draws a neutral card with a strip of color down the left edge. style outline draws it as a line on whatever is behind it; keep it for what is secondary, empty or a boundary. The line or strip is the focal color on the slide's focal node, the box's fill where it sets one, and secondary ink otherwise; a tint on the focal node gets a focal edge.
 state on a box or text: muted is present but secondary (the neutral panel, secondary ink); struck is absent or ruled out (a box keeps its words readable and gets a quiet × badge; a text is struck through); failed (a box) broke, with a status-colored dashed edge and an × badge. What a box holds is muted with it. Leave a thing out unless its absence is the point. Never draw lines across words to cross something out.
-Code spans: configuration fields, commands, API and file names go in backticks, such as \`highAvailability\`, and are set in the brand's code font. Lead with plain English the first time: "High availability (\`highAvailability\`) is empty or omitted". Texts, boxes, subtitle, caveat and source take them; titles, edge labels, badges, tables and charts do not.
+Code spans: configuration fields, commands, API and file names go in backticks, such as \`highAvailability\`, and are set in the brand's code font. Lead with plain English the first time: "High availability (\`highAvailability\`) is empty or omitted". Texts, boxes, subtitle, detail, caveat and source take them; titles, edge labels, badges, tables and charts do not. \\\` is a literal backtick; otherwise a pair of backticks on one line is a code span.
 metric is a number with its label beneath, in the brand's metric size: {type:metric,id,value:"42%",label:"of teams"}. badge is a small numbered or lettered disc for steps and references. rule is a thin line between the parts of a column or a row.
 A card's content sits inside its shape's text area, so a diamond, ellipse or hexagon holds much less than a rectangle of the same size. Containers may set group:true and an id.
 gap: none|tight|normal|wide. align: start|center|end|stretch. In a row, stretch (the default) makes every child fill the row's height; start, center or end gives each child the height its content needs. On a text, or a box with text, align sets the text left, centered or right. In a row an icon takes its own width unless you give it a weight. On a box with children, align (start|center|end) places its content vertically. fill/color: a brand color role name. textRole: a brand typography role name.
@@ -216,6 +216,8 @@ export function validateComposition(comp,contract,{collect}={}) {
       if(n.state!==undefined) {
         if(!states.includes(n.state))fail(where,'state is normal, muted, struck or failed');
         if(n.state==='failed'&&n.type!=='box')fail(where,'failed marks a box; put the words in a box, or use struck');
+        // The × badge sits in a rectangle's corner; on another shape it would fall outside the outline or over the words.
+        if(n.type==='box'&&['failed','struck'].includes(n.state)&&!['rect','roundRect'].includes(n.shape??'rect'))fail(where,`a struck or failed box is a rectangle or roundRect, so its × badge sits inside it; remove shape ${n.shape}, or mute it instead`);
         if(n.id===focalId&&n.state!=='normal')fail(where,'the focal node is the point of the slide; it cannot be muted, struck or failed');
         // A failed or struck box carries an × badge, grouped with it.
         if(n.type==='box'&&['failed','struck'].includes(n.state)){claim(`${n.id}_state`,where);if(n.children===undefined&&n.style!=='bar'){claim(`${n.id}_group`,where);claim(`${n.id}_text`,where);}}
@@ -332,10 +334,10 @@ export function validateComposition(comp,contract,{collect}={}) {
 export const codeFamily=contract=>{const r=contract?.design?.slides?.typography?.code;return r?.fontFamily??defaultTheme.codeFont;};
 async function measurer(contract,options) {
   const family=contract.design.fontFamily,fonts={},codeFonts={};
-  if(options!==undefined&&(!options||typeof options!=='object'||Array.isArray(options)||Object.entries(options).some(([k,v])=>!['regular','bold'].includes(k)||!v?.path||Object.keys(v).some(f=>!['path','sha256'].includes(f)))))throw new Error('Fonts use regular/bold {path,sha256?} records');
+  if(options!==undefined&&(!options||typeof options!=='object'||Array.isArray(options)||Object.entries(options).some(([k,v])=>!['regular','bold','code','codeBold'].includes(k)||!v?.path||Object.keys(v).some(f=>!['path','sha256'].includes(f)))))throw new Error('Fonts use regular, bold, code and codeBold {path,sha256?} records');
   for(const bold of [false,true]){const spec=options?.[bold?'bold':'regular'];fonts[bold]=(await resolveFont(family,{bold,file:spec?.path,expectedHash:spec?.sha256})).font;}
   // The code font is looked up only when some text has a code span; without it, code is estimated as monospace.
-  let looked=false;const code=async()=>{if(!looked){looked=true;for(const bold of [false,true])codeFonts[bold]=(await resolveFont(codeFamily(contract),{bold})).font;}};
+  let looked=false;const code=async()=>{if(!looked){looked=true;for(const bold of [false,true]){const spec=options?.[bold?'codeBold':'code'];codeFonts[bold]=(await resolveFont(codeFamily(contract),{bold,file:spec?.path,expectedHash:spec?.sha256})).font;}}};
   const exact=Boolean(fonts.false&&fonts.true);
   // Text is author text, with code spans in backticks, or {text,code} as a scene element holds it.
   const parse=value=>typeof value==='string'?codeSpans(value):{text:value.text,code:value.code??[]};

@@ -305,6 +305,9 @@ test('a muted or struck card is the neutral panel in secondary ink, never a bare
   // A struck box reserves its badge's IDs, as a failed box does.
   assert.throws(()=>validateComposition(deck({type:'stack',direction:'row',children:[{type:'box',id:'gone_box',state:'struck',text:'x'},{type:'box',id:'gone_box_state',text:'y'}]}),c),/repeated ID: gone_box_state/);
   assert.throws(()=>validateComposition(deck({type:'stack',direction:'row',children:[{type:'box',id:'gone_box',state:'struck',text:'x'},{type:'box',id:'gone_box_text',text:'y'}]}),c),/repeated ID: gone_box_text/);
+  // The badge sits in a rectangle's corner; on another shape it would fall outside the shape or over its words.
+  for(const shape of ['ellipse','diamond','hexagon','chevron','can'])for(const state of ['struck','failed'])assert.throws(()=>validateComposition(deck({type:'box',id:'odd_shape',shape,state,text:'x'}),c),/a struck or failed box is a rectangle or roundRect/);
+  await compileComposition(deck({type:'box',id:'round_gone',shape:'roundRect',state:'struck',text:'Replicas'}),c);
 });
 
 test('a brand that forbids tints gets a neutral card with a strip of the meaning color instead',async()=>{

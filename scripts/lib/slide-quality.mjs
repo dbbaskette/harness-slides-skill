@@ -16,11 +16,11 @@ export function validateDesignReport(report,scene,{initial=false}={}) {
   return report;
 }
 export async function auditSceneQuality(scene,{designReport,fonts,artifactDigest,policy=1,resolve=resolveFont}={}) {
-  validateScene(scene);if(fonts&&(!fonts||typeof fonts!=='object'||Array.isArray(fonts)||Object.keys(fonts).some(k=>!['regular','bold'].includes(k))))throw new Error('Fonts use regular/bold records');if(designReport)validateDesignReport(designReport,scene);
+  validateScene(scene);if(fonts&&(!fonts||typeof fonts!=='object'||Array.isArray(fonts)||Object.keys(fonts).some(k=>!['regular','bold','code','codeBold'].includes(k))))throw new Error('Fonts use regular, bold, code and codeBold records');if(designReport)validateDesignReport(designReport,scene);
   const theme=themeFor(scene),cache=new Map(),fontEvidence=[],measurements=[],findings=sceneFindings(scene),prompts=[];
   const fontFor=async bold=>{const key=bold?'bold':'regular';if(!cache.has(key)){const spec=fonts?.[key];if(spec&&(!spec.path||Object.keys(spec).some(k=>!['path','sha256'].includes(k))))throw new Error('Fonts use regular/bold {path,sha256?} records');const result=await resolve(theme.font,{bold,file:spec?.path,expectedHash:spec?.sha256});cache.set(key,result);fontEvidence.push({weight:key,...result.evidence});}return cache.get(key);};
   // Inline code is measured in the scene's code font; it is looked up once, only when some text has code.
-  const codeCache=new Map(),codeFor=async bold=>{const key=bold?'bold':'regular';if(!codeCache.has(key)){const result=await resolve(theme.codeFont,{bold});codeCache.set(key,result);fontEvidence.push({weight:`code ${key}`,...result.evidence});}return codeCache.get(key);};
+  const codeCache=new Map(),codeFor=async bold=>{const key=bold?'bold':'regular';if(!codeCache.has(key)){const spec=fonts?.[bold?'codeBold':'code'];if(spec&&(!spec.path||Object.keys(spec).some(k=>!['path','sha256'].includes(k))))throw new Error('Fonts use {path,sha256?} records');const result=await resolve(theme.codeFont,{bold,file:spec?.path,expectedHash:spec?.sha256});codeCache.set(key,result);fontEvidence.push({weight:`code ${key}`,...result.evidence});}return codeCache.get(key);};
   const geometry=new Map();for(const slide of scene.slides){const key=compositionGeometry(slide,scene.canvas);if(!geometry.has(key))geometry.set(key,[]);geometry.get(key).push(slide.id);}
   const deckReview={groups:[...geometry.values()].filter(ids=>ids.length>=3),questions:['What does each visual make easier to understand than the same wording in a list?','Which shared geometry supports comparison, and which changing relationship needs recomposition?']};
   for(const slide of scene.slides) {
