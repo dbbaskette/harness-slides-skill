@@ -59,6 +59,13 @@ and a cached re-preview of the first deck kept its images and left out the
 replaced Drive link. The `replace-and-trash` fallback is covered by fixtures
 only; Drive did not refuse an in-place conversion.
 
+Host (macOS, Node 22): **331 tests, 327 passed, four skipped, zero failures**,
+with a failing `gcloud` on `PATH` to show no test reaches Google (it was never
+called) and the real pool state unchanged; `context:check` and `docs:check` pass.
+Disposable Tart VM from `tanzu-brand-golden-gate-base` (macOS 27.0, Node 22.23.2)
+from a clean clone at cc87c78: `npm run test:native` **331 passed, zero failures
+or skips**.
+
 ## Development verification — 0.15.0, 19 October 2026
 
 Issue #72 closes the reproduced gaps in unbranded native structure, direct-source
