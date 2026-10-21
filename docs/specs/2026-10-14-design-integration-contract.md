@@ -82,7 +82,7 @@ or reused. A runtime without `capabilities` (0.13.1 and earlier) has none of the
 | `compose-projects` | `project.json` links versioned composition sources, builds, previews and reviews; studio text edits recompile the source, and workspace status/history/build/restore operate on the project |
 | `compose-provenance` | A slide's `provenance`, never drawn and added to the speaker notes; `internal-source` findings from `outline check` and `compose preview` for a source line that reads as internal provenance |
 | `compose-verified-critique` | Critic packet schema 2 binds the deck and each image hash; assessments answer all eight questions for every slide and give an inspection note |
-| `compose-visual-vocabulary` | Box `style: tint`, `state: muted\|struck\|failed` on a box or text, edge `style: solid\|dashed\|dotted`, edges attached to texts, labelled cards for `dependency`, supporting fills for a direction without meanings, refusal of words over words, and `no-meanings` and `ascii-art` findings |
+| `compose-visual-vocabulary` | Box `style: tint`, `state: muted\|struck\|failed` on a box or text, edge `style: solid\|dashed\|dotted`, edges attached to texts, labelled cards for `dependency`, supporting fills for a direction without meanings, `design.slides.fills: {tints: false}` in a brand contract, refusal of words over words and of a word wider than its line (warnings, `unverified-fit`, when measurement is estimated), and `no-meanings` and `ascii-art` findings |
 | `neutral-native-composition` | Neutral live/reading contracts and Cover/Section/Closing layouts, with the same native writer for groups, tables, routed/attached connectors and chart data |
 | `owned-google-previews` | Preview creation stores ownership and remote version receipts; a stale/unowned file is refused, and an owned unchanged preview is preserved while a fresh file is created |
 | `preview-repair-clusters` | `compose preview` returns `repair`: each slide's warning and error findings grouped by slide, blocking slides first, with codes and object IDs ([visual vocabulary](#visual-vocabulary-in-0160-unreleased)) |
@@ -964,7 +964,10 @@ words drawn over other words are now refused and an arrow to a text now attaches
 | Outline `parts` | Short labels approved for diagram nodes, so a sentence need not be split |
 | `split-point` | With `--outline FILE`, or `--project ROOT` whose `project.json` names an outline, `compile` refuses a reading deck whose approved point's sentence is spread over several nodes. A live deck gets `splitPoints` in the result. The outline is recorded in `compose-report.json` `inputs.outline`, and `preview` reports `split-point` (error for reading, warning for live) |
 | `provenance` | On an outline content slide and a composition slide. Never drawn; appended to the notes as `Provenance: …`. `source` is a learner-facing citation; `internal-source` warns on finding/objective IDs, blueprints and slug-prefixed references |
-| Words over words | `compile` refuses two texts whose measured words overlap; empty padding does not count |
+| Words over words | `compile` refuses two texts whose measured words overlap; empty padding does not count. A failed box keeps its words and children clear of its badge |
+| Word wider than its line | `compile` refuses a word (split at spaces and hyphens) wider than the text it sits in, which every renderer would break mid-word |
+| Estimated measurement | Without the brand font both refusals become `unverifiedFit` entries in `structure.json` and `unverified-fit` preview warnings |
+| `outline-changed` | A preview of a build whose recorded outline is changed or missing reports an error-level finding, so it blocks in `repair` |
 | `ascii-art`, `no-meanings` | Preview warnings for typed arrows, box-drawing or punctuation-only placeholders, and for a deck of more than ten content slides whose direction has no meanings |
 | `repair` | `preview.json` groups warning and error findings per slide: `{blocking:[slide IDs], slides:[{slide,number,blocking,codes,objects}]}` |
 

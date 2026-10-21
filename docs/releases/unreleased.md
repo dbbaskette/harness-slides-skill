@@ -17,7 +17,10 @@ for diagram nodes. With `--outline` or an outline `--project`, `compose compile`
 refuses a reading deck whose point is split across nodes, and `preview` reports
 `split-point`. `source` is a learner-facing citation; `provenance` is never
 drawn and goes into the notes, and `internal-source` warns about finding IDs on
-a slide. Words drawn over other words are refused. `preview.json` adds `repair`,
+a slide. Words drawn over other words, and a word wider than its line, are
+refused when the brand font measured them; with an estimated measurement they
+are `unverified-fit` warnings. `preview` refuses nothing new but reports an
+outline changed since the build (`outline-changed`). `preview.json` adds `repair`,
 the warnings and errors grouped per slide, blocking slides first.
 
 The brand drives the look and Harness Slides drives iteration. When a brand
@@ -28,11 +31,15 @@ approval, look choice and final acceptance checkpoints in its own interface and
 never skips one by hosting it.
 
 Guidance for 0.16.0 requires runtime 0.16.0; 0.15.x retains guidance at
-`5ba00545e36a26b3f6011b65c9923e1f4efe145c`. Existing compositions compile
-unchanged unless they draw words over words; an arrow to a text is now attached.
+`5ba00545e36a26b3f6011b65c9923e1f4efe145c`. A composition that uses none of
+the new vocabulary compiles to the same scene as before, unless it draws words
+over words or has a word wider than its line, both now refused. An arrow to a
+text is now attached, and the text is sized to its words, so a rebuilt slide
+with such an arrow can change geometry. Google Slides import of dashed and
+dotted lines, strikethrough, the failed badge and connectors attached to text
+boxes has not been checked live.
 
 ## Earlier development: 0.15.0
-
 
 Composition output preserves editable groups, routed/attached connectors, native
 tables and chart data through the same writer with or without a brand template.

@@ -22,11 +22,18 @@ const lines=error=>error.message.split('\n').filter(line=>!/^\d+ problems to fix
 // With --design-project the approved design is checked too, written or not; --section accepts a contiguous run of approved slides.
 // The approved outline: named with --outline, or the one an outline project's manifest records.
 async function approvedOutline(outline,project) {
-  if(outline){const bytes=await readFile(outline);return {path:resolve(outline),bytes,outline:JSON.parse(bytes)};}
+  // A named outline that cannot be read or parsed is refused with what to fix, never skipped.
+  const load=async(path,named)=>{
+    let bytes;try{bytes=await readFile(path);}catch(error){throw refuse(`${named}, which cannot be read (${error.code??error.message}); restore it or name the outline with --outline`,{code:'input-invalid'});}
+    try{return {path:resolve(path),bytes,outline:JSON.parse(bytes)};}catch{throw refuse(`the outline ${named.replace(/^.* the outline /,'')} is not valid JSON; fix it before compiling`,{code:'input-invalid'});}
+  };
+  if(outline)return load(outline,`--outline names the outline ${outline}`);
   if(!project)return null;
   let manifest;try{manifest=JSON.parse(await readFile(join(resolve(project),'project.json'),'utf8'));}catch(error){if(error.code==='ENOENT')return null;throw error;}
-  if(typeof manifest?.outline!=='string')return null;
-  const path=await regularInside(resolve(project),manifest.outline),bytes=await readFile(path);return {path,bytes,outline:JSON.parse(bytes)};
+  if(manifest?.outline===undefined)return null;
+  if(typeof manifest.outline!=='string')throw refuse('project.json names an outline that is not a path',{code:'input-invalid'});
+  let path;try{path=await regularInside(resolve(project),manifest.outline);}catch(error){throw refuse(`project.json names the outline ${manifest.outline}, which cannot be read (${error.code??error.message}); restore it or name the outline with --outline`,{code:'input-invalid'});}
+  return load(path,`project.json names the outline ${manifest.outline}`);
 }
 
 export async function compileCompositionFile({file,brand,output,fonts,project,outline:outlineFile,'design-project':designProject,'asset-project':assetProject,section,register=true}) {

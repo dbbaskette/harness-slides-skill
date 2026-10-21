@@ -287,3 +287,88 @@ test('a brand that forbids tints gets a neutral card with a strip of the meaning
   assert.throws(()=>validateComposition(deck({type:'text',id:'only_words',text:'x'}),brand({fills:{tints:'no'}})),/fills\.tints/);
   assert.notEqual(byId((await compileComposition(deck({type:'box',id:'tint_aqua',style:'tint',fill:'accentAqua',text:'x'},{direction:dir}),brand())).scene,'tint_aqua').fill,'#E2E3E4');
 });
+
+test('a failed box reserves room for its badge, so it never overlaps its own words or children',async()=>{
+  const c=brand(),long='Primary and synchronous standby share one zone, so one outage removes both of them at once.';
+  const inside=(scene,owner,id)=>{const b=byId(scene,`${owner}_state`),e=byId(scene,id);return b.x>=e.x+e.width-.5||b.y>=e.y+e.height-.5||b.x+b.width<=e.x+.5||b.y+b.height<=e.y+.5;};
+  // A failed bar card with long words, a failed card whose first child is as wide as the card, and a plain failed box.
+  const bar=(await compileComposition(deck({type:'box',id:'zone_bar',style:'bar',state:'failed',text:long}),c)).scene;assert.ok(inside(bar,'zone_bar','zone_bar_text'),'badge clear of the bar words');
+  const card=(await compileComposition(deck({type:'box',id:'zone_card',state:'failed',children:[{type:'box',id:'wide_child',text:long},{type:'text',id:'after_child',text:'More'}]}),c)).scene;assert.ok(inside(card,'zone_card','wide_child'),'badge clear of the first child');
+  const plain=(await compileComposition(deck({type:'box',id:'zone_plain',state:'failed',text:long}),c)).scene;
+  assert.equal(byId(plain,'zone_plain').text,undefined);assert.equal(byId(plain,'zone_plain_text').text,long);assert.ok(inside(plain,'zone_plain','zone_plain_text'),'badge clear of the words');
+  // The words stay centred in the box, as a box's words are.
+  const box=byId(plain,'zone_plain'),words=byId(plain,'zone_plain_text');assert.ok(Math.abs((words.y+words.height/2)-(box.y+box.height/2))<1);
+  assert.throws(()=>validateComposition(deck({type:'stack',direction:'row',children:[{type:'box',id:'zone_plain',state:'failed',text:'x'},{type:'box',id:'zone_plain_text',text:'y'}]}),c),/repeated ID: zone_plain_text/);
+});
+
+test('the audits ignore the engine\'s own badges, real URLs and names, and short repeated words',async()=>{
+  // A failed box's × badge is the engine's, not faked drawing; a "+" badge is a symbol, not a placeholder.
+  for(const fine of ['×','+','?','%','&','—'])assert.ok(!asciiArt(fine),fine);
+  for(const bad of ['.','. .','·','|'])assert.ok(asciiArt(bad),bad);
+  const c=brand(),{scene,structure}=await compileComposition(deck({type:'box',id:'zone_gone',state:'failed',text:'Zone A'}),c);
+  assert.ok(!(await screenComposition({scene,structure})).some(f=>f.code==='ascii-art'));
+  for(const citation of ['https://www.postgresql.org/docs/18/continuous-archiving.html','AWS g5 instance guide','O2 network report','See https://example.com/f10/g3'])assert.ok(!internalSource(citation),citation);
+  for(const internal of ['Finding g3; Tanzu HA 4.5','g3, g4','Objective O4','Blueprint O1–O9'])assert.ok(internalSource(internal),internal);
+  // One-word pieces that happen to occur in a sentence are labels, not a split sentence.
+  const outline={version:1,title:'D',slides:[{id:'slide_one',kind:'content',title:'T',understand:'U',relation:'none',points:[{label:'Topology',text:'Primary and standby in zone A; replica in zone B.'}],sources:['s1']}]};
+  const labels=(await compileComposition(deck({type:'stack',direction:'row',children:['Primary','Standby','Replica','Zone A'].map((t,i)=>({type:'box',id:`node_${i}x`,text:t}))}),c)).scene;
+  assert.equal(splitPoints(outline,labels).length,0);
+  // Pieces out of order, or covering only a little of the sentence, are not a split either.
+  const scattered=(await compileComposition(deck({type:'stack',direction:'row',children:[{type:'box',id:'node_late',text:'replica in zone B'},{type:'box',id:'node_early',text:'Primary and standby'}]}),c)).scene;
+  assert.equal(splitPoints(outline,scattered).length,1,'in-order pieces covering the sentence are a split');
+  const thin=(await compileComposition(deck({type:'stack',direction:'row',children:[{type:'box',id:'node_one',text:'Primary and standby'},{type:'box',id:'node_two',text:'Primary and standby'}]}),c)).scene;
+  assert.equal(splitPoints(outline,thin).length,0,'the same piece twice covers too little');
+});
+
+test('fit refusals that rest on estimated measurement become warnings, and hyphenated words may break at the hyphen',async()=>{
+  const c=brand();
+  await compileComposition(deck({type:'stack',direction:'row',children:[{type:'box',id:'wide_box',text:'Zone B'},{type:'box',id:'hyphen_box',text:'Synchronous-standby-replica',weight:1},{type:'box',id:'other_box',text:'Other',weight:2}]}),c);
+  const guessed=brand();guessed.design.fontFamily='Harness Missing Sans';guessed.revision=contractRevision(guessed);
+  const over=deck({type:'free',children:[{type:'text',id:'first_words',text:'Primary and synchronous standby',at:{x:0,y:0,width:.6,height:.3}},{type:'text',id:'second_words',text:'Zone-A loss risk',at:{x:.2,y:.05,width:.6,height:.3}}]});
+  const {structure,report}=await compileComposition(over,guessed);assert.match(report.measurement,/estimated/);
+  assert.ok(structure.unverifiedFit.some(x=>x.slide==='slide_one'&&/its words overlap/.test(x.detail)));
+  const f=(await screenComposition({scene:(await compileComposition(over,guessed)).scene,structure})).find(x=>x.code==='unverified-fit');assert.equal(f.severity,'warn');
+});
+
+test('an outline named by project.json must be readable, and a preview notices an outline changed since the build',async t=>{
+  const dir=await temporary(t),nb=await nativeBrand(dir),brandFile=join(dir,'brand.json'),file=join(dir,'composition.json'),project=join(dir,'project');
+  await writeFile(brandFile,JSON.stringify(nb));await writeFile(file,JSON.stringify(deck({type:'text',id:'only_words',text:'Words that are enough.'})));await mkdir(project);
+  await writeFile(join(project,'project.json'),JSON.stringify({schema:1,tool:'harness-slides-project',outline:'outline.json',versions:[]}));
+  await assert.rejects(()=>compileCompositionFile({file,brand:brandFile,project}),/project\.json names the outline outline\.json, which cannot be read/);
+  await writeFile(join(project,'outline.json'),'{not json');
+  await assert.rejects(()=>compileCompositionFile({file,brand:brandFile,project}),/outline outline\.json is not valid JSON/);
+  await writeFile(join(project,'outline.json'),JSON.stringify(restOutline));
+  await compileCompositionFile({file,brand:brandFile,project,output:join(project,'build')});
+  await writeFile(join(project,'outline.json'),JSON.stringify({...restOutline,title:'Changed'}));
+  const {previewComposition}=await import('../scripts/lib/compose-preview.mjs'),{encodePng}=await import('../scripts/lib/contact-sheet.mjs'),tiny=encodePng({width:16,height:9,rgb:Buffer.alloc(16*9*3,200)});
+  const run=async(command,args)=>{if(args[0]==='-v')return {stdout:''};if(command==='pdfinfo')return {stdout:'Pages:          1\n'};if(command==='pdftoppm'){await writeFile(args.at(-1)+'.png',tiny);return {stdout:''};}throw Object.assign(new Error('spawn ENOENT'),{code:'ENOENT'});};
+  const drive={importDeck:async()=>({id:'drive_file_1',url:''}),updateDeck:async({fileId})=>({id:fileId,url:''}),exportPdf:async({output})=>{await writeFile(output,'%PDF-1.7 fake');return {output};}};
+  const result=await previewComposition({file:join(project,'build'),output:join(dir,'preview')},{run,drive});
+  const f=result.slides[0].findings.find(x=>x.code==='outline-changed');assert.equal(f.severity,'error');assert.deepEqual(result.repair.blocking,['slide_one']);
+});
+
+test('the pptxgenjs writer carries dashes and strikethrough too',async t=>{
+  const {renderPptxScene}=await import('../scripts/lib/pptx-render.mjs'),dir=await temporary(t),file=join(dir,'scene.pptx');
+  await renderPptxScene({version:2,title:'Dash',mode:'new',canvas:{width:960,height:540},slides:[{id:'slide_one',title:'Dash',sources:['s1'],elements:[
+    {id:'struck_words',type:'text',x:40,y:40,width:300,height:40,text:'Gone',strike:true},
+    {id:'dashed_line',type:'line',x:40,y:120,width:300,height:1,dash:'dash',arrow:true},
+    {id:'dotted_edge',type:'shape',x:40,y:160,width:200,height:80,stroke:'#555555',dash:'dot'}]}]},file);
+  const xml=await part(file,'ppt/slides/slide1.xml');
+  assert.match(xml,/strike="sngStrike"/);assert.match(xml,/<a:prstDash val="dash"\/>/);assert.match(xml,/<a:prstDash val="sysDot"\/>/);
+});
+
+test('compositions that use none of the new vocabulary compile to the same scenes as before',async()=>{
+  // Digests recorded from 0.15.1 (5ba0054) on the neutral brand. Only arrows to texts, new fields and refusals change a scene.
+  const {neutralBrandContract}=await import('../scripts/lib/brand-contract.mjs'),{digest}=await import('../scripts/lib/common.mjs'),c=await neutralBrandContract();
+  for(const [name,expected] of Object.entries(unchanged)){
+    const comp=JSON.parse(await readFile(new URL(`../${name}`,import.meta.url),'utf8'));
+    assert.equal(digest((await compileComposition(comp,c)).scene),expected,name);
+  }
+});
+const unchanged={
+  'examples/composition.json':'309b662b53f218f7468820af4178664cd094a8fc40d21c50aca2a62fc77d99d5',
+  'references/gallery/hierarchy.json':'388faeaa3302f78c02584d6df0af72476ea53de0acc241388234458598cbdac9',
+  'references/gallery/none.json':'8235e2fadd0a1257d39a4bac3b7e8e4186e689499b5ddad37c4b4825057adf89',
+  'references/gallery/overlap.json':'f3f4bf4a8f6dec49d4b3f928f48a83f37a3430b53b3682bb48e0569359f29c21',
+  'references/gallery/quantity.json':'71743c0f99306b638bebab2ab909b903f6b1eab16470226d9f2afd0e0c5cdce0',
+};

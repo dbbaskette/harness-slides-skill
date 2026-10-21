@@ -42,6 +42,7 @@ export async function screenComposition({scene,structure={groups:[],connectors:[
   const templated=new Set((structure.layouts??[]).filter(l=>l.layout!=='@subtitled').map(l=>l.slide));
   for(const id of structure.unspoken??[])findings.push({slide:id,severity:'info',code:'no-notes',detail:'This deck is presented live and the slide has no speaker notes. Say what the presenter says here and name the source behind the claim.'});
   for(const r of structure.reading??[])findings.push({slide:r.slide,severity:'warn',code:'reading-size-in-live-deck',detail:`${r.nodes.length} text items here are set at ${r.size}pt, the reading size, in a deck delivered live at ${r.live}pt. Cut words, split the slide or restructure instead of shrinking the type.`});
+  for(const u of structure.unverifiedFit??[])findings.push({slide:u.slide,object:u.id,severity:'warn',code:'unverified-fit',detail:`${u.detail}. The brand font was unavailable, so this was measured by estimate: look at the render.`});
   for(const a of structure.adjusted??[])findings.push({slide:a.slide,object:a.id,severity:'warn',code:'weight-overridden',detail:`${a.id} was given ${a.got}pt, not the ${a.asked}pt its weight asked for, because its content or a neighbour's needs more room. If the proportion is the point, use empty boxes or less text.`});
   for(let i=findings.length-1;i>=0;i--)if(templated.has(findings[i].slide)&&['text-only','similar-geometry','density','measured-text-overflow','title-value-needs-support','content-collision'].includes(findings[i].code))findings.splice(i,1);
   // Words over a picture are deliberate here: the compiler has already refused any that lack a filled box behind them.
@@ -90,7 +91,7 @@ export async function screenComposition({scene,structure={groups:[],connectors:[
     for(const id of native.find(n=>n.id===slide.id)?.unattached??[])findings.push({slide:slide.id,object:id,severity:'info',code:'unattached-connector',detail:'This arrow is positioned but not attached, so it will not follow its shapes. An arrow attaches to a box of any shape, a text and an icon with a disc or ring, not to a plain icon.'});
     const source=slide.elements.find(e=>e.id===`${slide.id}_source`);
     if(source&&internalSource(source.text))findings.push({slide:slide.id,object:source.id,severity:'warn',code:'internal-source',detail:`The source line "${source.text}" reads as internal provenance, not a citation the audience can follow. Cite the document by name, such as "Tanzu for Postgres 4.5 documentation", and move finding or objective IDs to the slide's provenance, which goes into the speaker notes.`});
-    for(const e of body.filter(e=>typeof e.text==='string'&&asciiArt(e.text)))findings.push({slide:slide.id,object:e.id,severity:'warn',code:'ascii-art',detail:`"${e.text.slice(0,40)}" fakes a drawing with characters. Draw an edge (style: "dashed" or "dotted" for a weaker link), mark a node with state: "struck" or "failed", or remove the placeholder.`});
+    for(const e of body.filter(e=>typeof e.text==='string'&&!/_state$/.test(e.id)&&asciiArt(e.text)))findings.push({slide:slide.id,object:e.id,severity:'warn',code:'ascii-art',detail:`"${e.text.slice(0,40)}" fakes a drawing with characters. Draw an edge (style: "dashed" or "dotted" for a weaker link), mark a node with state: "struck" or "failed", or remove the placeholder.`});
   });
   // One icon should mean one thing across the deck.
   const meanings=new Map();
@@ -208,8 +209,11 @@ async function renderCompositionPreview({file,output,slide,'file-id':fileId,rend
     if(pages!==scene.slides.length)throw new Error(`The render has ${pages} pages for ${scene.slides.length} slides; check the deck for an import problem`);
     // The approved outline recorded with the build, if any, lets the screen find sentences chopped into nodes.
     const report=await load('compose-report.json'),contract=await load('brand-contract.json').catch(()=>null);
-    const outline=report.inputs?.outline?.path?await readFile(resolve(dir,report.inputs.outline.path),'utf8').then(JSON.parse,()=>null):null;
+    // The outline must be the one the build was compiled against; a changed or missing outline means the approval moved.
+    const recorded=report.inputs?.outline,outlineBytes=recorded?.path?await readFile(resolve(dir,recorded.path)).catch(()=>null):null;
+    const outlineCurrent=Boolean(outlineBytes&&hash(outlineBytes)===recorded.sha256),outline=outlineCurrent?JSON.parse(outlineBytes):null;
     const findings=await screenComposition({scene,structure,native:built.native??[],fonts:fonts?JSON.parse(await readFile(fonts,'utf8')):report.fonts,outline,delivery:contract?.medium?.delivery??'reading'}),slides=[];
+    if(recorded&&!outlineCurrent)findings.push({slide:scene.slides[0].id,severity:'error',code:'outline-changed',detail:`The outline this build was compiled against (${recorded.path}) is ${outlineBytes?'changed':'missing'}. The approved wording may have moved: compile again against the current outline before previewing.`});
     for(const [index,s] of scene.slides.entries()) {
       if(wanted!==null&&wanted!==index)continue;
       const image=`slide-${String(index+1).padStart(2,'0')}.png`;

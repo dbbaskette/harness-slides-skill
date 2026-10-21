@@ -137,7 +137,9 @@ Show a state, not a drawing of one. `state` on a box or text is `muted`,
 dashed edge and an × badge); what a box holds is muted with it. An edge's
 `style` is `dashed` or `dotted` for a weaker link, such as asynchronous
 replication. Never type `- - >` or box-drawing characters, and never draw lines
-across words to cross them out. `compile` refuses words drawn over other words.
+across words to cross them out. `compile` refuses words drawn over other words
+and a word wider than its line, which a renderer would break mid-word; widen
+the node or shorten the word. Without the brand font these are warnings.
 
 A box that holds other nodes is a card. Its content starts at the top; set
 `align` to `center` or `end` to place it lower. Centre only when every card in a

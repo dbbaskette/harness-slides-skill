@@ -115,7 +115,7 @@ Generated IDs are reserved: <box with style bar>_bar and _text, <failed box>_sta
 A card's align has no effect when it holds a box, grid or image, because those fill the spare space.
 IDs match [a-zA-Z_][a-zA-Z0-9_-]{4,40} and are unique across the deck.
 Nest at most 8 levels. Run compose contract --brand brand-contract.json for the brand's content area, gap, padding and line sizes.
-Text is measured with the brand font. Content that cannot fit at its role's size fails with the shortfall; rewrite, split or restructure. Words drawn over other words are refused.
+Text is measured with the brand font. Content that cannot fit at its role's size fails with the shortfall; rewrite, split or restructure. Words drawn over other words, and a word (split at spaces and hyphens) wider than its line, are refused; without the brand font they are warnings.
 A diagram node carries a short label. An approved point's sentence stays whole: in one node, or in the notes beside short node labels; never split one sentence across several nodes.`;
 
 export function validateComposition(comp,contract,{collect}={}) {
@@ -212,7 +212,7 @@ export function validateComposition(comp,contract,{collect}={}) {
         if(n.state==='failed'&&n.type!=='box')fail(where,'failed marks a box; put the words in a box, or use struck');
         if(n.id===focalId&&n.state!=='normal')fail(where,'the focal node is the point of the slide; it cannot be muted, struck or failed');
         // A failed box carries an × badge, grouped with it.
-        if(n.state==='failed'){claim(`${n.id}_state`,where);if(n.children===undefined&&n.style!=='bar')claim(`${n.id}_group`,where);}
+        if(n.state==='failed'){claim(`${n.id}_state`,where);if(n.children===undefined&&n.style!=='bar'){claim(`${n.id}_group`,where);claim(`${n.id}_text`,where);}}
       }
       if(n.type==='chart')checkChart(n,where);
       if(n.group!==undefined&&typeof n.group!=='boolean')fail(where,'group must be boolean');
@@ -373,6 +373,8 @@ export async function compileComposition(comp,contract,{fonts}={}) {
   const style=n=>roles[n.textRole??bodyRole];
   // Text and icons keep their own size; everything else shares the space that is left.
   const badgeSize=Math.round(iconSize*.6),ruleSpace=inset/2,barWidth=6;
+  // A failed box's × badge sits in its top-right corner; its words and children keep clear of that column.
+  const stateSide=Math.round(badgeSize*.8),reserveFor=n=>n.type==='box'&&n.state==='failed'&&(shapeKinds[n.shape??'rect'][3]===1&&shapeKinds[n.shape??'rect'][4]===1)?Math.max(0,stateSide+inset/4-inset+2):0;
   const flexible=n=>!['text','icon','badge','rule','table'].includes(n.type);
   // A table is set in the brand's table style; each row is as tall as its tallest cell.
   const tableStyle={size:sl.table?.fontPt??roles.bodyReference?.size??18,pad:sl.table?.paddingPt??8};
@@ -406,13 +408,13 @@ export async function compileComposition(comp,contract,{fonts}={}) {
       if(n.text!==undefined) {
         // Rectangles pad their text by the brand inset; other presets already confine text to an inner area.
         const [,,,fx,fy]=shapeKinds[n.shape??'rect'];
-        if(fx===1&&fy===1)return measure.height(n.text,style(n),width-inset*2)+inset*2;
+        if(fx===1&&fy===1)return measure.height(n.text,style(n),width-inset*2-reserveFor(n))+inset*2;
         return fx*width>7.2?measure.height(n.text,style(n),fx*width)/fy:Infinity;
       }
       if(n.children) {
         // A card's content sits inside the shape's own text area, so a diamond or an ellipse holds less than its bounds.
         const [,,,fx,fy]=shapeKinds[n.shape??'rect'],column={type:'stack',direction:'column',gap:n.gap,children:n.children};
-        return fx===1&&fy===1?need(column,Math.max(1,width-inset*2))+inset*2:need(column,Math.max(1,fx*width))/fy;
+        return fx===1&&fy===1?need(column,Math.max(1,width-inset*2-reserveFor(n)))+inset*2:need(column,Math.max(1,fx*width))/fy;
       }
       // An empty box is a drawn area, such as one segment of a bar, and can be as small as its share.
       return 0;
@@ -448,6 +450,8 @@ export async function compileComposition(comp,contract,{fonts}={}) {
     const alarm=colors.statusCritical&&!(dir&&colors.statusCritical.toUpperCase()===colors[dir.focal].toUpperCase())?colors.statusCritical:colors.inkDeep;
     const quiet=n=>Boolean(n.state&&n.state!=='normal'&&n.id!==focalId),struck=n=>quiet(n)&&['struck','failed'].includes(n.state);
     const put=(element,members)=>{elements.push(element);members?.push(element.id);return element;};
+    // Without the brand font, measurement is an estimate: a refusal that rests on it is reported to look at, not enforced.
+    const unverified=detail=>{const [where]=detail.split(':');(structure.unverifiedFit??=[]).push({slide:s.id,id:where.split('/')[1]??s.id,detail});};
     // A column's shortfall is the sum of its parts, so the message lists them: the part to change is rarely the column itself.
     const parts=(n,width)=>{const kids=n.type==='box'?n.children:n.type==='stack'&&n.direction==='column'?n.children:null;if(!kids||kids.length<2)return '';const g=gapOf(n),w=n.type==='box'?Math.max(1,width-inset*2):width;return ` (${kids.map(k=>`${k.id??k.type} ${round(need(k,w))}`).join(' + ')}${g?`, plus ${kids.length-1} gap${kids.length>2?'s':''} of ${g}`:''}${n.type==='box'?`, plus padding of ${inset*2}`:''})`;};
     // Text shortfalls are also given in lines, which is the unit an author can act on.
@@ -485,9 +489,10 @@ export async function compileComposition(comp,contract,{fonts}={}) {
       if(checks){const required=need(n,rect.width);if(required>rect.height+.5){short(n,rect,required);return;}}
       // A word wider than its line would be broken mid-word by every renderer, so it is refused like any other shortfall.
       if(typeof n.text==='string'&&['text','box'].includes(n.type)) {
-        const [,,,fx]=shapeKinds[n.shape??'rect'],room=n.type==='text'?rect.width:fx===1?rect.width-inset*2:rect.width*fx,st=style(n);
-        const word=n.text.split(/\s+/).filter(Boolean).map(w=>({w,width:measure.width(w,st)})).sort((a,b)=>b.width-a.width)[0];
-        if(word&&word.width>room+.5){tight.push(`${s.id}/${n.id}: the word "${word.w}" needs ${round(word.width)}pt but the text is ${round(room)}pt wide; widen the node, shorten the word or split it where a reader would`);return;}
+        const [,,,fx]=shapeKinds[n.shape??'rect'],room=n.type==='text'?rect.width:fx===1?rect.width-inset*2-reserveFor(n):rect.width*fx,st=style(n);
+        // A renderer may break at a space or a hyphen, never inside a word.
+        const word=n.text.split(/[\s-]+/).filter(Boolean).map(w=>({w,width:measure.width(w,st)})).sort((a,b)=>b.width-a.width)[0];
+        if(word&&word.width>room+.5){const message=`${s.id}/${n.id}: the word "${word.w}" needs ${round(word.width)}pt but the text is ${round(room)}pt wide; widen the node, shorten the word or split it where a reader would`;if(measure.exact){tight.push(message);return;}unverified(message);}
       }
       if(n.id)rects.set(n.id,rect);
       const own=n.group?[]:members;
@@ -543,7 +548,7 @@ export async function compileComposition(comp,contract,{fonts}={}) {
         // A failed box keeps its words readable: a status-colored dashed edge and an × badge mark it, not lines drawn across it.
         if(failed)Object.assign(base,{stroke:alarm,strokeWeight:1.5,dash:'dash'});
         const behind=base.fill??surface,strip=look==='bar'?{id:`${n.id}_bar`,type:'shape',shape:'rect',x:round(rect.x),y:round(rect.y),width:barWidth,height:round(rect.height),fill:soft?mutedInk:colors[accent]}:null;
-        const badge=()=>{if(!failed)return null;const side=Math.round(badgeSize*.8),st={...roles.caption,bold:true};return {id:`${n.id}_state`,type:'shape',shape:'ellipse',x:round(rect.x+rect.width-side-inset/4),y:round(rect.y+inset/4),width:side,height:side,fill:alarm,text:'×',fontSize:st.size,bold:true,color:ink(onColor??colors.inkDeep,alarm,st),align:'center'};};
+        const reserve=reserveFor(n),badge=()=>{if(!failed)return null;const side=stateSide,st={...roles.caption,bold:true};return {id:`${n.id}_state`,type:'shape',shape:'ellipse',x:round(rect.x+rect.width-side-inset/4),y:round(rect.y+inset/4),width:side,height:side,fill:alarm,text:'×',fontSize:st.size,bold:true,color:ink(onColor??colors.inkDeep,alarm,st),align:'center'};};
         if(n.text!==undefined) {
           sized(n);
           if(!strip&&!failed){put({...base,text:n.text,...textProps(n,behind)},own);return;}
@@ -551,13 +556,17 @@ export async function compileComposition(comp,contract,{fonts}={}) {
           if(strip){
             // The words sit in their own box, clear of the strip, so every emitter insets them the same way.
             put(base,members);put(strip,members);
-            put({id:`${n.id}_text`,type:'text',x:round(rect.x+inset),y:round(rect.y),width:round(rect.width-inset*2),height:round(rect.height),text:n.text,...textProps(n,behind)},members);
+            put({id:`${n.id}_text`,type:'text',x:round(rect.x+inset),y:round(rect.y),width:round(rect.width-inset*2-reserve),height:round(rect.height),text:n.text,...textProps(n,behind)},members);
+          } else if(reserve) {
+            // The words of a failed box sit in their own box, centred as a box's words are and clear of the badge.
+            const width=rect.width-inset*2-reserve,height=Math.min(rect.height,measure.height(n.text,style(n),width));
+            put(base,members);put({id:`${n.id}_text`,type:'text',x:round(rect.x+inset),y:round(rect.y+(rect.height-height)/2),width:round(width),height:round(height),text:n.text,...textProps(n,behind)},members);
           } else put({...base,text:n.text,...textProps(n,behind)},members);
           if(failed)put(badge(),members);
           structure.groups.push({slide:s.id,id:`${n.id}_group`,members});own?.push(...members);return;
         }
         const inner=[];put(base,inner);if(strip)put(strip,inner);
-        const [,,,fx,fy]=shapeKinds[base.shape],area=fx===1&&fy===1?{x:rect.x+inset,y:rect.y+inset,width:rect.width-inset*2,height:rect.height-inset*2}:{x:rect.x+rect.width*(1-fx)/2,y:rect.y+rect.height*(1-fy)/2,width:rect.width*fx,height:rect.height*fy};
+        const [,,,fx,fy]=shapeKinds[base.shape],area=fx===1&&fy===1?{x:rect.x+inset,y:rect.y+inset,width:rect.width-inset*2-reserve,height:rect.height-inset*2}:{x:rect.x+rect.width*(1-fx)/2,y:rect.y+rect.height*(1-fy)/2,width:rect.width*fx,height:rect.height*fy};
         if(n.children)place({type:'stack',direction:'column',gap:n.gap,align:n.align,children:n.children,name:n.id},area,inner,behind);
         if(failed)put(badge(),inner);
         if(inner.length>1)structure.groups.push({slide:s.id,id:`${n.id}_group`,members:inner});
@@ -662,8 +671,8 @@ export async function compileComposition(comp,contract,{fonts}={}) {
       };
       const worded=elements.map(e=>({e,r:reach(e)})).filter(x=>x.r);
       worded.forEach(({e:b,r:rb},j)=>{
-        const hit=worded.slice(0,j).find(({e:a,r:ra})=>a.id!==`${b.id}_state`&&b.id!==`${a.id}_state`&&Math.min(ra.x+ra.width,rb.x+rb.width)-Math.max(ra.x,rb.x)>1&&Math.min(ra.y+ra.height,rb.y+rb.height)-Math.max(ra.y,rb.y)>1);
-        if(hit)tight.push(`${s.id}/${b.id}: its words overlap the words of ${hit.e.id}; give each its own room, move or resize one, or join them into one node`);
+        const hit=worded.slice(0,j).find(({e:a,r:ra})=>Math.min(ra.x+ra.width,rb.x+rb.width)-Math.max(ra.x,rb.x)>1&&Math.min(ra.y+ra.height,rb.y+rb.height)-Math.max(ra.y,rb.y)>1);
+        if(hit){const message=`${s.id}/${b.id}: its words overlap the words of ${hit.e.id}; give each its own room, move or resize one, or join them into one node`;if(measure.exact)tight.push(message);else unverified(message);}
       });
     }
     if(!s.layout) {
