@@ -21,7 +21,9 @@ a slide. Words drawn over other words, and a word wider than its line, are
 refused when the brand font measured them; with an estimated measurement they
 are `unverified-fit` warnings. `preview` refuses nothing new but reports an
 outline changed since the build (`outline-changed`). `preview.json` adds `repair`,
-the warnings and errors grouped per slide, blocking slides first.
+the warnings and errors grouped per slide, blocking slides first. A failed box's
+badge is sized to hold its ×, and a solid icon's glyph is no longer judged
+against the card behind it.
 
 The brand drives the look and Harness Slides drives iteration. When a brand
 add-on supplies directions, such as Tanzu Brand's `look samples` and `look

@@ -21,6 +21,26 @@ Google, Gemini or other provider requests were made; Google import of dashed
 and dotted lines, strikethrough, the failed badge and connectors attached to
 text boxes is unverified.
 
+### Live Google Slides check — 0.16.0 (2642ea1), 21 October 2026
+
+With the owner's approval, one live `compose preview` (Google renderer, the
+Mac's existing gcloud sign-in) imported the reconstructed Training Studio
+slides 9, 13 and 15 under the Tanzu contract with `fills: {tints: false}`, as
+"Preview: Harness Slides 0.16.0 Google check — safe to delete". The Google PDF
+export showed dashed connectors and dashed failed-box outlines, the struck-through
+text, the × badge inside the failed box's top-right corner, all four brand
+icons, and no text overflow. The Drive PPTX export of the imported deck kept
+`stCxn`/`endCxn` on the box-to-box connectors (`rest_feeds`, `work_sync` and the
+dashed `work_async`), `prstDash` on the dashed connector and outlines, and
+`strike="sngStrike"` on the struck text. The native Slides API was unavailable
+to this OAuth client, so the read-back used the Drive export. The deck had no
+connector ending on a text box, so that import path remains unverified.
+
+The check found two screening defects, fixed afterwards: the failed-box badge
+(26pt) was 1.3pt short of its own ×, so the engine flagged its own badge as
+overflowing, and a solid icon's white glyph was judged against a white card and
+reported as blending in.
+
 ## Development verification — 0.15.0, 19 October 2026
 
 Issue #72 closes the reproduced gaps in unbranded native structure, direct-source

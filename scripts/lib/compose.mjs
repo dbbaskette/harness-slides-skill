@@ -374,7 +374,8 @@ export async function compileComposition(comp,contract,{fonts}={}) {
   // Text and icons keep their own size; everything else shares the space that is left.
   const badgeSize=Math.round(iconSize*.6),ruleSpace=inset/2,barWidth=6;
   // A failed box's × badge sits in its top-right corner; its words and children keep clear of that column.
-  const stateSide=Math.round(badgeSize*.8),reserveFor=n=>n.type==='box'&&n.state==='failed'&&(shapeKinds[n.shape??'rect'][3]===1&&shapeKinds[n.shape??'rect'][4]===1)?Math.max(0,stateSide+inset/4-inset+2):0;
+  // The badge is never smaller than the × it holds needs, in the brand's caption type.
+  const stateSide=Math.max(Math.round(badgeSize*.8),Math.ceil(measure.height('×',{...roles.caption,bold:true},1e4))),reserveFor=n=>n.type==='box'&&n.state==='failed'&&(shapeKinds[n.shape??'rect'][3]===1&&shapeKinds[n.shape??'rect'][4]===1)?Math.max(0,stateSide+inset/4-inset+2):0;
   const flexible=n=>!['text','icon','badge','rule','table'].includes(n.type);
   // A table is set in the brand's table style; each row is as tall as its tallest cell.
   const tableStyle={size:sl.table?.fontPt??roles.bodyReference?.size??18,pad:sl.table?.paddingPt??8};
