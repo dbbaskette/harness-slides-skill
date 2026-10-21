@@ -30,6 +30,17 @@ function brand({delivery='reading',...extra}={}) {
     language:{organization:{toneStatus:'unspecified'},authorVoice:{status:'unselected'}}};
   c.revision=contractRevision(c);return c;
 }
+// Fit refusals are enforced only when the brand font measures the text; without it they are warnings. The host decides
+// which: a runner without Arial (the core CI job) measures by estimate, one with it (the native job, macOS) exactly.
+const {resolveFont}=await import('../scripts/lib/text-metrics.mjs');
+const fontMode=async()=>{const r=(await resolveFont('Arial')).font,b=(await resolveFont('Arial',{bold:true})).font;return r&&b?'exact':!r&&!b?'estimated':'mixed';};
+// A refusal under exact measurement; the same problem reported as an unverified-fit warning under estimated measurement.
+async function refusedOrWarned(comp,c,pattern){
+  const mode=await fontMode();
+  if(mode==='exact')return assert.rejects(()=>compileComposition(comp,c),pattern);
+  const {structure,report}=await compileComposition(comp,c);assert.match(report.measurement,/estimated/);
+  assert.ok((structure.unverifiedFit??[]).some(u=>pattern.test(u.detail)),JSON.stringify(structure.unverifiedFit));
+}
 const exec=promisify(execFile),cli=fileURLToPath(new URL('../scripts/harness-slides.mjs',import.meta.url));
 const dir0={focal:'headingPrimary',neutral:'canvasSecondary'};
 const deck=(canvas,{direction=dir0,brief,connect,...slide}={})=>({version:1,title:'Vocabulary',...(direction?{direction}:{}),slides:[{id:'slide_one',title:'A claim the slide supports',sources:['s1'],...(brief?{brief}:{}),...(connect?{connect}:{}),...slide,canvas}]});
@@ -220,8 +231,8 @@ test('ASCII arrows, box drawing and punctuation placeholders are reported as fak
 
 test('words drawn over other words are refused; words over a plain filled card are not',async()=>{
   const c=brand(),over=children=>deck({type:'free',children});
-  await assert.rejects(()=>compileComposition(over([{type:'text',id:'first_words',text:'Primary and synchronous standby',at:{x:0,y:0,width:.6,height:.3}},{type:'text',id:'second_words',text:'Zone-A loss risk',at:{x:.2,y:.05,width:.6,height:.3}}]),c),/slide_one\/second_words: its words overlap the words of first_words/);
-  await assert.rejects(()=>compileComposition(over([{type:'box',id:'boxed_words',text:'Restore to a new instance',at:{x:0,y:0,width:.5,height:.4}},{type:'text',id:'stray_words',text:'verify access',at:{x:.1,y:.12,width:.3,height:.2}}]),c),/its words overlap/);
+  await refusedOrWarned(over([{type:'text',id:'first_words',text:'Primary and synchronous standby',at:{x:0,y:0,width:.6,height:.3}},{type:'text',id:'second_words',text:'Zone-A loss risk',at:{x:.2,y:.05,width:.6,height:.3}}]),c,/slide_one\/second_words: its words overlap the words of first_words/);
+  await refusedOrWarned(over([{type:'box',id:'boxed_words',text:'Restore to a new instance',at:{x:0,y:0,width:.5,height:.4}},{type:'text',id:'stray_words',text:'verify access',at:{x:.1,y:.12,width:.3,height:.2}}]),c,/its words overlap/);
   // A label on a filled card, words in an empty box's corner, and two texts whose boxes touch only in empty padding are fine.
   await compileComposition(over([{type:'box',id:'zone_box',at:{x:0,y:0,width:.6,height:.8}},{type:'text',id:'zone_label',text:'Zone A',textRole:'label',at:{x:.02,y:.02,width:.3,height:.2}},{type:'text',id:'zone_body',text:'Primary',at:{x:.02,y:.3,width:.3,height:.2}}]),c);
   await compileComposition(over([{type:'text',id:'top_words',text:'One short line',at:{x:0,y:0,width:.5,height:.5}},{type:'text',id:'low_words',text:'Another short line',at:{x:0,y:.3,width:.5,height:.3}}]),c);
@@ -264,7 +275,7 @@ test('a preview of a build bound to its outline reports the split point and grou
 
 test('a word wider than its box is refused rather than broken mid-word, and a muted card keeps a hairline edge',async()=>{
   const c=brand(),narrow=deck({type:'stack',direction:'row',children:[{type:'box',id:'wide_box',text:'Zone B'},{type:'box',id:'thin_box',text:'Replica',weight:.35},{type:'box',id:'other_box',text:'Other',weight:2}]});
-  await assert.rejects(()=>compileComposition(narrow,c),/slide_one\/thin_box: the word "Replica" needs [\d.]+pt but the text is [\d.]+pt wide/);
+  await refusedOrWarned(narrow,c,/slide_one\/thin_box: the word "Replica" needs [\d.]+pt but the text is [\d.]+pt wide/);
   const {scene}=await compileComposition(deck({type:'stack',direction:'row',children:[{type:'box',id:'quiet_box',state:'muted',style:'tint',text:'Standby'},{type:'box',id:'loud_box',text:'Primary'}]}),c);
   assert.deepEqual([byId(scene,'quiet_box').stroke,byId(scene,'quiet_box').strokeWeight],['#53565A',1]);assert.equal(byId(scene,'loud_box').stroke,undefined);
 });
@@ -357,18 +368,26 @@ test('the pptxgenjs writer carries dashes and strikethrough too',async t=>{
   assert.match(xml,/strike="sngStrike"/);assert.match(xml,/<a:prstDash val="dash"\/>/);assert.match(xml,/<a:prstDash val="sysDot"\/>/);
 });
 
-test('compositions that use none of the new vocabulary compile to the same scenes as before',async()=>{
-  // Digests recorded from 0.15.1 (5ba0054) on the neutral brand. Only arrows to texts, new fields and refusals change a scene.
+test('compositions that use none of the new vocabulary compile to the same scenes as before',async t=>{
+  // Digests recorded from 0.15.1 (5ba0054) on the neutral brand, in each measurement mode: with Arial (exact) and with no
+  // Arial at all (estimated, as on a runner without the font). Only arrows to texts, new fields and refusals change a scene.
+  const mode=await fontMode();if(mode==='mixed')return t.skip('only one Arial weight is installed, a mode with no recorded baseline');
   const {neutralBrandContract}=await import('../scripts/lib/brand-contract.mjs'),{digest}=await import('../scripts/lib/common.mjs'),c=await neutralBrandContract();
-  for(const [name,expected] of Object.entries(unchanged)){
+  for(const [name,expected] of Object.entries(unchanged[mode])){
     const comp=JSON.parse(await readFile(new URL(`../${name}`,import.meta.url),'utf8'));
     assert.equal(digest((await compileComposition(comp,c)).scene),expected,name);
   }
 });
-const unchanged={
+const unchanged={exact:{
   'examples/composition.json':'309b662b53f218f7468820af4178664cd094a8fc40d21c50aca2a62fc77d99d5',
   'references/gallery/hierarchy.json':'388faeaa3302f78c02584d6df0af72476ea53de0acc241388234458598cbdac9',
   'references/gallery/none.json':'8235e2fadd0a1257d39a4bac3b7e8e4186e689499b5ddad37c4b4825057adf89',
   'references/gallery/overlap.json':'f3f4bf4a8f6dec49d4b3f928f48a83f37a3430b53b3682bb48e0569359f29c21',
   'references/gallery/quantity.json':'71743c0f99306b638bebab2ab909b903f6b1eab16470226d9f2afd0e0c5cdce0',
-};
+},estimated:{
+  'examples/composition.json':'8aeb59c89aea415f86bcb32a1fef5851444ab4a7d65ad418a7244ff15ae7920c',
+  'references/gallery/hierarchy.json':'74236749bcb9404f9a97045f68d60da308b38ec58cd45377a9e9088e85f48820',
+  'references/gallery/none.json':'9e4b8008ff3257770301d760192e548ebcc14de017b53072d3e4074e72e50467',
+  'references/gallery/overlap.json':'f3f4bf4a8f6dec49d4b3f928f48a83f37a3430b53b3682bb48e0569359f29c21',
+  'references/gallery/quantity.json':'65229fc752730608e1de2f08b8c56ef18430c8777737334b1b33216e0ed33c2b',
+}};
