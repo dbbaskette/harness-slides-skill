@@ -30,19 +30,19 @@
        {
         "type": "box",
         "id": "depend_shop",
-        "style": "bar",
+        "style": "tint",
         "text": "Checkout cannot take an order"
        },
        {
         "type": "box",
         "id": "depend_help",
-        "style": "bar",
+        "style": "tint",
         "text": "Support cannot open an account"
        },
        {
         "type": "box",
         "id": "depend_bill",
-        "style": "bar",
+        "style": "tint",
         "text": "Billing cannot show an invoice"
        }
       ]

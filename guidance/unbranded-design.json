@@ -2,7 +2,8 @@
   "fontFamily": "Arial",
   "colors": {
     "canvasPrimary": "#FFFFFF", "canvasSecondary": "#F0F2F5", "inkDeep": "#202124",
-    "inkSecondary": "#555555", "headingPrimary": "#2867B2", "accentAqua": "#2867B2"
+    "inkSecondary": "#555555", "headingPrimary": "#2867B2", "accentAqua": "#2867B2",
+    "accentTeal": "#1C7C70", "accentPlum": "#7A4E96"
   },
   "slides": {
     "canvas": {"width": 960, "height": 540},

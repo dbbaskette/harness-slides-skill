@@ -57,7 +57,9 @@ test('a preview builds the deck, imports it once, exports the render and returns
   const sheet=decodePng(await readFile(result.contactSheet)),packet=JSON.parse(await readFile(result.critic,'utf8'));
   assert.deepEqual([sheet.width,sheet.height],[2*16+3*12,2*(9+36)+3*12]);
   assert.equal(packet.deckSha256,result.deckSha256);assert.equal(packet.questions.length,8);assert.deepEqual(packet.slides.map(s=>[s.number,s.id]),[[1,'flow_slide'],[2,'prose_slide'],[3,'cards_one'],[4,'cards_two']]);assert.deepEqual(Object.keys(packet.grades),['critical','major','minor']);
-  assert.ok(result.slides[0].findings.some(f=>f.code==='unattached-connector'));assert.ok(result.slides[1].findings.some(f=>f.code==='relational-text-only'));
+  // The arrow to a text now holds on to it; the findings are grouped per slide for repair.
+  assert.ok(!result.slides[0].findings.some(f=>f.code==='unattached-connector'));assert.deepEqual(result.native[0].attached,['edge_one']);assert.ok(result.slides[1].findings.some(f=>f.code==='relational-text-only'));
+  assert.ok(result.repair.slides.some(c=>c.slide==='prose_slide'&&c.codes['relational-text-only']===1));assert.deepEqual(result.repair.blocking,[]);
   assert.deepEqual(JSON.parse(await readFile(join(dir,'preview','preview.json'),'utf8')).slides.map(s=>s.id),['flow_slide','prose_slide','cards_one','cards_two']);
 });
 

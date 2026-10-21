@@ -31,7 +31,7 @@ export function compileGoogleScene(scene,deck,{localImages=false}={}) {
   function text(e,cellLocation) {
     const selector=cellLocation?{cellLocation}:{};
     return [{insertText:{objectId:e.id,...selector,insertionIndex:0,text:e.text}},
-      {updateTextStyle:{objectId:e.id,...selector,textRange:{type:'ALL'},style:{...(e.href?{link:{url:e.href}}:{}),fontFamily:t.font,fontSize:{magnitude:e.fontSize??(e.role==='title'?t.titleSize:t.bodySize),unit:'PT'},bold:e.bold??false,foregroundColor:{opaqueColor:solid(e.color??'text')}},fields:'fontFamily,fontSize,bold,foregroundColor'+(e.href?',link':'')}},
+      {updateTextStyle:{objectId:e.id,...selector,textRange:{type:'ALL'},style:{...(e.href?{link:{url:e.href}}:{}),fontFamily:t.font,fontSize:{magnitude:e.fontSize??(e.role==='title'?t.titleSize:t.bodySize),unit:'PT'},bold:e.bold??false,...(e.strike?{strikethrough:true}:{}),foregroundColor:{opaqueColor:solid(e.color??'text')}},fields:'fontFamily,fontSize,bold,foregroundColor'+(e.strike?',strikethrough':'')+(e.href?',link':'')}},
       {updateParagraphStyle:{objectId:e.id,...selector,textRange:{type:'ALL'},style:{alignment:({left:'START',center:'CENTER',right:'END'})[e.align??'left'],lineSpacing:125,spaceAbove:{magnitude:0,unit:'PT'},spaceBelow:{magnitude:0,unit:'PT'}},fields:'alignment,lineSpacing,spaceAbove,spaceBelow'}}];
   }
   for(const s of scene.slides) {
@@ -63,7 +63,7 @@ export function compileGoogleScene(scene,deck,{localImages=false}={}) {
         requests.push({createSheetsChart:{objectId:e.id,spreadsheetId:c.spreadsheetId,chartId:c.chartId,linkingMode:'LINKED',elementProperties:props(s,e)}});
       } else if(e.type==='line') {
         const lineProps=props(s,e);lineProps.transform={...lineProps.transform,scaleX:e.flipH?-1:1,scaleY:e.flipV?-1:1,translateX:e.x+(e.flipH?e.width:0),translateY:e.y+(e.flipV?e.height:0)};requests.push({createLine:{objectId:e.id,lineCategory:e.route==='elbow'?'BENT':e.route==='curve'?'CURVED':'STRAIGHT',elementProperties:lineProps}});
-        requests.push({updateLineProperties:{objectId:e.id,lineProperties:{lineFill:{solidFill:{color:solid(e.color??'accent'),alpha:1}},weight:{magnitude:e.weight??2,unit:'PT'},endArrow:e.arrow?'FILL_ARROW':'NONE'},fields:'lineFill,weight,endArrow'}});
+        requests.push({updateLineProperties:{objectId:e.id,lineProperties:{lineFill:{solidFill:{color:solid(e.color??'accent'),alpha:1}},weight:{magnitude:e.weight??2,unit:'PT'},...(e.dash?{dashStyle:e.dash==='dot'?'DOT':'DASH'}:{}),endArrow:e.arrow?'FILL_ARROW':'NONE'},fields:'lineFill,weight,endArrow'+(e.dash?',dashStyle':'')}});
       } else if(e.type==='table') {
         requests.push({createTable:{objectId:e.id,rows:e.rows.length,columns:e.rows[0].length,elementProperties:{pageObjectId:s.id}}});
         requests.push({updatePageElementTransform:{objectId:e.id,applyMode:'ABSOLUTE',transform:transform(e.x,e.y)}});
@@ -73,7 +73,7 @@ export function compileGoogleScene(scene,deck,{localImages=false}={}) {
         e.rows.forEach((row,rowIndex)=>row.forEach((value,columnIndex)=>{if(value)requests.push(...text({...e,text:value,bold:rowIndex===0,color:rowIndex===0?(e.headerColor??e.color??'text'):(e.color??'text')}, {rowIndex,columnIndex}));requests.push({updateTableCellProperties:{objectId:e.id,tableRange:{location:{rowIndex,columnIndex},rowSpan:1,columnSpan:1},tableCellProperties:{tableCellBackgroundFill:{solidFill:{color:solid(rowIndex===0?(e.headerFill??'muted'):(e.bodyFill??'background')),alpha:1}},contentAlignment:'MIDDLE'},fields:'tableCellBackgroundFill,contentAlignment'}});}));
       } else {
         requests.push({createShape:{objectId:e.id,shapeType:e.type==='text'?'TEXT_BOX':shapeKinds[e.shape??'rect'][1],elementProperties:props(s,e)}});
-        requests.push({updateShapeProperties:{objectId:e.id,shapeProperties:{shapeBackgroundFill:e.fill?{solidFill:{color:solid(e.fill),alpha:1}}:{propertyState:'NOT_RENDERED'},outline:e.stroke?{outlineFill:{solidFill:{color:solid(e.stroke),alpha:1}},weight:{magnitude:e.strokeWeight??1.5,unit:'PT'},propertyState:'RENDERED'}:{propertyState:'NOT_RENDERED'},contentAlignment:'MIDDLE',autofit:{autofitType:'NONE'}},fields:'shapeBackgroundFill,outline,contentAlignment,autofit.autofitType'}});
+        requests.push({updateShapeProperties:{objectId:e.id,shapeProperties:{shapeBackgroundFill:e.fill?{solidFill:{color:solid(e.fill),alpha:1}}:{propertyState:'NOT_RENDERED'},outline:e.stroke?{outlineFill:{solidFill:{color:solid(e.stroke),alpha:1}},weight:{magnitude:e.strokeWeight??1.5,unit:'PT'},...(e.dash?{dashStyle:e.dash==='dot'?'DOT':'DASH'}:{}),propertyState:'RENDERED'}:{propertyState:'NOT_RENDERED'},contentAlignment:'MIDDLE',autofit:{autofitType:'NONE'}},fields:'shapeBackgroundFill,outline,contentAlignment,autofit.autofitType'}});
         if(e.text)requests.push(...text(e));
       }
     }

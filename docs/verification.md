@@ -1,6 +1,27 @@
 # Verification
 
-## Current development verification — 0.15.0, 19 October 2026
+## Current development verification — 0.16.0, 21 October 2026
+
+The visual vocabulary change (tint cards, node states, dashed edges, attached
+text endpoints, supporting colors, split-point and provenance audits, refusal
+of words over words and of words wider than their line, `repair` clusters) has
+tests for each behaviour in `tests/visual-vocabulary.test.mjs`; existing tests
+were updated where behaviour changed on purpose (an arrow to a text now
+attaches; a direction without meanings accepts supporting fills).
+
+Host (macOS, Node 25): **321 tests, 317 passed, four skipped (native render,
+exact font and browser checks), zero failures**; `context:check` and
+`docs:check` pass. Disposable Tart VM from `tanzu-brand-golden-gate-base`
+(macOS 27.0, Node 22.23.2, LibreOffice and Poppler, Playwright Chromium):
+`npm run test:native` **321 passed, zero failures or skips**. The VM also
+converted before/after proof decks built with `compose render` through
+LibreOffice and Poppler, the conversion `compose preview --renderer local` runs,
+and the refreshed gallery images in `docs/gallery/` come from that run. No
+Google, Gemini or other provider requests were made; Google import of dashed
+and dotted lines, strikethrough, the failed badge and connectors attached to
+text boxes is unverified.
+
+## Development verification — 0.15.0, 19 October 2026
 
 Issue #72 closes the reproduced gaps in unbranded native structure, direct-source
 image snapshots, critique coverage and preview ownership. The native writer is

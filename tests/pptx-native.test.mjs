@@ -71,8 +71,13 @@ test('edges attach to the facing connection sites and box children form a group'
 });
 
 test('an edge to something with no connection site is drawn but reported unattached',async t=>{
+  // A text is sized to its words and holds an arrow at the edge of them, like a rectangle.
   const comp=flow(),first=comp.slides[0].canvas.children[0];comp.slides[0].canvas.children[0]={type:'text',id:first.id,text:'Edge'};
-  const {output,result}=await build(t,comp),xml=await part(output,'ppt/slides/harnessSlide1.xml');
+  const worded=await build(t,comp);assert.deepEqual(worded.result.native[0].attached,['edge_one']);assert.match(await part(worded.output,'ppt/slides/harnessSlide1.xml'),/stCxn/);
+  // A picture has no connection sites, so its arrow is positioned but not attached.
+  const dir=await temporary(t),c=await brand(dir);await writeFile(join(dir,'pixel.png'),png);
+  const pictured=flow();pictured.slides[0].canvas.children[0]={type:'image',id:first.id,src:'pixel.png',alt:'A pixel'};
+  const compiled=await compileComposition(pictured,c),output=join(dir,'deck.pptx'),result=await emitNativePptx({scene:compiled.scene,structure:compiled.structure,brand:c,output,base:dir}),xml=await part(output,'ppt/slides/harnessSlide1.xml');
   assert.deepEqual(result.native[0].unattached,['edge_one']);assert.match(xml,/<p:cxnSp>/);assert.doesNotMatch(xml,/stCxn/);
   // A hexagon, a chevron and a cylinder attach on the sides they have sites for.
   for(const shape of ['hexagon','chevron','can']){const sided=flow();sided.slides[0].canvas.children[0].shape=shape;const built=await build(t,sided);assert.deepEqual(built.result.native[0].unattached,[],shape);assert.match(await part(built.output,'ppt/slides/harnessSlide1.xml'),/stCxn/,shape);}

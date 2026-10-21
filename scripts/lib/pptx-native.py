@@ -125,12 +125,18 @@ def outline(e):
     """A shape's own line: none unless the scene gives it a stroke."""
     if not e.get('stroke'):
         return '<a:ln><a:noFill/></a:ln>'
-    return f'<a:ln w="{emu(e.get("strokeWeight", 1.5))}">{fill(e["stroke"])}</a:ln>'
+    return f'<a:ln w="{emu(e.get("strokeWeight", 1.5))}">{fill(e["stroke"])}{dash(e)}</a:ln>'
+
+
+def dash(e):
+    """A dashed or dotted line; solid lines write nothing, as before."""
+    return {'dash': '<a:prstDash val="dash"/>', 'dot': '<a:prstDash val="sysDot"/>'}.get(e.get('dash'), '')
 
 
 def paragraphs(e, font):
     align = {'left': 'l', 'center': 'ctr', 'right': 'r'}[e.get('align', 'left')]
-    run = (f'<a:rPr lang="en-US" sz="{int(round(e["fontSize"] * 100))}" b="{1 if e.get("bold") else 0}" dirty="0">'
+    strike = ' strike="sngStrike"' if e.get('strike') else ''
+    run = (f'<a:rPr lang="en-US" sz="{int(round(e["fontSize"] * 100))}" b="{1 if e.get("bold") else 0}"{strike} dirty="0">'
            f'{fill(e["color"])}<a:latin typeface={quoteattr(font)}/><a:cs typeface={quoteattr(font)}/></a:rPr>')
     props = (f'<a:pPr marL="0" indent="0" algn="{align}"><a:lnSpc><a:spcPct val="125000"/></a:lnSpc>'
              '<a:spcBef><a:spcPts val="0"/></a:spcBef><a:spcAft><a:spcPts val="0"/></a:spcAft><a:buNone/></a:pPr>')
@@ -410,6 +416,9 @@ class Slide:
                 site, number = None, self.numbers.get(node)
                 if target and target['type'] == 'shape':
                     site = SITES.get(target.get('shape', 'rect'), {}).get(self.side(target, point))
+                elif target and target['type'] == 'text':
+                    # A text box is a rectangle with the usual four sites; the compiler sizes it to its words.
+                    site = SITES['rect'].get(self.side(target, point))
                 elif target and target['type'] == 'icon' and target.get('style') != 'plain':
                     # A group has no connection sites, but the disc or ring inside an icon does.
                     site, number = SITES['ellipse'].get(self.side(target, point)), self.number(f'{node}#1')
@@ -433,7 +442,7 @@ class Slide:
             frame = xfrm(flat, (' flipH="1"' if e.get('flipH') else '') + (' flipV="1"' if e.get('flipV') else ''))
         return (f'<p:cxnSp>{non_visual("CxnSp", self.numbers[e["id"]], e["id"], inner=joined)}<p:spPr>{frame}'
                 f'<a:prstGeom prst="{preset or "straightConnector1"}"><a:avLst/></a:prstGeom><a:ln w="{emu(e.get("weight", 2))}">'
-                f'{fill(e.get("color", "#000000"))}{arrow}</a:ln></p:spPr></p:cxnSp>')
+                f'{fill(e.get("color", "#000000"))}{dash(e)}{arrow}</a:ln></p:spPr></p:cxnSp>')
 
     def table(self, e):
         """A native table: one graphic frame, a grid of editable cells, a filled header row and hairlines between rows."""

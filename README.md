@@ -23,7 +23,7 @@ The installer adds the skill to all three agents. Look for `"status": "installed
 and `"dependencies": "installed"` in the result, then start a new agent session.
 
 [Published release: v0.14.1](https://github.com/dbbaskette/harness-slides-skill/releases/tag/v0.14.1)
-· [Development changes: 0.15.0, unreleased](docs/releases/unreleased.md)
+· [Development changes: 0.16.0, unreleased](docs/releases/unreleased.md)
 
 ### 2. Open your project
 

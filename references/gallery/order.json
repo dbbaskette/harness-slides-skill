@@ -29,7 +29,7 @@
      {
       "type": "box",
       "id": "order_build",
-      "style": "outline",
+      "style": "tint",
       "children": [
        {
         "type": "badge",
@@ -56,7 +56,7 @@
      {
       "type": "box",
       "id": "order_review",
-      "style": "outline",
+      "style": "tint",
       "children": [
        {
         "type": "badge",
@@ -83,7 +83,7 @@
      {
       "type": "box",
       "id": "order_stage",
-      "style": "outline",
+      "style": "tint",
       "children": [
        {
         "type": "badge",

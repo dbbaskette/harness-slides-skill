@@ -1,6 +1,6 @@
 # Versioned releases
 
-Development changes are recorded in [0.15.0 — unreleased](releases/unreleased.md).
+Development changes are recorded in [0.16.0 — unreleased](releases/unreleased.md).
 
 GitHub Releases and immutable `v<package-version>` tags identify supported runtime
 code. The release ZIP contains the exact tagged source and installer; its SHA-256

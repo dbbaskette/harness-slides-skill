@@ -32,7 +32,11 @@ Before the first slide, write a `direction` for the whole deck:
 
 Every slide then follows it. Boxes start neutral, and fills come only from the
 neutral, the meanings and the brand's canvas color. A color in `meanings` keeps
-that meaning on every slide; never borrow it for decoration. Nothing uses the
+that meaning on every slide; never borrow it for decoration. Give a deck of more
+than about ten slides two or three meanings, such as each product compared or
+a state. Until it has them, `compile` lets cards take up to three supporting
+colors from the brand, which `compose contract --brand` names, and `preview`
+reports `no-meanings`. Nothing uses the
 focal color except the one node a slide names as its point: not another box, not
 text, not an arrow. Arrows are drawn in an ink color. There is no limit on how
 many fill colors a slide uses; each one has to be in the direction, with a
@@ -53,7 +57,7 @@ meaning. Text and icons may use the brand's ink and on-color roles freely.
 | Relation | The parts are | Draw it as |
 | --- | --- | --- |
 | `order` | steps in sequence | nodes joined by edges, chevrons, or steps stacked in a column |
-| `dependency` | things that rely on or feed each other | nodes joined by edges |
+| `dependency` | things that rely on or feed each other | nodes joined by edges, or labelled cards in reading order |
 | `hierarchy` | levels, parents and children | edges, nested boxes or stacked layers |
 | `membership` | a group and its members | a box holding two or more members |
 | `contrast` | things compared | side by side |
@@ -95,19 +99,47 @@ from four containers and a handful of leaves:
 | `chart` | A native bar, line or pie chart in the brand's chart colors, its data editable |
 | `spacer` | Deliberate empty space, and room for an arrow label |
 
-A box has three looks, set with `style`:
+A box has four looks, set with `style`:
 
-- `solid` fills it. Keep that for the point of the slide and for a color that
-  carries a meaning.
-- `outline` draws it as a line and leaves the inside open.
-- `bar` is a neutral card with a strip of color down the left edge.
+- `tint` is a light surface of its `fill`, or of the neutral when it sets none.
+  It is the supporting card: filled, in the color of what it stands for. A
+  brand that forbids lightening its colors (`compose contract --brand` says so)
+  draws it as a neutral `bar` card instead; for such a brand, write `bar`.
+- `bar` is a neutral card with a strip of its color down the left edge.
+- `solid` fills it at full strength. Keep that for the point of the slide.
+- `outline` draws only a line. Keep it for a boundary, such as a zone or a
+  level, and for something empty or secondary.
 
 The line or strip is the focal color on the slide's point, the box's `fill`
 where it has one, and a quiet ink otherwise. Under a direction a `fill` is still
-one of its meanings, so a plain supporting card sets none.
+one of its meanings.
 
-A slide of nothing but solid boxes is heavy and flat. Give the supporting cards
-`outline` or `bar`, and let the one solid shape be the thing to look at.
+Supporting cards are `tint` or `bar`; let the one solid shape be the thing to
+look at. A slide of thin outlined boxes reads as a wireframe, and a big outlined
+box with two lines in it reads as empty. Lead a card with its icon, or a badge
+where the brand has no icons, and let a row `align` its cards so they take the
+height their content needs.
+
+## Labels on nodes, sentences whole
+
+A diagram node carries a short label: "Base backup", "Zone A", "Primary". An
+approved point's sentence stays whole, in one text or card, or in the notes
+beside the labelled diagram. Never spread one sentence across several nodes.
+An outline point may list `parts`, short labels approved for separate nodes.
+Without them, use labelled cards, which also draw a `dependency`.
+
+When the build knows the outline, `compile` refuses a reading deck whose
+point is split across nodes and a live deck's preview reports it: pass
+`--outline outline.json`, or `--project ROOT` for a project made by `outline start`.
+
+Show a state, not a drawing of one. `state` on a box or text is `muted`,
+`struck` (its words struck through) or `failed` (a box, with a status-colored
+dashed edge and an × badge); what a box holds is muted with it. An edge's
+`style` is `dashed` or `dotted` for a weaker link, such as asynchronous
+replication. Never type `- - >` or box-drawing characters, and never draw lines
+across words to cross them out. `compile` refuses words drawn over other words
+and a word wider than its line, which a renderer would break mid-word; widen
+the node or shorten the word. Without the brand font these are warnings.
 
 A box that holds other nodes is a card. Its content starts at the top; set
 `align` to `center` or `end` to place it lower. Centre only when every card in a
@@ -135,7 +167,8 @@ in the same place on every slide:
 | --- | --- |
 | `subtitle` | One line under the title, in the template's own subtitle line: the section, or the question the slide answers |
 | `caveat` | A ruled strip at the foot. Text, or `{"label":"Limit","text":"…"}` with a one-word label |
-| `source` | A line under the caveat naming where the claim comes from |
+| `source` | A line under the caveat: a citation the audience can follow, such as "Tanzu for Postgres 4.5 documentation" |
+| `provenance` | Never drawn. Finding, objective or research IDs behind the slide; it is added to the speaker notes |
 
 Each takes its height from the canvas, so use the ones a slide needs. Decide
 once which of them every slide in the deck carries, and keep to it.
@@ -236,8 +269,9 @@ brand's own icon rules where it has them. An icon needs its label beside it,
 stands for one thing throughout the deck, and is not repeated across the cards
 of one slide; `preview` reports each of these. Shapes: `rect`, `roundRect`,
 `ellipse`, `diamond`, `hexagon`, `chevron`, `can`. An arrow stays attached to
-any of them and to an icon with a disc or a ring, so it follows when someone
-moves the node.
+any of them, to a text and to an icon with a disc or a ring, so it follows when
+someone moves the node. A text an arrow points at is sized to its words, so the
+arrow meets them.
 
 ## Build, look, fix
 
@@ -256,7 +290,8 @@ the result shows how much of each slide's height the content needs. Then add
 `--output`. Shorten the wording, split the slide or restructure. Text is never
 shrunk to fit.
 
-`preview` returns native images with findings. Verified bundles reuse the exact
+`preview` returns native images with findings, and `repair` groups each slide's
+warnings and errors, blocking slides first, for the next round of fixes. Verified bundles reuse the exact
 editable PPTX and pixels when input dependencies are unchanged; no critique or
 user approval is copied. A changed deck may still need full native PDF conversion,
 but unaffected page images can be reused and thumbnails come from those images.
@@ -284,7 +319,10 @@ A batch costs one round trip where three single slides cost three, and the
 whole build renders in a few seconds either way. Look at each slide; if it
 needs revising, revise it and look at the revision before the next batch. Two revisions is the limit for a slide:
 after that, write down what still bothers you and move on. The final review
-picks up the worst of them. Findings point at things to look at: wording that describes a relationship
+picks up the worst of them. Findings point at things to look at: an approved sentence split across nodes
+(`split-point`, blocking in a reading deck), a source line that reads as
+internal provenance, characters standing in for a drawing (`ascii-art`),
+wording that describes a relationship
 with nothing drawn, a layout repeated from the previous slide, an arrow that
 could not be attached, an icon that blends into the card behind it, a weight
 the content overrode, a deck with

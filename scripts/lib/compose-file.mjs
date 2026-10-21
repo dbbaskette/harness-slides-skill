@@ -5,7 +5,8 @@ import {resolve,dirname,join} from 'node:path';
 import {compileComposition} from './compose.mjs';
 import {checkBrandSources,neutralBrandContract} from './brand-contract.mjs';
 import {requireSceneDesign} from './design-session.mjs';
-import {digest,hash,recordedPath} from './common.mjs';
+import {digest,hash,recordedPath,regularInside} from './common.mjs';
+import {splitPoints} from './compose-audit.mjs';
 import {refuse,refuseAll,compositionProblems} from './refusals.mjs';
 import {resolveCompositionAssets,iconAssetProblems,placeImages,verifyBuiltAssets} from './assets.mjs';
 
@@ -19,7 +20,23 @@ const lines=error=>error.message.split('\n').filter(line=>!/^\d+ problems to fix
 
 // Without --output this only checks: every structure, fit, icon and layout problem comes back from one run and nothing is written.
 // With --design-project the approved design is checked too, written or not; --section accepts a contiguous run of approved slides.
-export async function compileCompositionFile({file,brand,output,fonts,project,'design-project':designProject,'asset-project':assetProject,section,register=true}) {
+// The approved outline: named with --outline, or the one an outline project's manifest records.
+async function approvedOutline(outline,project) {
+  // A named outline that cannot be read or parsed is refused with what to fix, never skipped.
+  const load=async(path,named)=>{
+    let bytes;try{bytes=await readFile(path);}catch(error){throw refuse(`${named}, which cannot be read (${error.code??error.message}); restore it or name the outline with --outline`,{code:'input-invalid'});}
+    try{return {path:resolve(path),bytes,outline:JSON.parse(bytes)};}catch{throw refuse(`the outline ${named.replace(/^.* the outline /,'')} is not valid JSON; fix it before compiling`,{code:'input-invalid'});}
+  };
+  if(outline)return load(outline,`--outline names the outline ${outline}`);
+  if(!project)return null;
+  let manifest;try{manifest=JSON.parse(await readFile(join(resolve(project),'project.json'),'utf8'));}catch(error){if(error.code==='ENOENT')return null;throw error;}
+  if(manifest?.outline===undefined)return null;
+  if(typeof manifest.outline!=='string')throw refuse('project.json names an outline that is not a path',{code:'input-invalid'});
+  let path;try{path=await regularInside(resolve(project),manifest.outline);}catch(error){throw refuse(`project.json names the outline ${manifest.outline}, which cannot be read (${error.code??error.message}); restore it or name the outline with --outline`,{code:'input-invalid'});}
+  return load(path,`project.json names the outline ${manifest.outline}`);
+}
+
+export async function compileCompositionFile({file,brand,output,fonts,project,outline:outlineFile,'design-project':designProject,'asset-project':assetProject,section,register=true}) {
   if(!file)throw new Error('Provide --file composition.json, and a new --output directory to write the build');
   if(section&&!designProject)throw refuse('--section needs --design-project: a section is checked against the approved design',{code:'input-invalid'});
   const bytes=await readFile(file),brandBytes=brand?await readFile(brand):null;
@@ -33,9 +50,13 @@ export async function compileCompositionFile({file,brand,output,fonts,project,'d
   const native=await import('./pptx-native.mjs'),found=compiled?.structure??requested(comp),wanted={...found,icons:(found.icons??[]).filter(i=>!unresolved.has(i.id))};
   for(const check of [native.checkIcons,native.checkLayouts])try{await check(wanted,contract);}catch(error){problems.push(...lines(error));}
   problems.push(...await iconAssetProblems(icons,contract));
+  // An approved sentence split across several nodes misleads a reader with no presenter, so a reading deck refuses it.
+  const approvedSource=await approvedOutline(outlineFile,project),reading=(contract.medium.delivery??'reading')==='reading';
+  const split=approvedSource?splitPoints(approvedSource.outline,comp):[];
+  if(reading)problems.push(...split.map(f=>`${f.slide}: ${f.detail.replace(/^The approved point/,'the approved point')}`));
   if(problems.length)throw refuseAll(problems.length===1?problems[0]:`${problems.length} problems to fix:\n${problems.join('\n')}`,compositionProblems(problems,comp));
   const {scene,structure,report}=compiled;
-  const summary={slides:scene.slides.length,brandRevision:contract.revision,measurement:report.measurement,groups:structure.groups.length,connectors:structure.connectors.length,icons:structure.icons.length,room:Object.fromEntries(report.room.map(r=>[r.slide,`${r.needs} of ${r.has}`])),...(structure.adjusted?.length?{weightOverridden:structure.adjusted}:{}),...(structure.reading?.length?{readingSizeInLiveDeck:structure.reading.map(r=>`${r.slide}: ${r.nodes.length} items at ${r.size}pt`)}:{})};
+  const summary={slides:scene.slides.length,brandRevision:contract.revision,measurement:report.measurement,groups:structure.groups.length,connectors:structure.connectors.length,icons:structure.icons.length,room:Object.fromEntries(report.room.map(r=>[r.slide,`${r.needs} of ${r.has}`])),...(structure.adjusted?.length?{weightOverridden:structure.adjusted}:{}),...(structure.reading?.length?{readingSizeInLiveDeck:structure.reading.map(r=>`${r.slide}: ${r.nodes.length} items at ${r.size}pt`)}:{}),...(split.length?{splitPoints:split.map(f=>`${f.slide}: ${f.detail}`)}:{}),...(structure.supporting?{supportingColors:structure.supporting}:{})};
   const approved=designProject||output?await requireSceneDesign(scene,designProject,undefined,{section}):null;
   if(approved)summary.design={revision:approved.revision,scope:approved.scope,slides:approved.slides};
   if(!output)return {status:'fits; nothing written. Add a new --output directory to write the build',...summary};
@@ -48,7 +69,7 @@ export async function compileCompositionFile({file,brand,output,fonts,project,'d
   for(const i of structure.icons){const use=icons.get(i.id);if(use)assets.push({object:i.id,slide:i.slide,asset:use.assetId,kind:'icon',ref:use.ref,sha256:use.sha256});}
   // The composition and brand are named relative to the build when both lie in the project; one from elsewhere stays absolute.
   output=resolve(output);const inputProject=project??designProject??assetProject,input=path=>recordedPath(output,path,inputProject);
-  report.inputs={composition:{path:input(file),sha256:hash(bytes)},brand:brand?{path:input(brand),sha256:hash(brandBytes)}:{kind:'neutral defaults',revision:contract.revision},assets};
+  report.inputs={composition:{path:input(file),sha256:hash(bytes)},brand:brand?{path:input(brand),sha256:hash(brandBytes)}:{kind:'neutral defaults',revision:contract.revision},assets,...(approvedSource?{outline:{path:input(approvedSource.path),sha256:hash(approvedSource.bytes)}}:{})};
   if(fonts)report.fonts=JSON.parse(await readFile(fonts,'utf8'));
   report.sceneDigest=digest(scene);report.structureDigest=digest(structure);report.project=recordedPath(output,project??output,project??output);
   await mkdir(output,{mode:0o700});

@@ -44,7 +44,7 @@ this engine. Apply its selected contract and assets; do not mix identities.
 
 | Task | Read |
 | --- | --- |
-| New deck or full rework | First [draft](references/draft.md) it, get the story approved, reuse settled brand/style choices and show a content sample only for a meaningful unresolved visual choice as the [walkthrough](references/design-walkthrough.md) says. Then, to build: [design](references/design.md) and [compositions](references/compositions.md) |
+| New deck or full rework | First [draft](references/draft.md) it, get the story approved, then take the look from the brand add-on's choice step when it supplies directions, or reuse settled choices and compare content samples for an open visual choice, as the [walkthrough](references/design-walkthrough.md) says. A studio runner hosts these checkpoints and never skips one. Then, to build: [design](references/design.md) and [compositions](references/compositions.md) |
 | Redesign that keeps the content | [Design](references/design.md) and [walkthrough](references/design-walkthrough.md), then [compositions](references/compositions.md) |
 | More than about ten content slides, in a harness that runs subagents | Also [parallel build](references/parallel-build.md), once the walkthrough is approved |
 | A deck that compositions cannot express, or a chart linked to Google Sheets | [Other methods](references/authoring.md); load only the one chosen |

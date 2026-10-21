@@ -21,7 +21,8 @@ jobs:
       - run: npm run context:check
       - run: npm run docs:check
   native:
-    runs-on: ubuntu-latest
+    # Playwright has no Chromium build for ubuntu-latest's current image (26.04); pin the image it supports.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

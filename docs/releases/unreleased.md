@@ -1,4 +1,45 @@
-# 0.15.0 — unreleased
+# 0.16.0 — unreleased
+
+Compositions get a fuller visual vocabulary. A `tint` card is a light surface of
+the color it stands for, and guidance makes `tint` or `bar` the supporting card,
+keeping `outline` for boundaries. A brand contract with `fills: {tints: false}`
+never has a color lightened: its tint cards compile as neutral bar cards with a
+strip of the meaning color. A direction without meanings may fill with up
+to three supporting brand colors; a deck of more than ten content slides without
+meanings gets a `no-meanings` warning. Nodes take `state: muted|struck|failed`
+and edges `style: dashed|dotted`, so nothing is crossed out with lines or typed
+as `- - >`. Arrows to texts attach at the edge of the words. Labelled cards draw a
+dependency without edges. The gallery examples are filled and badge-led, and the
+neutral palette adds two accents.
+
+Approved sentences stay whole. Outline points may list `parts`, short labels
+for diagram nodes. With `--outline` or an outline `--project`, `compose compile`
+refuses a reading deck whose point is split across nodes, and `preview` reports
+`split-point`. `source` is a learner-facing citation; `provenance` is never
+drawn and goes into the notes, and `internal-source` warns about finding IDs on
+a slide. Words drawn over other words, and a word wider than its line, are
+refused when the brand font measured them; with an estimated measurement they
+are `unverified-fit` warnings. `preview` refuses nothing new but reports an
+outline changed since the build (`outline-changed`). `preview.json` adds `repair`,
+the warnings and errors grouped per slide, blocking slides first.
+
+The brand drives the look and Harness Slides drives iteration. When a brand
+add-on supplies directions, such as Tanzu Brand's `look samples` and `look
+choose`, the look comes from that choice step; without one, the optional
+comparison of content samples remains. A studio runner hosts the draft
+approval, look choice and final acceptance checkpoints in its own interface and
+never skips one by hosting it.
+
+Guidance for 0.16.0 requires runtime 0.16.0; 0.15.x retains guidance at
+`5ba00545e36a26b3f6011b65c9923e1f4efe145c`. A composition that uses none of
+the new vocabulary compiles to the same scene as before, unless it draws words
+over words or has a word wider than its line, both now refused. An arrow to a
+text is now attached, and the text is sized to its words, so a rebuilt slide
+with such an arrow can change geometry. Google Slides import of dashed and
+dotted lines, strikethrough, the failed badge and connectors attached to text
+boxes has not been checked live.
+
+## Earlier development: 0.15.0
 
 Composition output preserves editable groups, routed/attached connectors, native
 tables and chart data through the same writer with or without a brand template.

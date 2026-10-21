@@ -13,6 +13,7 @@ import {refuse} from './refusals.mjs';
 import {themeFor,color} from './scene.mjs';
 import {contrastRatio as contrast} from './compose.mjs';
 import {writeContactSheet} from './contact-sheet.mjs';
+import {splitPoints,internalSource,asciiArt,repairClusters} from './compose-audit.mjs';
 
 // Wording that states an order or a dependency. Everyday words such as "after" or "next" alone are not enough.
 const relational=/→|->|=>|\b(?:and then|, then|first\b.{1,80}\bthen|leads? to|results? in|depends? on|flows? (?:to|into|through|from)|sends? (?:\w+ ){1,4}to|hands? off to|followed by|versus|vs\.?|step \d|stage \d|phase \d)\b/i;
@@ -23,7 +24,7 @@ const signature=slide=>JSON.stringify(slide.elements.filter(e=>e.role!=='title')
 const backdrop=(slide,box,before=slide.elements.length)=>slide.elements.slice(0,before).filter(e=>e.type==='shape'&&e.fill&&e.x<=box.x+.5&&e.y<=box.y+.5&&e.x+e.width>=box.x+box.width-.5&&e.y+e.height>=box.y+box.height-.5).at(-1);
 
 // Screens that need no render. They point at slides to look at; they do not approve anything.
-export async function screenComposition({scene,structure={groups:[],connectors:[]},native=[],fonts}) {
+export async function screenComposition({scene,structure={groups:[],connectors:[]},native=[],fonts,outline,delivery='reading'}) {
   const audit=await auditSceneQuality(scene,{fonts}),theme=themeFor(scene);
   // The audit judges text against the slide background. Text on a filled card is judged against that card instead.
   const findings=audit.findings.filter(f=>{
@@ -41,6 +42,7 @@ export async function screenComposition({scene,structure={groups:[],connectors:[
   const templated=new Set((structure.layouts??[]).filter(l=>l.layout!=='@subtitled').map(l=>l.slide));
   for(const id of structure.unspoken??[])findings.push({slide:id,severity:'info',code:'no-notes',detail:'This deck is presented live and the slide has no speaker notes. Say what the presenter says here and name the source behind the claim.'});
   for(const r of structure.reading??[])findings.push({slide:r.slide,severity:'warn',code:'reading-size-in-live-deck',detail:`${r.nodes.length} text items here are set at ${r.size}pt, the reading size, in a deck delivered live at ${r.live}pt. Cut words, split the slide or restructure instead of shrinking the type.`});
+  for(const u of structure.unverifiedFit??[])findings.push({slide:u.slide,object:u.id,severity:'warn',code:'unverified-fit',detail:`${u.detail}. The brand font was unavailable, so this was measured by estimate: look at the render.`});
   for(const a of structure.adjusted??[])findings.push({slide:a.slide,object:a.id,severity:'warn',code:'weight-overridden',detail:`${a.id} was given ${a.got}pt, not the ${a.asked}pt its weight asked for, because its content or a neighbour's needs more room. If the proportion is the point, use empty boxes or less text.`});
   for(let i=findings.length-1;i>=0;i--)if(templated.has(findings[i].slide)&&['text-only','similar-geometry','density','measured-text-overflow','title-value-needs-support','content-collision'].includes(findings[i].code))findings.splice(i,1);
   // Words over a picture are deliberate here: the compiler has already refused any that lack a filled box behind them.
@@ -49,6 +51,10 @@ export async function screenComposition({scene,structure={groups:[],connectors:[
   // Deck-level discipline: one direction for the whole deck, a brief per content slide, and a rhythm that varies.
   const briefs=new Map((structure.briefs??[]).map(b=>[b.slide,b])),content=scene.slides.filter(s=>!templated.has(s.id));
   if(!structure.direction&&content.length)findings.push({slide:content[0].id,severity:'info',code:'no-direction',detail:'This deck has no direction. Decide once which color means "look here", which is the neutral and what each other color stands for, so every slide follows the same rules.'});
+  // A long deck needs colors that mean something. Without meanings the build fell back on supporting colors from the brand.
+  if(structure.direction&&!Object.keys(structure.direction.meanings??{}).length&&content.length>10)findings.push({slide:content[0].id,severity:'warn',code:'no-meanings',detail:`This deck has ${content.length} content slides and its direction gives no color a meaning, so cards can only be told apart by position.${structure.supporting?.length?` The build allowed the brand's supporting colors (${structure.supporting.join(', ')});`:''} Name two or three meanings in the direction, such as one product or one state, and fill tint or bar cards with them.`});
+  // An approved sentence chopped into nodes. In a deck read without a presenter it misleads, so it blocks delivery.
+  if(outline)findings.push(...splitPoints(outline,scene,{severity:delivery==='live'?'warn':'error'}));
   let run=0;
   for(const slide of scene.slides) {
     const brief=briefs.get(slide.id);
@@ -82,7 +88,10 @@ export async function screenComposition({scene,structure={groups:[],connectors:[
       if(!near)findings.push({slide:slide.id,object:icon.id,severity:'warn',code:'icon-alone',detail:'No words sit beside this icon, so it cannot be read. Put its label next to it, or remove it.'});
       else labelled.push({slide:slide.id,id:icon.id,icon:icon.icon,label:near.e.text.split('\n')[0].trim().toLowerCase()});
     }
-    for(const id of native.find(n=>n.id===slide.id)?.unattached??[])findings.push({slide:slide.id,object:id,severity:'info',code:'unattached-connector',detail:'This arrow is positioned but not attached, so it will not follow its shapes. An arrow attaches to a box of any shape and to an icon with a disc or ring, not to a text or a plain icon.'});
+    for(const id of native.find(n=>n.id===slide.id)?.unattached??[])findings.push({slide:slide.id,object:id,severity:'info',code:'unattached-connector',detail:'This arrow is positioned but not attached, so it will not follow its shapes. An arrow attaches to a box of any shape, a text and an icon with a disc or ring, not to a plain icon.'});
+    const source=slide.elements.find(e=>e.id===`${slide.id}_source`);
+    if(source&&internalSource(source.text))findings.push({slide:slide.id,object:source.id,severity:'warn',code:'internal-source',detail:`The source line "${source.text}" reads as internal provenance, not a citation the audience can follow. Cite the document by name, such as "Tanzu for Postgres 4.5 documentation", and move finding or objective IDs to the slide's provenance, which goes into the speaker notes.`});
+    for(const e of body.filter(e=>typeof e.text==='string'&&!/_state$/.test(e.id)&&asciiArt(e.text)))findings.push({slide:slide.id,object:e.id,severity:'warn',code:'ascii-art',detail:`"${e.text.slice(0,40)}" fakes a drawing with characters. Draw an edge (style: "dashed" or "dotted" for a weaker link), mark a node with state: "struck" or "failed", or remove the placeholder.`});
   });
   // One icon should mean one thing across the deck.
   const meanings=new Map();
@@ -198,7 +207,13 @@ async function renderCompositionPreview({file,output,slide,'file-id':fileId,rend
     const pages=Number((await tool(pdfinfo,[pdf],{timeout:30000,maxBuffer:1024*1024})).stdout.match(/^Pages:\s+(\d+)/m)?.[1]);
     if(!Number.isInteger(pages))throw new Error('Could not read the page count of the render');
     if(pages!==scene.slides.length)throw new Error(`The render has ${pages} pages for ${scene.slides.length} slides; check the deck for an import problem`);
-    const findings=await screenComposition({scene,structure,native:built.native??[],fonts:fonts?JSON.parse(await readFile(fonts,'utf8')):(await load('compose-report.json')).fonts}),slides=[];
+    // The approved outline recorded with the build, if any, lets the screen find sentences chopped into nodes.
+    const report=await load('compose-report.json'),contract=await load('brand-contract.json').catch(()=>null);
+    // The outline must be the one the build was compiled against; a changed or missing outline means the approval moved.
+    const recorded=report.inputs?.outline,outlineBytes=recorded?.path?await readFile(resolve(dir,recorded.path)).catch(()=>null):null;
+    const outlineCurrent=Boolean(outlineBytes&&hash(outlineBytes)===recorded.sha256),outline=outlineCurrent?JSON.parse(outlineBytes):null;
+    const findings=await screenComposition({scene,structure,native:built.native??[],fonts:fonts?JSON.parse(await readFile(fonts,'utf8')):report.fonts,outline,delivery:contract?.medium?.delivery??'reading'}),slides=[];
+    if(recorded&&!outlineCurrent)findings.push({slide:scene.slides[0].id,severity:'error',code:'outline-changed',detail:`The outline this build was compiled against (${recorded.path}) is ${outlineBytes?'changed':'missing'}. The approved wording may have moved: compile again against the current outline before previewing.`});
     for(const [index,s] of scene.slides.entries()) {
       if(wanted!==null&&wanted!==index)continue;
       const image=`slide-${String(index+1).padStart(2,'0')}.png`;
@@ -220,8 +235,9 @@ async function renderCompositionPreview({file,output,slide,'file-id':fileId,rend
         slides:await Promise.all(slides.map(async s=>({number:s.number,id:s.id,title:s.title,image:s.image.split(/[\\/]/).at(-1),imageSha256:hash(await readFile(s.image)),...(briefs.get(s.id)?.relation?{relation:briefs.get(s.id).relation}:{}),rhythm:briefs.get(s.id)?.rhythm??'dense'}))),
         answer:{deckSha256,reviewer:'independent|author',slides:slides.map(s=>({id:s.id,answers:Array(8).fill(null),note:'What you inspected on this slide; use true/false for every question.'})),findings:[{slide:'SLIDE_ID',question:1,severity:'critical|major|minor',note:'What is wrong, in a sentence.',fix:'Optional: what would fix it.'}],weakest:['up to three slide IDs']}},null,2)+'\n',{flag:'wx',mode:0o600});
     }
-    const result={schema:1,output,deck,deckSha256,...review,...(approved?{design:{revision:approved.revision,scope:approved.scope,slides:approved.slides}}:{}),renderer:renderer==='google'?'Google Slides PDF export':'LibreOffice',emitter:built.emitter,native:built.native??[],...(remote?{fileId:remote.id,url:remote.url}:{}),slides,
-      status:'rendered and screened; open each image and judge it. Screens are prompts to look, not approval.',next:remote?`Reuse this Drive file for the next preview: --file-id ${remote.id}`:undefined};
+    const repair=repairClusters(slides);
+    const result={schema:1,output,deck,deckSha256,...review,repair,...(approved?{design:{revision:approved.revision,scope:approved.scope,slides:approved.slides}}:{}),renderer:renderer==='google'?'Google Slides PDF export':'LibreOffice',emitter:built.emitter,native:built.native??[],...(remote?{fileId:remote.id,url:remote.url}:{}),slides,
+      status:repair.blocking.length?`rendered and screened; ${repair.blocking.length} slide${repair.blocking.length===1?'':'s'} (${repair.blocking.join(', ')}) carry blocking findings: repair them before delivery. Screens are prompts to look, not approval.`:'rendered and screened; open each image and judge it. Screens are prompts to look, not approval.',next:remote?`Reuse this Drive file for the next preview: --file-id ${remote.id}`:undefined};
     await writeFile(join(output,'preview.json'),JSON.stringify(result,null,2)+'\n',{flag:'wx',mode:0o600});
     return result;
   } catch(error) {

@@ -32,6 +32,7 @@ export function validateBrandContract(contract, { medium } = {}) {
     }
     if (!Array.isArray(s.chart?.seriesRoles) || !s.chart.seriesRoles.length || s.chart.seriesRoles.some(role=>!hex(design.colors[role]))) throw new Error('Brand charts need selected series roles');
     for(const role of [s.table?.headerFillRole,s.table?.headerTextRole]) if(!hex(design.colors[role]))throw new Error('Brand table roles are unresolved');
+    if (s.fills !== undefined && (!record(s.fills) || Object.keys(s.fills).some(k => k !== 'tints') || typeof s.fills.tints !== 'boolean')) throw new Error('Brand slides.fills.tints must be true or false');
   } else if (design.slides !== undefined) throw new Error('Blog design must not inherit slide geometry');
   if (contract.revision !== contractRevision(contract)) throw new Error('Brand contract changed; resolve a fresh handoff');
   return contract;

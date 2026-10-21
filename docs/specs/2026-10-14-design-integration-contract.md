@@ -80,13 +80,17 @@ or reused. A runtime without `capabilities` (0.13.1 and earlier) has none of the
 | `assets-approved-candidates` | `assets status\|check --design-project` reading the candidates of every slide in the stored plan, pending or approved. Without it they see only the slides of the question `design status` is waiting on, and none once the design is approved |
 | `canonical-digests` | Intents, slide approvals and plan revisions that [ignore key order](#key-order) |
 | `compose-projects` | `project.json` links versioned composition sources, builds, previews and reviews; studio text edits recompile the source, and workspace status/history/build/restore operate on the project |
+| `compose-provenance` | A slide's `provenance`, never drawn and added to the speaker notes; `internal-source` findings from `outline check` and `compose preview` for a source line that reads as internal provenance |
 | `compose-verified-critique` | Critic packet schema 2 binds the deck and each image hash; assessments answer all eight questions for every slide and give an inspection note |
+| `compose-visual-vocabulary` | Box `style: tint`, `state: muted\|struck\|failed` on a box or text, edge `style: solid\|dashed\|dotted`, edges attached to texts, labelled cards for `dependency`, supporting fills for a direction without meanings, `design.slides.fills: {tints: false}` in a brand contract, refusal of words over words and of a word wider than its line (warnings, `unverified-fit`, when measurement is estimated), and `no-meanings` and `ascii-art` findings |
 | `neutral-native-composition` | Neutral live/reading contracts and Cover/Section/Closing layouts, with the same native writer for groups, tables, routed/attached connectors and chart data |
 | `owned-google-previews` | Preview creation stores ownership and remote version receipts; a stale/unowned file is refused, and an owned unchanged preview is preserved while a fresh file is created |
+| `preview-repair-clusters` | `compose preview` returns `repair`: each slide's warning and error findings grouped by slide, blocking slides first, with codes and object IDs ([visual vocabulary](#visual-vocabulary-in-0160-unreleased)) |
 | `render-bundles` | Verified immutable native PPTX/PDF/PNG bundles shared by composition preview and design-bound review; cached artifacts contain no critique or user approval |
 | `compose-icon-assets` | `{type:icon,asset:ID}` in a composition, resolved through the asset manifest and listed in `compose-report.json` `inputs.assets` ([the asset manifest](#the-asset-manifest)) |
 | `compose-review` | `review --compiled COMPILED --design-project DIR`, the [design-bound review of a composition](#design-bound-review-of-a-composition) |
 | `compose-section` | `--section` on `compose compile` and `compose preview` ([sections](#sections)), `--design-project` on `compose preview`, and `compose compile --design-project` checking without `--output` |
+| `compose-split-point` | `compose compile --outline FILE`, or the outline of a `--project`, refusing a reading deck whose approved point is split across nodes; `split-point` preview findings; outline points' `parts` |
 | `design-batch` | `design propose --mode batch` and [the whole-plan question](#the-whole-plan-question) |
 | `design-icon-ids` | `refType: "library-id"` on an icon candidate, and `design propose --brand` and `assets check --brand --design-project` checking it ([icons by library ID](#icons-by-library-id)) |
 | `design-present-findings` | `design present --accept-findings`, `findings` on a rendered question and `renderedFindings` in `design status` ([presenting with findings](#presenting-with-findings)) |
@@ -939,3 +943,49 @@ previous file: atomic conditional media replacement has not been established.
 Always use the returned ID. A lost receipt, missing version or intervening edit
 requires a new preview without `--file-id`. No cached local render certifies a
 live Drive deck's current state.
+
+
+## Visual vocabulary in 0.16.0 (unreleased)
+
+Decks built through Training Studio with 0.14.1 came out as thin outlined boxes,
+sentences chopped across diagram nodes, internal finding IDs on the slides and
+hand-typed `- - >` arrows. 0.16.0 gives composers a fuller vocabulary and the
+audits to hold them to it. Existing compositions compile as before, except that
+words drawn over other words are now refused and an arrow to a text now attaches.
+
+| Addition | What it does |
+| --- | --- |
+| `style: "tint"` on a box | A light surface of its `fill` (the neutral by default); the focal node keeps a focal edge. Guidance now makes `tint` or `bar` the supporting card and keeps `outline` for boundaries. A brand contract with `design.slides.fills: {tints: false}` forbids lightening its colors: there `tint` compiles as a neutral bar card with a strip of its fill color (or a plain neutral card without a fill), and `compose contract --brand` says to use `bar` |
+| Supporting fills | A direction without `meanings` may fill with up to three brand colors: its chart colors, then other `accent*` roles, minus the focal and the neutral. `compose contract --brand` lists them; `compile` reports `supportingColors`; `structure.json` records `supporting` |
+| `state` on a box or text | `muted`, `struck` (strikethrough) or `failed` (a box: status-colored dashed edge and a grouped `<id>_state` × badge). A box's state carries to what it holds. The focal node cannot take one |
+| Edge `style` | `dashed` or `dotted`, written as a native dash in PPTX and Google Slides |
+| Edges to texts | A text an edge points at is sized to its words, and the connector attaches to it |
+| Labelled cards | Two or more cards in a row, column or grid, each headed by a `label` text, draw `dependency` without edges |
+| Outline `parts` | Short labels approved for diagram nodes, so a sentence need not be split |
+| `split-point` | With `--outline FILE`, or `--project ROOT` whose `project.json` names an outline, `compile` refuses a reading deck whose approved point's sentence is spread over several nodes. A live deck gets `splitPoints` in the result. The outline is recorded in `compose-report.json` `inputs.outline`, and `preview` reports `split-point` (error for reading, warning for live) |
+| `provenance` | On an outline content slide and a composition slide. Never drawn; appended to the notes as `Provenance: …`. `source` is a learner-facing citation; `internal-source` warns on finding/objective IDs, blueprints and slug-prefixed references |
+| Words over words | `compile` refuses two texts whose measured words overlap; empty padding does not count. A failed box keeps its words and children clear of its badge |
+| Word wider than its line | `compile` refuses a word (split at spaces and hyphens) wider than the text it sits in, which every renderer would break mid-word |
+| Estimated measurement | Without the brand font both refusals become `unverifiedFit` entries in `structure.json` and `unverified-fit` preview warnings |
+| `outline-changed` | A preview of a build whose recorded outline is changed or missing reports an error-level finding, so it blocks in `repair` |
+| `ascii-art`, `no-meanings` | Preview warnings for typed arrows, box-drawing or punctuation-only placeholders, and for a deck of more than ten content slides whose direction has no meanings |
+| `repair` | `preview.json` groups warning and error findings per slide: `{blocking:[slide IDs], slides:[{slide,number,blocking,codes,objects}]}` |
+
+What a caller does:
+
+- Pass `--project ROOT` (from `outline start`) or `--outline outline.json` to
+  `compose compile`, so split points are found. Treat a refusal as a repair
+  round for the named slides.
+- Use `repair.blocking` and `repair.slides` from `compose preview` to send
+  slides back for repair before the critique; treat `split-point` as blocking.
+- Put finding and objective IDs in `provenance`, not `source`.
+- Give long decks `direction.meanings`; brand add-ons may suggest them.
+- A brand add-on whose rules forbid tints (Broadcom, Tanzu) exports
+  `design.slides.fills: {tints: false}` in its contract; the engine then never
+  lightens a brand color.
+- Host the checkpoints in the studio's own interface: draft approval, the look
+  choice and final acceptance. Hosting one never skips it. When the brand add-on
+  supplies directions (Tanzu Brand's `look samples|choose` writing the outline's
+  `direction`), take the look from that step.
+- Detect support with the `compose-visual-vocabulary`, `compose-split-point`,
+  `compose-provenance` and `preview-repair-clusters` capabilities.
