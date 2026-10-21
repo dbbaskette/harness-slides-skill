@@ -182,6 +182,8 @@ const sha=data=>createHash('sha256').update(data).digest('hex');
 function googleRoute(pages,{importFails,exportFails,noPoppler}={}){
   const calls=[],uploads=[];
   const drive={
+    poolPreview:async({file,fileId,size,render})=>{calls.push(['pool',fileId??null]);if(importFails)throw new Error('Google API request failed (403): the Drive upload was refused');uploads.push(sha(await readFile(file)));
+      const remote={id:'drive_review_1',url:'https://docs.google.com/presentation/d/drive_review_1/edit',pool:{slot:1,size:Number(size??4),generation:1,receipt:'drive_review_1:1',route:'drive-update',folder:{id:'pool_folder',url:'https://drive.google.com/drive/folders/pool_folder',name:'Harness Slides previews'}}};await render(remote);return remote;},
     importDeck:async({file,name})=>{calls.push(['import',name]);if(importFails)throw new Error('Google API request failed (403): the Drive upload was refused');uploads.push(sha(await readFile(file)));return {id:'drive_review_1',url:'https://docs.google.com/presentation/d/drive_review_1/edit'};},
     updateDeck:async({fileId,file})=>{calls.push(['update',fileId]);uploads.push(sha(await readFile(file)));return {id:fileId,url:`https://docs.google.com/presentation/d/${fileId}/edit`};},
     exportPdf:async({fileId,output})=>{calls.push(['pdf',fileId]);if(exportFails)throw new Error('Drive did not return a PDF; no output was saved.');await writeFile(output,'%PDF-1.7 stand-in');return {output};}};
@@ -214,10 +216,10 @@ test('review --compiled renders through Google Drive, binding the receipts to th
   const r=await record(f),deck=await readFile(join(f.options.output,'deck.pptx'));
   // The bytes Google drew are the bytes the review hashes; Poppler was checked before anything was uploaded.
   assert.deepEqual(route.uploads,[r.source.sha256]);assert.equal(sha(deck),r.source.sha256);
-  assert.ok(route.calls.findIndex(c=>c[0]==='import')>route.calls.findIndex(c=>c[0]==='pdftoppm'&&c[1]==='-v'));
-  assert.deepEqual(route.calls.find(c=>c[0]==='import'),['import',`Preview: ${f.plan.title}`]);
+  assert.ok(route.calls.findIndex(c=>c[0]==='pool')>route.calls.findIndex(c=>c[0]==='pdftoppm'&&c[1]==='-v'));
+  assert.deepEqual(route.calls.filter(c=>['pool','import','update'].includes(c[0])),[['pool',null]]);
   assert.match(r.renderer,/Google Slides/);assert.match(first.renderer,/Google Slides/);
-  assert.deepEqual([first.fileId,r.remote.fileId,r.remote.provider],['drive_review_1','drive_review_1','google']);assert.match(first.next,/--file-id drive_review_1/);
+  assert.deepEqual([first.fileId,r.remote.fileId,r.remote.provider],['drive_review_1','drive_review_1','google']);assert.match(first.next,/Preview pool file 1 of 4.*--file-id drive_review_1:1$/);assert.equal(r.remote.pool.receipt,'drive_review_1:1');
   for(const s of r.slides)assert.equal(sha(await readFile(join(f.options.output,s.image))),s.imageSha256);
   assert.ok(r.creativeQuality.limitations.some(l=>/Google Slides/.test(l)));
   await markReview({output:f.options.output,revision:first.revision,numbers:[1,2,3],note:'SCRIPTED FIXTURE Google pixels inspected'});
@@ -225,16 +227,22 @@ test('review --compiled renders through Google Drive, binding the receipts to th
   assert.equal((await presentDesign({project:f.project,review:f.options.output,revision:first.revision})).question.phase,'rendered');
   // An unchanged build keeps its deck, pictures and receipts: nothing is uploaded again.
   const again=await prepareReview(googleOptions(f,route));assert.equal(again.revision,first.revision);assert.equal(again.readyForUserReview,true);
-  assert.equal(route.calls.filter(c=>['import','update'].includes(c[0])).length,1);
-  // A refresh with --file-id replaces that Drive file's content instead of creating another.
+  assert.equal(route.calls.filter(c=>['pool','import','update'].includes(c[0])).length,1);
+  // A refresh goes through the pool again; a bare --file-id only names a file, and the pool picks one.
   const refreshed=googleRoute(f.plan.slides.length);await prepareReview(googleOptions(f,refreshed,{refresh:true,fileId:'drive_review_1'}));
-  assert.deepEqual(refreshed.calls.filter(c=>['import','update'].includes(c[0])),[['update','drive_review_1']]);
+  assert.deepEqual(refreshed.calls.filter(c=>['pool','import','update'].includes(c[0])),[['pool','drive_review_1']]);
+  // With --new-preview-file the review takes the earlier route: the named preview is checked and kept, and a new file is made.
+  const kept=googleRoute(f.plan.slides.length);await prepareReview(googleOptions(f,kept,{refresh:true,fileId:'drive_review_1',newPreviewFile:true}));
+  assert.deepEqual(kept.calls.filter(c=>['pool','import','update'].includes(c[0])),[['update','drive_review_1']]);
+  // A receipt this computer's pool does not know is refused before anything is rendered.
+  const unknown=await problemOf(prepareReview(googleOptions(f,googleRoute(3),{output:join(f.project,'review-unknown'),fileId:'drive_review_1:1'})));
+  assert.equal(unknown.code,'input-invalid');assert.match(unknown.detail,/not a preview pool file/);
 });
 
 test('a Google review names a missing Poppler before uploading, and a Drive failure as provider-failed with the file to reuse',async t=>{
   const f=await built(t);
   const missing=googleRoute(3,{noPoppler:true}),problem=await problemOf(prepareReview(googleOptions(f,missing)));
-  assert.deepEqual([problem.code,problem.provider],['renderer-unavailable','poppler']);assert.ok(!missing.calls.some(c=>c[0]==='import'));
+  assert.deepEqual([problem.code,problem.provider],['renderer-unavailable','poppler']);assert.ok(!missing.calls.some(c=>['pool','import'].includes(c[0])));
   const refused=await problemOf(prepareReview(googleOptions(f,googleRoute(3,{importFails:true}),{output:join(f.project,'review-2')})));
   assert.deepEqual([refused.code,refused.provider],['provider-failed','google']);
   const stranded=await problemOf(prepareReview(googleOptions(f,googleRoute(3,{exportFails:true}),{output:join(f.project,'review-3')})));

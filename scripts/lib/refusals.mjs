@@ -29,6 +29,7 @@ const codes={
   'provider-missing':[true,'Set up the provider named in provider (images status says what is missing), or record a supplied image with assets add-supplied'],
   'renderer-unavailable':[true,'Install the named tool, or preview with the other renderer'],
   'provider-failed':[true,'Check Google access with drive check, or preview with --renderer local'],
+  'preview-replaced':[true,'Preview again without --file-id; the preview pool replaces its least recently used file'],
   'render-failed':[true,'Open the built deck to find the problem, then preview again'],
   'output-exists':[true,'Choose a new output directory'],
   'input-missing':[true,'Check the path given on the command line'],

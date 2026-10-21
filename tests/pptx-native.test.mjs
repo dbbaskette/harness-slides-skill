@@ -235,7 +235,7 @@ test('a deck that cannot be read back is not left at its output, by render or by
   await assert.rejects(()=>render(compiled,kept),/unbound prefix/);assert.equal(await readFile(kept,'utf8'),'kept');
   // A preview builds the same deck inside its own new folder and removes the folder. Nothing is uploaded.
   const uploads=[],upload=async()=>{uploads.push('upload');throw new Error('nothing should be uploaded');};
-  await assert.rejects(()=>previewComposition({file:compiled,output:join(dir,'preview')},{run:async()=>({stdout:''}),drive:{importDeck:upload,updateDeck:upload,exportPdf:upload}}),/unbound prefix/);assert.deepEqual(uploads,[]);
+  await assert.rejects(()=>previewComposition({file:compiled,output:join(dir,'preview')},{run:async()=>({stdout:''}),drive:{importDeck:upload,updateDeck:upload,exportPdf:upload,poolPreview:upload}}),/unbound prefix/);assert.deepEqual(uploads,[]);
   // The generated deck is read back as well, and removed when that fails.
   await assert.rejects(()=>render(neutral,join(dir,'neutral.pptx'),{env:{...process.env,PATH:bin}}),/reader unavailable/);
   assert.deepEqual((await readdir(dir)).filter(name=>name!=='.harness-slides').sort(),before);

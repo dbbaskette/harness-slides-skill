@@ -149,7 +149,7 @@ test('the CLI takes --mode on propose only',async t=>{
 const sectionFile=async(dir,name,ids,edit=()=>{})=>{const comp=await read('composition.json');comp.slides=ids.map(id=>typeof id==='string'?comp.slides.find(s=>s.id===id):id);edit(comp);const file=join(dir,name);await writeFile(file,JSON.stringify(comp));return file;};
 const tiny=encodePng({width:16,height:9,rgb:Buffer.alloc(16*9*3,200)});
 // Stand-ins for Drive and Poppler that write the files the real tools would, for a render of `pages` slides.
-const renderFakes=pages=>({drive:{importDeck:async()=>({id:'drive_file_1',url:'https://docs.google.com/presentation/d/drive_file_1/edit'}),exportPdf:async({output})=>{await writeFile(output,'%PDF-1.7 fake');return {output};}},
+const renderFakes=pages=>({drive:{poolPreview:async({render})=>{const r={id:'drive_file_1',url:''};await render?.(r);return r;},importDeck:async()=>({id:'drive_file_1',url:'https://docs.google.com/presentation/d/drive_file_1/edit'}),exportPdf:async({output})=>{await writeFile(output,'%PDF-1.7 fake');return {output};}},
   run:async(command,args)=>{if(args[0]==='-v')return {stdout:''};if(command==='pdfinfo')return {stdout:`Pages:          ${pages}\n`};await writeFile(args.at(-1)+'.png',tiny);return {stdout:''};}});
 
 test('a declared section compiles and previews against the approved design, and the merged deck compiles as a whole',async t=>{

@@ -265,7 +265,7 @@ test('a preview of a build bound to its outline reports the split point and grou
   const built=await compileCompositionFile({file,brand:brandFile,project,output:join(project,'build')});assert.equal(built.splitPoints.length,1);
   const tiny=encodePng({width:16,height:9,rgb:Buffer.alloc(16*9*3,200)});
   const run=async(command,args)=>{if(args[0]==='-v')return {stdout:''};if(command==='pdfinfo')return {stdout:'Pages:          1\n'};if(command==='pdftoppm'){await writeFile(args.at(-1)+'.png',tiny);return {stdout:''};}throw Object.assign(new Error('spawn ENOENT'),{code:'ENOENT'});};
-  const drive={importDeck:async()=>({id:'drive_file_1',url:'https://docs.google.com/presentation/d/drive_file_1/edit'}),updateDeck:async({fileId})=>({id:fileId,url:''}),exportPdf:async({output})=>{await writeFile(output,'%PDF-1.7 fake');return {output};}};
+  const drive={poolPreview:async({render})=>{const r={id:'drive_file_1',url:''};await render?.(r);return r;},importDeck:async()=>({id:'drive_file_1',url:'https://docs.google.com/presentation/d/drive_file_1/edit'}),updateDeck:async({fileId})=>({id:fileId,url:''}),exportPdf:async({output})=>{await writeFile(output,'%PDF-1.7 fake');return {output};}};
   const result=await previewComposition({file:join(project,'build'),output:join(dir,'preview')},{run,drive});
   const codes=result.slides[0].findings.map(f=>f.code);assert.ok(codes.includes('split-point'));assert.ok(codes.includes('internal-source'));
   assert.equal(result.slides[0].findings.find(f=>f.code==='split-point').severity,'warn');
@@ -353,7 +353,7 @@ test('an outline named by project.json must be readable, and a preview notices a
   await writeFile(join(project,'outline.json'),JSON.stringify({...restOutline,title:'Changed'}));
   const {previewComposition}=await import('../scripts/lib/compose-preview.mjs'),{encodePng}=await import('../scripts/lib/contact-sheet.mjs'),tiny=encodePng({width:16,height:9,rgb:Buffer.alloc(16*9*3,200)});
   const run=async(command,args)=>{if(args[0]==='-v')return {stdout:''};if(command==='pdfinfo')return {stdout:'Pages:          1\n'};if(command==='pdftoppm'){await writeFile(args.at(-1)+'.png',tiny);return {stdout:''};}throw Object.assign(new Error('spawn ENOENT'),{code:'ENOENT'});};
-  const drive={importDeck:async()=>({id:'drive_file_1',url:''}),updateDeck:async({fileId})=>({id:fileId,url:''}),exportPdf:async({output})=>{await writeFile(output,'%PDF-1.7 fake');return {output};}};
+  const drive={poolPreview:async({render})=>{const r={id:'drive_file_1',url:''};await render?.(r);return r;},importDeck:async()=>({id:'drive_file_1',url:''}),updateDeck:async({fileId})=>({id:fileId,url:''}),exportPdf:async({output})=>{await writeFile(output,'%PDF-1.7 fake');return {output};}};
   const result=await previewComposition({file:join(project,'build'),output:join(dir,'preview')},{run,drive});
   const f=result.slides[0].findings.find(x=>x.code==='outline-changed');assert.equal(f.severity,'error');assert.deepEqual(result.repair.blocking,['slide_one']);
 });

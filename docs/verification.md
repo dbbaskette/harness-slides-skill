@@ -41,6 +41,24 @@ The check found two screening defects, fixed afterwards: the failed-box badge
 overflowing, and a solid icon's white glyph was judged against a white card and
 reported as blending in.
 
+### Live Google preview pool check — 0.16.0, 21 October 2026
+
+With the owner's approval, the Mac's existing gcloud sign-in ran three
+`compose preview --renderer google --pool-size 2` calls on small one-, two- and
+three-slide decks. A Drive `files.update` media upload of a PPTX onto an
+existing Google Slides file converted it in place (same ID, new version, the new
+slides in the PDF export), so the pool uses that route; the Slides API was again
+refused (HTTP 403) to this OAuth client. The first preview found the
+`Harness Slides previews` folder and its slot-1 file by their markers, left by
+the route probe, and replaced it in place; the second created slot 2; the third
+replaced slot 1 in place (generation 2). The folder then held exactly two files,
+neither trashed, and their Drive PDF exports showed the three-slide and two-slide
+decks. Each preview's PNGs showed its own deck. A `--file-id` with the first
+preview's receipt was refused as `preview-replaced` before anything was written,
+and a cached re-preview of the first deck kept its images and left out the
+replaced Drive link. The `replace-and-trash` fallback is covered by fixtures
+only; Drive did not refuse an in-place conversion.
+
 ## Development verification — 0.15.0, 19 October 2026
 
 Issue #72 closes the reproduced gaps in unbranded native structure, direct-source

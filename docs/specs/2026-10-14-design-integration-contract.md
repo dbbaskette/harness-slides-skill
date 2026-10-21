@@ -84,6 +84,7 @@ or reused. A runtime without `capabilities` (0.13.1 and earlier) has none of the
 | `compose-verified-critique` | Critic packet schema 2 binds the deck and each image hash; assessments answer all eight questions for every slide and give an inspection note |
 | `compose-visual-vocabulary` | Box `style: tint`, `state: muted\|struck\|failed` on a box or text, edge `style: solid\|dashed\|dotted`, edges attached to texts, labelled cards for `dependency`, supporting fills for a direction without meanings, `design.slides.fills: {tints: false}` in a brand contract, refusal of words over words and of a word wider than its line (warnings, `unverified-fit`, when measurement is estimated), and `no-meanings` and `ascii-art` findings |
 | `neutral-native-composition` | Neutral live/reading contracts and Cover/Section/Closing layouts, with the same native writer for groups, tables, routed/attached connectors and chart data |
+| `google-preview-pool` | `compose preview` and `review --renderer google` reuse a pool of Google Slides files by default, `--pool-size N` and `--new-preview-file` choose how a preview is kept, results carry `pool` with a `FILE_ID:GENERATION` receipt, a replaced receipt is refused as `preview-replaced`, and `drive pool` lists the pool ([the Google preview pool](#the-google-preview-pool-in-0160-unreleased)) |
 | `owned-google-previews` | Preview creation stores ownership and remote version receipts; a stale/unowned file is refused, and an owned unchanged preview is preserved while a fresh file is created |
 | `preview-repair-clusters` | `compose preview` returns `repair`: each slide's warning and error findings grouped by slide, blocking slides first, with codes and object IDs ([visual vocabulary](#visual-vocabulary-in-0160-unreleased)) |
 | `render-bundles` | Verified immutable native PPTX/PDF/PNG bundles shared by composition preview and design-bound review; cached artifacts contain no critique or user approval |
@@ -333,7 +334,8 @@ criteria (`visual-relationship`, `explanatory-value`, `asset-purpose`,
 | No LibreOffice or Poppler on this computer | `renderer-unavailable`, with `provider` `libreoffice` or `poppler`. For LibreOffice, `next` names `--renderer google` |
 | `--renderer google` and Drive refused the upload or the export | `provider-failed`, with `provider` `google` |
 | `--compiled` without `--design-project`, or with `--file`, `--previews`, `--native-snapshot`, `--decisions` or `--quality-report` | `input-invalid` |
-| `--renderer` other than `local` or `google`, `--renderer` with `--previews`, or `--file-id` without `--renderer google` | `input-invalid` |
+| `--renderer` other than `local` or `google`, `--renderer` with `--previews`, `--file-id`, `--pool-size` or `--new-preview-file` without `--renderer google`, or `--pool-size` with `--new-preview-file` | `input-invalid` |
+| `--file-id FILE_ID:GENERATION` for a pool file that now shows a newer preview | `preview-replaced`, with `provider` `google` |
 
 **Report.** Each finding carries a `category`. `designReview` in every result
 groups prompts and judgements into five categories:
@@ -390,16 +392,18 @@ again. A changed deck, image, build file or design revision is refused as
 `--renderer google` renders the deck through the Drive route that
 `compose preview --renderer google` takes. It works for `--compiled` and `--file`.
 Poppler (`pdfinfo`, `pdftoppm`) is checked first, before anything is uploaded.
-The exact bytes of `REVIEW/deck.pptx` that the review hashes are imported into
-Drive as `Preview: <deck title>`. In 0.15.0, preserve the previous preview and create a new one after checking the ownership/version of the file
-named by `--file-id`. Drive exports that file as a PDF, and Poppler cuts it into
-the pictures. The receipts do not change: `builtArtifactDigest` is the hash of the
+The exact bytes of `REVIEW/deck.pptx` that the review hashes go into a file of
+[the Google preview pool](#the-google-preview-pool-in-0160-unreleased), or, with
+`--new-preview-file`, are imported as a new `Preview: <deck title>` file after
+the ownership/version of the file named by `--file-id` is checked (the 0.15.0
+route). Drive exports that file as a PDF, and Poppler cuts it into the pictures. The receipts do not change: `builtArtifactDigest` is the hash of the
 uploaded bytes, and `artifactDigest` binds the pictures Google drew. The Drive
 copy only carries the render. The reviewed deck is still `REVIEW/deck.pptx`.
 
 The record's `renderer` names Google Slides, its `remote` keeps
-`{provider:"google",fileId,url}`, and the result returns `fileId`, `url` and a
-`next` naming `--file-id`. An unchanged build keeps its pictures and uploads
+`{provider:"google",fileId,url}` plus `pool` for a pool file, and the result
+returns `fileId`, `url`, `pool` and a `next` naming `--file-id`. A recorded pool
+file that has since shown another preview is dropped from the record. An unchanged build keeps its pictures and uploads
 nothing. A render with the other renderer draws every picture again. If Drive
 fails after the upload, the refusal names the file to reuse. Google draws
 with its own fonts, so the fonts on this computer do not enter the renderer's
@@ -580,6 +584,7 @@ Without `--json` the same refusal is the same sentence on stderr as before.
 | `provider-missing` | An image provider that is not set up: no API key, or no web sign-in; `provider` names it |
 | `renderer-unavailable` | Poppler or LibreOffice is not installed; `provider` is `poppler` or `libreoffice` |
 | `provider-failed` | A Google access or upload failure during preview or a Google-rendered review (`provider` is `google`), or an image provider that refused or failed (`provider` is `gemini-api` or `gemini-web`; `next` is its own advice) |
+| `preview-replaced` | A preview pool receipt (`--file-id FILE_ID:GENERATION`) whose file now shows a newer preview |
 | `render-failed` | A render that produced no PDF or the wrong page count |
 | `output-exists` | An output directory that already exists |
 | `input-missing`, `input-invalid` | A missing or unreadable input file, `--section` without `--design-project`, a malformed review assessment or one citing sources that are not its slide's, a `review` given the wrong combination of sources, a `review` operation on a folder that holds no review, or a call that mixes preparing with another `review` operation |
@@ -942,7 +947,39 @@ receipt and remote marker/version, then creates a fresh preview to preserve the
 previous file: atomic conditional media replacement has not been established.
 Always use the returned ID. A lost receipt, missing version or intervening edit
 requires a new preview without `--file-id`. No cached local render certifies a
-live Drive deck's current state.
+live Drive deck's current state. In 0.16.0 these receipts apply only with
+`--new-preview-file`; Google previews use
+[the preview pool](#the-google-preview-pool-in-0160-unreleased) by default.
+
+## The Google preview pool in 0.16.0 (unreleased)
+
+Every Google preview used to create another `Preview: …` file in Drive. A
+Google preview now reuses a small pool of Google Slides files, named
+`Harness Slides preview 1` to `Harness Slides preview N`, in one Drive folder,
+`Harness Slides previews`, that Harness Slides creates (marked with the Drive
+app property `harnessPreviewPool`) for the signed-in gcloud account the first
+time a preview needs it. Nothing changes the account or its settings.
+
+| Part | Behaviour |
+| --- | --- |
+| Size | `--pool-size N` (1–20) on `compose preview` and `review`, else `HARNESS_PREVIEW_POOL_SIZE`, else 4. Files are made as the pool needs them. A smaller size leaves the files above it untouched |
+| Choice | Each preview takes the least recently used pool file that no other preview is using. A preview leases its file for the upload and the PDF export, so two previews never take the same file; when every file is in use, a preview waits up to ten minutes for one, then is refused as `provider-failed` |
+| Replacement | One Drive `files.update` media upload of the PPTX onto the existing Google Slides file. Drive converts it in place and the file keeps its ID and link (route `drive-update`). If Drive refuses that, a new converted file takes the slot and the old one is moved to the Drive trash, never deleted (route `replace-and-trash`). A pool file's first preview creates it (route `created`). The Slides API is not used: it cannot insert slides from a PPTX, and it was refused to this OAuth client |
+| Kept files | A pool file that has been renamed, moved out of the folder or trashed is no longer the pool's: it is left as it is and a new file takes its place. To keep a preview, rename it |
+| State | `HARNESS_PREVIEW_POOL_STATE`, or `~/.local/share/harness-slides/preview-pool`, private to this user: `state.json` (per account: folder ID; per slot: file ID, generation, last use, route, lease) and `state.lock`. No deck content. A pool without state on this computer is found again by its folder and file markers instead of being duplicated |
+| Receipt | A preview's result carries `pool: {slot, size, generation, receipt, route, folder: {id, url, name}}`, where `receipt` is `FILE_ID:GENERATION`. The generation goes up each time the file's contents are replaced |
+| `--file-id` | A receipt replaces that same pool file, only while it still shows that preview; otherwise the call is refused as `preview-replaced`, "That preview has been replaced by a newer one; preview again.", before anything is rendered. A bare Drive ID only names a file: the pool still takes its least recently used file, so a caller that passes the previous `fileId` keeps working |
+| Reused renders | A cached render bundle keeps its pictures. If its pool file has since shown another preview, the result leaves out `fileId`, `url` and `pool` and gives `remoteReplaced` instead, and `compose preview`'s project record and `review`'s record drop that remote |
+| Failure | A failure after the upload names the pool file (`retry with --file-id FILE_ID.`); the next preview reuses the pool either way |
+| The earlier route | `--new-preview-file` creates a new `Preview: …` file each time, with the 0.15.0 ownership and version checks for `--file-id`. It takes no `--pool-size` |
+| Status | `drive pool` prints, from the state on this computer, each account's folder URL and each pool file's slot, ID, link, generation, receipt, last use, route and whether a preview is using it. It makes no Google request |
+
+What a caller does: nothing, to get the pool. Read `pool.receipt` when the
+caller wants to replace the same file again; keep passing the bare `fileId`
+otherwise, or stop passing `--file-id`. Do not treat `url` as lasting: a later
+preview replaces what it shows, and `pool` says which file and generation the
+pictures came from. Pass `--new-preview-file` where a separate Drive file per
+preview is wanted. Detect support with the `google-preview-pool` capability.
 
 
 ## Visual vocabulary in 0.16.0 (unreleased)

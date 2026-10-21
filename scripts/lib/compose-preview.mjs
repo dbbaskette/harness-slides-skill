@@ -7,6 +7,7 @@ import {pathToFileURL} from 'node:url';
 import {auditSceneQuality} from './slide-quality.mjs';
 import {renderCompositionDir} from './compose-file.mjs';
 import {importDeck,updateDeck,exportPdf,previewPrefix} from '../google-drive-deck.mjs';
+import {poolPreview,assertReceiptCurrent,poolRemoteCurrent,poolSize} from './preview-pool.mjs';
 import {hash,regularInside,digest} from './common.mjs';
 import {requireSceneDesign} from './design-session.mjs';
 import {refuse} from './refusals.mjs';
@@ -168,22 +169,30 @@ export async function previewComposition(options,deps={}){
   const scene=JSON.parse(await readFile(join(options.file,'scene.json'),'utf8'));
   const approved=options['design-project']?await requireSceneDesign(scene,options['design-project'],undefined,{section:options.section}):null;
   if(options.slide&&!scene.slides.some(s=>s.id===options.slide))throw new Error(`No slide ${options.slide}; choose one of ${scene.slides.map(s=>s.id).join(', ')}`);
+  if((options['new-preview-file']||options['pool-size']!==undefined)&&(options.renderer??'google')!=='google')throw refuse('--new-preview-file and --pool-size choose how a Google preview is kept: give them with --renderer google',{code:'input-invalid'});
+  if(options['new-preview-file']&&options['pool-size']!==undefined)throw refuse('--new-preview-file makes a new Drive file instead of using the preview pool, so it takes no --pool-size',{code:'input-invalid'});
+  if(options['pool-size']!==undefined)poolSize(options['pool-size']);
+  // A preview pool receipt for a file that now shows a newer preview is refused before anything is rendered or reused.
+  if((options.renderer??'google')==='google'&&!options['new-preview-file']&&options['file-id'])await assertReceiptCurrent(options['file-id'],deps.google);
   const {compositionRenderBundle,materializeRenderBundle}=await import('./render-bundle.mjs');
   const bundle=await compositionRenderBundle(options,deps,renderCompositionPreview),result=await materializeRenderBundle(bundle,options.output,{slide:options.slide});
   if(approved)result.design={revision:approved.revision,scope:approved.scope,slides:approved.slides};else delete result.design;
+  // A reused render keeps its pictures, but a pool file that has since shown another preview no longer belongs to it.
+  if(bundle.reused&&result.pool&&!await poolRemoteCurrent({fileId:result.fileId,pool:result.pool},deps.google)){for(const key of ['fileId','url','pool','next'])delete result[key];result.remoteReplaced='The preview pool file this render used now shows a newer preview, so its Drive link is left out. These images still show this build.';}
   const {compositionBinding,recordCompositionArtifact}=await import('./composition-project.mjs');
   result.buildBinding=await compositionBinding(options.file);
   if(!options.slide){const packet=JSON.parse(await readFile(join(options.output,'critic.json'),'utf8'));packet.buildBinding=result.buildBinding;await writeFile(join(options.output,'critic.json'),JSON.stringify(packet,null,2)+'\n');}
   await writeFile(join(options.output,'preview.json'),JSON.stringify(result,null,2)+'\n');
-  if(options.register!==false)await recordCompositionArtifact(options.project??resolve(options.file,JSON.parse(await readFile(join(options.file,'compose-report.json'),'utf8')).project??'.'),options.file,'preview',{path:resolve(options.output),remote:result.fileId?{fileId:result.fileId,url:result.url}:null});
+  if(options.register!==false)await recordCompositionArtifact(options.project??resolve(options.file,JSON.parse(await readFile(join(options.file,'compose-report.json'),'utf8')).project??'.'),options.file,'preview',{path:resolve(options.output),remote:result.fileId?{fileId:result.fileId,url:result.url,...(result.pool?{pool:result.pool}:{})}:null});
   return result;
 }
 
-async function renderCompositionPreview({file,output,slide,'file-id':fileId,renderer='google',fonts,'design-project':designProject,section,soffice:customSoffice,pdfinfo:customPdfinfo,pdftoppm:customPdftoppm},deps={}) {
+export const poolNext=pool=>`Preview pool file ${pool.slot} of ${pool.size} in ${pool.folder.url}; a later preview replaces it. To replace only this file while it still shows this render: --file-id ${pool.receipt}`;
+async function renderCompositionPreview({file,output,slide,'file-id':fileId,'new-preview-file':newPreviewFile,'pool-size':size,renderer='google',fonts,'design-project':designProject,section,soffice:customSoffice,pdfinfo:customPdfinfo,pdftoppm:customPdftoppm},deps={}) {
   if(!file||!output)throw new Error('Provide --file COMPILED_DIR and a new --output directory');
   if(!['google','local'].includes(renderer))throw new Error('Renderer must be google or local');
   if(section&&!designProject)throw refuse('--section needs --design-project: a section is checked against the approved design',{code:'input-invalid'});
-  const run=deps.run??promisify(execFile),drive={importDeck,updateDeck,exportPdf,...deps.drive};
+  const run=deps.run??promisify(execFile),drive={importDeck,updateDeck,exportPdf,poolPreview,...deps.drive};
   const dir=resolve(file),load=async name=>JSON.parse(await readFile(join(dir,name),'utf8')),scene=await load('scene.json'),structure=await load('structure.json');
   const wanted=slide===undefined?null:scene.slides.findIndex(s=>s.id===slide);
   if(wanted===-1)throw new Error(`No slide ${slide}; choose one of ${scene.slides.map(s=>s.id).join(', ')}`);
@@ -196,8 +205,16 @@ async function renderCompositionPreview({file,output,slide,'file-id':fileId,rend
   try {
     const deck=join(output,'deck.pptx'),pdf=join(output,'deck.pdf'),built=await renderCompositionDir({file:dir,output:deck});
     if(renderer==='google') {
-      remote=fileId?await drive.updateDeck({fileId,file:deck},deps.google):await drive.importDeck({file:deck,name:`${previewPrefix}${scene.title}`,preview:true},deps.google);
-      await drive.exportPdf({fileId:remote.id,output:pdf},deps.google);
+      if(newPreviewFile){
+        // The route before the pool: every preview is a new "Preview: …" file, and the previous one is kept.
+        remote=fileId?await drive.updateDeck({fileId,file:deck},deps.google):await drive.importDeck({file:deck,name:`${previewPrefix}${scene.title}`,preview:true},deps.google);
+        await drive.exportPdf({fileId:remote.id,output:pdf},deps.google);
+      }else{
+        // The pool replaces its least recently used file and exports the render while that file is leased to this preview.
+        let leased=null;
+        try{remote=await drive.poolPreview({file:deck,size,fileId,render:async r=>{leased=r;await drive.exportPdf({fileId:r.id,output:pdf},deps.google);}},deps.google);}
+        catch(error){remote=leased;throw error;}
+      }
     } else {
       const soffice=customSoffice||process.env.HARNESS_SOFFICE||'soffice',profile=join(output,'.office-profile');
       try{await run(soffice,[`-env:UserInstallation=${pathToFileURL(profile).href}`,'--headless','--convert-to','pdf','--outdir',output,deck],{timeout:120000,maxBuffer:1024*1024});}
@@ -237,13 +254,14 @@ async function renderCompositionPreview({file,output,slide,'file-id':fileId,rend
         answer:{deckSha256,reviewer:'independent|author',slides:slides.map(s=>({id:s.id,answers:Array(8).fill(null),note:'What you inspected on this slide; use true/false for every question.'})),findings:[{slide:'SLIDE_ID',question:1,severity:'critical|major|minor',note:'What is wrong, in a sentence.',fix:'Optional: what would fix it.'}],weakest:['up to three slide IDs']}},null,2)+'\n',{flag:'wx',mode:0o600});
     }
     const repair=repairClusters(slides);
-    const result={schema:1,output,deck,deckSha256,...review,repair,...(approved?{design:{revision:approved.revision,scope:approved.scope,slides:approved.slides}}:{}),renderer:renderer==='google'?'Google Slides PDF export':'LibreOffice',emitter:built.emitter,native:built.native??[],...(remote?{fileId:remote.id,url:remote.url}:{}),slides,
-      status:repair.blocking.length?`rendered and screened; ${repair.blocking.length} slide${repair.blocking.length===1?'':'s'} (${repair.blocking.join(', ')}) carry blocking findings: repair them before delivery. Screens are prompts to look, not approval.`:'rendered and screened; open each image and judge it. Screens are prompts to look, not approval.',next:remote?`Reuse this Drive file for the next preview: --file-id ${remote.id}`:undefined};
+    const result={schema:1,output,deck,deckSha256,...review,repair,...(approved?{design:{revision:approved.revision,scope:approved.scope,slides:approved.slides}}:{}),renderer:renderer==='google'?'Google Slides PDF export':'LibreOffice',emitter:built.emitter,native:built.native??[],...(remote?{fileId:remote.id,url:remote.url,...(remote.pool?{pool:remote.pool}:{})}:{}),slides,
+      status:repair.blocking.length?`rendered and screened; ${repair.blocking.length} slide${repair.blocking.length===1?'':'s'} (${repair.blocking.join(', ')}) carry blocking findings: repair them before delivery. Screens are prompts to look, not approval.`:'rendered and screened; open each image and judge it. Screens are prompts to look, not approval.',next:remote?.pool?poolNext(remote.pool):remote?`Reuse this Drive file for the next preview: --file-id ${remote.id}`:undefined};
     await writeFile(join(output,'preview.json'),JSON.stringify(result,null,2)+'\n',{flag:'wx',mode:0o600});
     return result;
   } catch(error) {
     await rm(output,{recursive:true,force:true});
     // The upload already happened: say where it is so a retry reuses it instead of creating another file.
+    if(remote?.pool)throw Object.assign(new Error(`${error.message} The preview deck is in the preview pool (${remote.url}); retry with --file-id ${remote.id}.`,{cause:error}),error.problem?{problem:error.problem}:{});
     if(remote)throw new Error(`${error.message} The preview deck is in Drive (${remote.url}); retry with --file-id ${remote.id}.`,{cause:error});
     throw error;
   }

@@ -9,6 +9,8 @@ import {compileComposition} from '../scripts/lib/compose.mjs';
 import {previewComposition,screenComposition,recordCritique,criticQuestions} from '../scripts/lib/compose-preview.mjs';
 import {encodePng,decodePng} from '../scripts/lib/contact-sheet.mjs';
 import {importDeck,updateDeck,exportPdf} from '../scripts/google-drive-deck.mjs';
+import {poolStub,fakeDrive} from './pool-fixtures.mjs';
+import {problemsOf} from '../scripts/lib/refusals.mjs';
 
 const slide=(id,title,canvas,connect)=>({id,title,sources:['brief:test'],canvas,...(connect?{connect}:{})});
 const deck=()=>({version:1,title:'Preview deck',slides:[
@@ -28,6 +30,7 @@ function fakes(pages=4) {
     importDeck:async({file,name})=>{calls.push(['import',name]);return {id:'drive_file_1',url:'https://docs.google.com/presentation/d/drive_file_1/edit'};},
     updateDeck:async({fileId})=>{calls.push(['update',fileId]);return {id:fileId,url:`https://docs.google.com/presentation/d/${fileId}/edit`};},
     exportPdf:async({fileId,output})=>{calls.push(['pdf',fileId]);await writeFile(output,'%PDF-1.7 fake');return {output};}};
+  drive.poolPreview=poolStub(calls);
   const run=async(command,args)=>{calls.push([command,...(command==='pdftoppm'?args.slice(0,4):[])]);if(args[0]==='-v')return {stdout:''};if(command==='pdfinfo')return {stdout:`Title: x\nPages:          ${pages}\n`};if(command==='pdftoppm'){await writeFile(args.at(-1)+'.png',tiny);return {stdout:''};}throw Object.assign(new Error('spawn ENOENT'),{code:'ENOENT'});};
   return {calls,deps:{drive,run}};
 }
@@ -48,10 +51,11 @@ test('everyday wording is not mistaken for a relationship, and numbered boxes wi
   assert.ok((await codes({type:'grid',columns:3,children:[1,2,3].map(n=>({type:'box',id:`step_box${n}`,text:`${n}. Do part ${n}`}))})).includes('sequence-without-edges'));
 });
 
-test('a preview builds the deck, imports it once, exports the render and returns images with findings',async t=>{
+test('a preview builds the deck, puts it in the preview pool once, exports the render and returns images with findings',async t=>{
   const {dir,output}=await compiled(t),{calls,deps}=fakes(),result=await previewComposition({file:output,output:join(dir,'preview')},deps);
-  assert.deepEqual(calls.filter(c=>['import','pdf'].includes(c[0])),[['import','Preview: Preview deck'],['pdf','drive_file_1']]);
-  assert.equal(result.fileId,'drive_file_1');assert.equal(result.slides.length,4);assert.equal(result.emitter,'native template');assert.match(result.next,/--file-id drive_file_1/);
+  assert.deepEqual(calls.filter(c=>['pool','import','pdf'].includes(c[0])),[['pool',null,null],['pdf','drive_file_1']]);
+  assert.equal(result.fileId,'drive_file_1');assert.equal(result.slides.length,4);assert.equal(result.emitter,'native template');assert.match(result.next,/Preview pool file 1 of 4.*--file-id drive_file_1:1$/);
+  assert.equal(result.pool.receipt,'drive_file_1:1');assert.equal(result.pool.folder.name,'Harness Slides previews');
   assert.deepEqual((await readdir(join(dir,'preview'))).sort(),['contact-sheet.png','critic.json','deck.pdf','deck.pptx','preview.json','slide-01.png','slide-02.png','slide-03.png','slide-04.png']);
   // The whole-deck render carries one sheet of every slide and the packet a reviewer answers from.
   const sheet=decodePng(await readFile(result.contactSheet)),packet=JSON.parse(await readFile(result.critic,'utf8'));
@@ -63,8 +67,9 @@ test('a preview builds the deck, imports it once, exports the render and returns
   assert.deepEqual(JSON.parse(await readFile(join(dir,'preview','preview.json'),'utf8')).slides.map(s=>s.id),['flow_slide','prose_slide','cards_one','cards_two']);
 });
 
-test('a later preview updates the same Drive file and can render one slide',async t=>{
-  const {dir,output}=await compiled(t),{calls,deps}=fakes(),result=await previewComposition({file:output,output:join(dir,'preview'),slide:'cards_one','file-id':'drive_file_9'},deps);
+test('with --new-preview-file a later preview checks the named Drive file, keeps it and can render one slide',async t=>{
+  const {dir,output}=await compiled(t),{calls,deps}=fakes(),result=await previewComposition({file:output,output:join(dir,'preview'),slide:'cards_one','file-id':'drive_file_9','new-preview-file':true},deps);
+  assert.ok(!calls.some(c=>c[0]==='pool'));
   assert.deepEqual(calls.find(c=>c[0]==='update'),['update','drive_file_9']);assert.ok(!calls.some(c=>c[0]==='import'));
   assert.deepEqual(result.slides.map(s=>[s.id,s.number]),[['cards_one',3]]);assert.deepEqual(calls.filter(c=>c[0]==='pdftoppm'&&c[1]!=='-v'),[['pdftoppm','-f','3','-l','3']]);
   assert.deepEqual((await readdir(join(dir,'preview'))).filter(n=>n.endsWith('.png')),['slide-03.png']);
@@ -72,12 +77,37 @@ test('a later preview updates the same Drive file and can render one slide',asyn
 
 test('a render with the wrong page count, an unknown slide or a missing renderer fails and leaves nothing behind',async t=>{
   const {dir,output}=await compiled(t);
-  await assert.rejects(()=>previewComposition({file:output,output:join(dir,'short')},fakes(3).deps),/render has 3 pages for 4 slides.*preview deck is in Drive.*retry with --file-id drive_file_1/);
+  await assert.rejects(()=>previewComposition({file:output,output:join(dir,'short')},fakes(3).deps),/render has 3 pages for 4 slides.*preview deck is in the preview pool.*retry with --file-id drive_file_1\./);
   const missing=fakes();missing.deps.run=async()=>{throw Object.assign(new Error('spawn pdfinfo ENOENT'),{code:'ENOENT'});};
   await assert.rejects(()=>previewComposition({file:output,output:join(dir,'tools')},missing.deps),/Poppler/);assert.deepEqual(missing.calls,[]);
   await assert.rejects(()=>previewComposition({file:output,output:join(dir,'unknown'),slide:'missing_slide'},fakes().deps),/No slide missing_slide/);
   await assert.rejects(()=>previewComposition({file:output,output:join(dir,'local'),renderer:'local'},fakes().deps),/soffice is not installed/);
   assert.deepEqual((await readdir(dir)).filter(n=>['short','unknown','local','tools'].includes(n)),[]);
+});
+
+test('a reused render keeps its Drive link only while its pool file still shows it, and a replaced receipt is refused',async t=>{
+  const {dir,output,c}=await compiled(t),drive=fakeDrive(),google={tokenProvider:async()=>'token',fetcher:drive.fetcher};
+  // The project status reads the pool state the same way the CLI does, from the environment.
+  const saved=process.env.HARNESS_PREVIEW_POOL_STATE;process.env.HARNESS_PREVIEW_POOL_STATE=join(dir,'pool');t.after(()=>{if(saved===undefined)delete process.env.HARNESS_PREVIEW_POOL_STATE;else process.env.HARNESS_PREVIEW_POOL_STATE=saved;});
+  const {compositionStatus}=await import('../scripts/lib/composition-project.mjs');
+  const run=fakes().deps.run,preview=(name,options={})=>previewComposition({file:output,output:join(dir,name),'pool-size':'1',...options},{run,google});
+  const first=await preview('first');assert.equal(first.pool.generation,1);assert.equal(first.pool.route,'created');
+  const again=await preview('again');assert.equal(again.reused,true);assert.equal(again.fileId,first.fileId);assert.equal(again.pool.receipt,first.pool.receipt);
+  assert.equal((await compositionStatus(output)).remote.pool.receipt,first.pool.receipt);
+  // Another deck takes the only pool file.
+  const brandFile=join(dir,'brand.json'),other=join(dir,'other.json'),otherOut=join(dir,'other-compiled');await writeFile(brandFile,JSON.stringify(c));
+  await writeFile(other,JSON.stringify({...deck(),title:'Another deck'}));await compileCompositionFile({file:other,brand:brandFile,output:otherOut});
+  const replaced=await previewComposition({file:otherOut,output:join(dir,'other-preview'),'pool-size':'1'},{run,google});
+  assert.equal(replaced.fileId,first.fileId);assert.equal(replaced.pool.generation,2);assert.equal(replaced.pool.route,'drive-update');assert.equal(drive.live().length,1);
+  const status=await compositionStatus(output);
+  assert.equal(status.remote,null);assert.match(status.remoteReplaced,/replaced by a newer one/);
+  const later=await preview('later');assert.equal(later.reused,true);assert.equal(later.fileId,undefined);assert.match(later.remoteReplaced,/now shows a newer preview/);
+  const refused=await preview('stale',{'file-id':first.pool.receipt}).catch(error=>error);
+  assert.equal(refused.message,'That preview has been replaced by a newer one; preview again.');assert.equal(problemsOf(refused)[0].code,'preview-replaced');
+  await assert.rejects(()=>readdir(join(dir,'stale')),/ENOENT/);
+  await assert.rejects(()=>preview('both',{'new-preview-file':true}),/takes no --pool-size/);
+  await assert.rejects(()=>previewComposition({file:output,output:join(dir,'local-pool'),renderer:'local','pool-size':'2'},{run,google}),/give them with --renderer google/);
+  assert.ok(!drive.calls.some(([method])=>method==='DELETE'));
 });
 
 test('Drive previews require ownership and a matching version, and preserve the previous file',async t=>{

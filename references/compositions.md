@@ -295,10 +295,14 @@ warnings and errors, blocking slides first, for the next round of fixes. Verifie
 editable PPTX and pixels when input dependencies are unchanged; no critique or
 user approval is copied. A changed deck may still need full native PDF conversion,
 but unaffected page images can be reused and thumbnails come from those images.
-Google previews are named `Preview: …`. `--file-id` checks its saved ownership
-and remote version, then creates a fresh preview while preserving the previous
-file. Use the returned ID; a missing receipt or remote edit requires omitting
-`--file-id`. A cached local render does not verify a live deck's current state.
+Google previews reuse a pool of Drive files, `Harness Slides preview 1`–`4` in
+the `Harness Slides previews` folder: each preview replaces the least recently
+used one, so a returned `url` lasts only until a later preview takes that file.
+Omit `--file-id`, or pass the returned `pool.receipt` to replace that same file
+while it still shows your preview; a replaced receipt is refused. `--pool-size N`
+changes the size; `--new-preview-file` makes a separate `Preview: …` file instead.
+To keep a preview, rename it in Drive. A cached local render does not verify a
+live deck's current state.
 Use `--renderer local` when
 LibreOffice is installed and Google is unavailable.
 
