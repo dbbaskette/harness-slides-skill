@@ -60,5 +60,4 @@ in `references/` and maintainer records in `docs/`. After changing guidance, run
 then check local links with `npm run docs:check`.
 
 [Release procedures](releases.md) explain runtime versions, compatible guidance,
-checksums, updates, and rollback. The development runtime is 0.16.0; the current
-published release remains 0.14.1.
+checksums, updates, and rollback. The current published release is 0.16.0.
