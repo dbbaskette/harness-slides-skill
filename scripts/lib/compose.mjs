@@ -10,8 +10,8 @@ const fields={
   grid:['columns','gap','children','group'],
   free:['children','group'],
   ring:['children','hub','group'],
-  box:['text','shape','fill','color','textRole','align','children','gap','style'],
-  text:['text','textRole','color','align'],
+  box:['text','shape','fill','color','textRole','align','children','gap','style','state'],
+  text:['text','textRole','color','align','state'],
   image:['src','asset','alt','fit'],
   icon:['icon','asset','color','style'],
   badge:['text','fill'],
@@ -37,7 +37,7 @@ function axisBetween(canvas,from,to) {
   if(x.n.type==='grid'){const row=i=>Math.floor(i/x.n.columns),column=i=>i%x.n.columns;return row(x.i)===row(y.i)?true:column(x.i)===column(y.i)?false:undefined;}
   return undefined;
 }
-const iconStyles=['solid','outline','plain'],boxStyles=['solid','outline','bar'],chartKinds=['bar','line','pie'];
+const iconStyles=['solid','outline','plain'],boxStyles=['solid','outline','bar','tint'],chartKinds=['bar','line','pie'],states=['normal','muted','struck','failed'],edgeStyles={solid:undefined,dashed:'dash',dotted:'dot'};
 // A metric is shorthand for a number in the metric role over its label, so the number is never left without its context.
 const expand=n=>{
   if(!n||typeof n!=='object'||Array.isArray(n))return n;
@@ -50,7 +50,8 @@ const relations=['order','dependency','hierarchy','membership','contrast','paral
 // How each relation must show up in the structure, and what to tell the author when it does not.
 const drawn={
   order:[f=>f.edges>0||f.chevrons>1||f.layers,'Join nodes with edges, use chevrons in sequence or stack the steps in a column'],
-  dependency:[f=>f.edges>0,'Join the nodes with edges'],
+  // Labelled cards in reading order also carry a dependency, so a sentence never has to be chopped into nodes to earn an edge.
+  dependency:[f=>f.edges>0||f.labelled,'Join the nodes with edges, or lay the parts out as labelled cards in reading order (a card per part, its label in the label role)'],
   hierarchy:[f=>f.edges>0||f.nested||f.layers,'Use edges, nested boxes or stacked layers'],
   membership:[f=>f.members,'Put the members inside a box'],
   contrast:[f=>f.pair,'Place the things compared side by side'],
@@ -59,36 +60,54 @@ const drawn={
 };
 const luminance=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255).map(v=>v<=.03928?v/12.92:((v+.055)/1.055)**2.4).reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);
 export const contrastRatio=(a,b)=>{const [hi,lo]=[luminance(a),luminance(b)].sort((x,y)=>y-x);return (hi+.05)/(lo+.05);};
+// One color mixed into another: share 0 is the base, share 1 the color. Used for light surfaces, never for text.
+const mix=(hex,base,share)=>'#'+[1,3,5].map(i=>{const b=parseInt(base.slice(i,i+2),16);return Math.round(b+(parseInt(hex.slice(i,i+2),16)-b)*share).toString(16).padStart(2,'0');}).join('').toUpperCase();
+// A tint is a light surface of a color: the color mixed into the canvas, so ordinary ink reads on it. A color that is already light is used as it is.
+export const tintOf=(hex,canvas='#FFFFFF')=>luminance(hex)>=.6?hex.toUpperCase():mix(hex,canvas,.15);
+// The fills a direction that names no meanings may still use: the brand's chart colors first, then its other accents, at most three.
+// The focal and the neutral, inks, canvases, status colors, text variants and any color already listed never qualify.
+export function supportingRoles(contract,dir) {
+  const colors=contract.design.colors,hexOf=role=>colors[role]?.toUpperCase(),taken=new Set([dir?.focal,dir?.neutral].filter(Boolean).map(hexOf)),out=[];
+  for(const role of [...(contract.design.slides?.chart?.seriesRoles??[]),...Object.keys(colors).filter(r=>/^accent/.test(r))]) {
+    if(out.length===3)break;
+    if(!Object.hasOwn(colors,role)||/^(canvas|ink|status)/.test(role)||/Text$/.test(role)||taken.has(hexOf(role)))continue;
+    taken.add(hexOf(role));out.push(role);
+  }
+  return out;
+}
 
 export const composeContract=`Composition v1 (AI-owned; describe structure, never coordinates).
-{version:1,title,direction?:DIRECTION,slides:[{id,title,sources:[one or more IDs],canvas:NODE,connect?:[EDGE],brief?:BRIEF,subtitle?,caveat?:text|{label,text},source?,notes?:speaker notes,intent?,layoutId?} | {id,title,sources,layout:TEMPLATE LAYOUT NAME,subtitle?,detail?,picture?:{src,alt},notes?}]}
+{version:1,title,direction?:DIRECTION,slides:[{id,title,sources:[one or more IDs],canvas:NODE,connect?:[EDGE],brief?:BRIEF,subtitle?,caveat?:text|{label,text},source?,notes?:speaker notes,provenance?,intent?,layoutId?} | {id,title,sources,layout:TEMPLATE LAYOUT NAME,subtitle?,detail?,picture?:{src,alt},notes?,provenance?}]}
 A slide with layout uses that template layout's own placeholders (cover, section break, closing) and has no canvas; run compose layouts for the names.
 A content slide's furniture is set on the slide, not drawn in the canvas: subtitle is one line under the title, in the template's own subtitle line; caveat is a ruled strip at the foot, with an optional one-word label such as Limit or Verify; source is a line beneath it. The canvas gets the room that is left.
+source is a citation the audience can follow, such as "Tanzu for Postgres 4.5 documentation". Internal provenance (finding or objective IDs, research notes) goes in provenance, which is never drawn and is added to the speaker notes.
 NODE containers: {type:stack,direction:row|column,gap?,align?,children:[NODE]} | {type:grid,columns:1-6,gap?,children:[NODE]} | {type:free,children:[NODE with at:{x,y,width,height} as 0-1 fractions]} | {type:ring,children:[3-8 NODE],hub?:NODE}.
-NODE leaves: {type:icon,id,icon:STABLE ICON ID from the brand's icon search,color?,style?:solid|outline|plain} (or asset:ID of a recorded brand icon in place of icon) | {type:box,id,text?|children?,shape?:rect|ellipse|roundRect|diamond|hexagon|chevron|can,style?:solid|outline|bar,fill?,color?,textRole?,align?,gap?} | {type:metric,id,value,label} | {type:badge,id,text,fill?} | {type:rule} | {type:table,id,rows:[[header cells],[cells]...],widths?:[relative]} | {type:chart,id,kind:bar|line|pie,data:{categories,series:[{name,values}]},title?,units?,source?} | {type:text,id,text,textRole?,color?,align?} | {type:image,id,src,alt,fit?} (or asset:ID from assets status in place of src, alt defaulting to the recorded alt) | {type:spacer}.
+NODE leaves: {type:icon,id,icon:STABLE ICON ID from the brand's icon search,color?,style?:solid|outline|plain} (or asset:ID of a recorded brand icon in place of icon) | {type:box,id,text?|children?,shape?:rect|ellipse|roundRect|diamond|hexagon|chevron|can,style?:solid|tint|bar|outline,fill?,color?,textRole?,align?,gap?,state?} | {type:metric,id,value,label} | {type:badge,id,text,fill?} | {type:rule} | {type:table,id,rows:[[header cells],[cells]...],widths?:[relative]} | {type:chart,id,kind:bar|line|pie,data:{categories,series:[{name,values}]},title?,units?,source?} | {type:text,id,text,textRole?,color?,align?,state?} | {type:image,id,src,alt,fit?} (or asset:ID from assets status in place of src, alt defaulting to the recorded alt) | {type:spacer}.
 sources name what a slide rests on: a document section, a finding, or one ID such as request or author_knowledge when it comes from the brief or general knowledge.
 Any node may set weight (relative share, above 0 up to 10, default 1). A node never goes below the size its content needs; when that overrides a weight you set, compile and preview report it as weight-overridden. An empty box has no minimum, so use empty boxes for bars drawn to scale.
 An icon keeps the library's own colors unless you set color (a brand color role) or style: solid is a light icon on a colored disc, outline a colored icon in a ring, plain a colored icon with no container, drawn a little larger. On a filled card use plain or outline with a color that reads on the fill.
-A box is solid by default. style outline draws it as a line on whatever is behind it; style bar draws a neutral card with a strip of color down the left edge. The line or strip is the focal color on the slide's focal node, the box's fill where it sets one, and secondary ink otherwise. Both keep color to a small area, so use them for cards that are not the point.
+A box is solid by default. style tint is a light surface of its fill (the neutral when it sets none): the supporting card, filled, in the color of what it stands for. style bar draws a neutral card with a strip of color down the left edge. style outline draws it as a line on whatever is behind it; keep it for what is secondary, empty or a boundary. The line or strip is the focal color on the slide's focal node, the box's fill where it sets one, and secondary ink otherwise; a tint on the focal node gets a focal edge.
+state on a box or text: muted quiets it (light surface, secondary ink), struck also strikes its words through, failed (a box) adds a status-colored dashed edge and an × badge. What a muted, struck or failed box holds is muted with it. Never draw lines across words to cross something out.
 metric is a number with its label beneath, in the brand's metric size: {type:metric,id,value:"42%",label:"of teams"}. badge is a small numbered or lettered disc for steps and references. rule is a thin line between the parts of a column or a row.
 A card's content sits inside its shape's text area, so a diamond, ellipse or hexagon holds much less than a rectangle of the same size. Containers may set group:true and an id.
 gap: none|tight|normal|wide. align: start|center|end|stretch. In a row, stretch (the default) makes every child fill the row's height; start, center or end gives each child the height its content needs. On a text, or a box with text, align sets the text left, centered or right. In a row an icon takes its own width unless you give it a weight. On a box with children, align (start|center|end) places its content vertically. fill/color: a brand color role name. textRole: a brand typography role name.
-EDGE: {id,from:NODE id,to:NODE id,label?,arrow?:boolean,color?,route?:straight|elbow|curve}. An edge attaches to a box of any shape and to an icon with a disc or a ring; an edge to a text or a plain icon is drawn but cannot stay attached when a node moves.
+EDGE: {id,from:NODE id,to:NODE id,label?,arrow?:boolean,color?,route?:straight|elbow|curve,style?:solid|dashed|dotted}. dashed or dotted marks a weaker link, such as asynchronous replication; never type an arrow such as - - > into a text. An edge attaches to a box of any shape, to a text (at the edge of its words) and to an icon with a disc or a ring; only a plain icon cannot hold an arrow.
 A straight edge between nodes that are not level runs at a slant. route elbow turns it into right angles, which reads better for a fan-out or a tree; route curve bends it. ring places its children around a circle in order, the first at the top, going clockwise; an elbow or curve edge between two of them turns once around the outside, which draws a cycle. Use hub for what sits at the center.
 Text may sit over an image only inside a filled box, which keeps it readable whatever the picture shows; place the image and the box in a free container. A template layout with a picture slot takes picture:{src,alt} or picture:{asset}, cropped to fill the slot.
 table is a native, editable table in the brand's table style: the first row is the header, and each row is as tall as its tallest cell. Keep cells short; a table is for comparing values, not for holding sentences.
 chart is a native chart whose data stays editable: categories are 2–24 short labels (2–8 for a pie), and each series gives one plain number per category. A bar or line chart takes 1–6 series; a pie takes one, of values zero or more. Series, or a pie's slices, take the brand's chart colors in order, so there are never more of them than the brand has colors. title sits in the chart, units titles the value axis (not on a pie), and source is a caption beneath it; without one the chart cites the slide's source.
 DIRECTION, decided once for the deck: {focal:color role that means "look here",neutral:panel color role,meanings?:{color role:what it stands for in this deck},motif?:text}.
-With a direction, fills come only from the neutral, the meanings and white; boxes default to the neutral. Text, icon and edge colors may be any role except the focal.
+With a direction, fills come only from the neutral, the meanings and white; boxes default to the neutral. A direction with no meanings may also fill with up to three supporting colors derived from the brand (compose contract --brand lists them); name meanings once the deck has more than about ten slides. Text, icon and edge colors may be any role except the focal.
 BRIEF, per content slide: {relation:order|dependency|hierarchy|membership|contrast|parallel|overlap|quantity|none,focal?:NODE id,rhythm?:anchor|dense|breathing}.
-The title is the claim. The relation must be drawn: edges, chevrons or a column of steps for order, edges for dependency, edges, nesting or layers for hierarchy, a box holding two or more members for membership, side by side for contrast, a grid, row or column of like nodes for parallel, intersecting shapes for overlap, the metric text role for quantity.
+The title is the claim. The relation must be drawn: edges, chevrons or a column of steps for order, edges or labelled cards in reading order for dependency, edges, nesting or layers for hierarchy, a box holding two or more members for membership, side by side for contrast, a grid, row or column of like nodes for parallel, intersecting shapes for overlap, the metric text role for quantity.
 The focal node is a box or text; the compiler gives it the focal color and no other node, text or edge may use it. Text inside a filled box is given a readable color unless you set one.
 A labelled edge needs room: its label must fit the gap between the two nodes, so put a spacer between them.
-Generated IDs are reserved: <box with style bar>_bar and _text, <metric>_label, <chart with source>_source, <slide>_rule1 and up, <slide>_title, <slide>_subtitle, <slide>_detail, <slide>_caveat, <slide>_caveat_label, <slide>_caveat_rule, <slide>_source, <box with children>_group, <labelled edge>_label.
+Generated IDs are reserved: <box with style bar>_bar and _text, <failed box>_state and _group, <metric>_label, <chart with source>_source, <slide>_rule1 and up, <slide>_title, <slide>_subtitle, <slide>_detail, <slide>_caveat, <slide>_caveat_label, <slide>_caveat_rule, <slide>_source, <box with children>_group, <labelled edge>_label.
 A card's align has no effect when it holds a box, grid or image, because those fill the spare space.
 IDs match [a-zA-Z_][a-zA-Z0-9_-]{4,40} and are unique across the deck.
 Nest at most 8 levels. Run compose contract --brand brand-contract.json for the brand's content area, gap, padding and line sizes.
-Text is measured with the brand font. Content that cannot fit at its role's size fails with the shortfall; rewrite, split or restructure.`;
+Text is measured with the brand font. Content that cannot fit at its role's size fails with the shortfall; rewrite, split or restructure. Words drawn over other words are refused.
+A diagram node carries a short label. An approved point's sentence stays whole: in one node, or in the notes beside short node labels; never split one sentence across several nodes.`;
 
 export function validateComposition(comp,contract,{collect}={}) {
   validateBrandContract(contract,{medium:'slides'});comp=expanded(comp);
@@ -112,7 +131,9 @@ export function validateComposition(comp,contract,{collect}={}) {
     if(colors[dir.neutral].toUpperCase()===colors[dir.focal].toUpperCase())throw new Error('direction.neutral is the same color as the focal; choose a different one');
     if(dir.motif!==undefined&&!str(dir.motif))throw new Error('direction.motif describes one recurring device, or is omitted');
   }
-  const allowedFills=dir?[...new Set([dir.neutral,...Object.keys(dir.meanings??{}),...(Object.hasOwn(colors,'canvasPrimary')?['canvasPrimary']:[])])]:null;
+  // A direction that gives no color a meaning still gets a few supporting colors from the brand, so cards need not all be grey.
+  const supporting=dir&&!Object.keys(dir.meanings??{}).length?supportingRoles(contract,dir):[];
+  const allowedFills=dir?[...new Set([dir.neutral,...Object.keys(dir.meanings??{}),...supporting,...(Object.hasOwn(colors,'canvasPrimary')?['canvasPrimary']:[])])]:null;
   if(!str(comp.title))throw new Error('Provide a deck title');
   if(!Array.isArray(comp.slides)||!comp.slides.length||comp.slides.length>100)throw new Error('Provide 1–100 slides');
   const ids=new Set(),claim=(id,where)=>{if(ids.has(id))fail(where,`invalid or repeated ID: ${id} is already used in this deck`);if(!idPattern.test(id??''))fail(where,`invalid or repeated ID: ${id} must be 5 to 41 letters, digits, _ or -, starting with a letter or _`);ids.add(id);};
@@ -121,12 +142,13 @@ export function validateComposition(comp,contract,{collect}={}) {
     // Every problem on a slide is gathered, so one compile shows all of them.
     const found=[],attempt=check=>{try{check();}catch(error){found.push(error.message);}};
     if(!s||typeof s!=='object'||Array.isArray(s))throw new Error('each slide must be an object');
-    if(Object.keys(s).some(k=>!['id','title','sources','canvas','connect','notes','intent','layoutId','layout','subtitle','detail','picture','brief','caveat','source'].includes(k)))fail(s.id,'unsupported slide field');
+    if(Object.keys(s).some(k=>!['id','title','sources','canvas','connect','notes','intent','layoutId','layout','subtitle','detail','picture','brief','caveat','source','provenance'].includes(k)))fail(s.id,'unsupported slide field');
     if(s.picture!==undefined&&s.layout===undefined)fail(s.id,'picture fills a template layout\'s picture slot; on a content slide use an image node in the canvas');
     claim(s.id,'slide');claim(`${s.id}_title`,s.id);
     attempt(()=>{if(!str(s.title))fail(s.id,'provide a slide title');});
     attempt(()=>{if(!Array.isArray(s.sources)||!s.sources.length||s.sources.some(x=>!str(x)))fail(s.id,'provide source references: one or more IDs naming what the slide rests on, such as request or author_knowledge');});
-    const local=new Set(),fills=new Set(),leaves=new Set(),facts={edges:0,chevrons:0,members:false,pair:false,peers:false,nested:false,layers:false,metric:false,chart:false},brief=s.brief,focalId=brief?.focal;let nodes=0,rules=0;
+    attempt(()=>{if(s.provenance!==undefined&&!str(s.provenance))fail(s.id,'provide provenance text or omit it; it goes into the speaker notes and is never drawn');});
+    const local=new Set(),fills=new Set(),leaves=new Set(),facts={edges:0,chevrons:0,members:false,pair:false,peers:false,nested:false,layers:false,metric:false,chart:false,labelled:false},brief=s.brief,focalId=brief?.focal;let nodes=0,rules=0;
     // A chart is checked from its kind and shape down to its numbers; the first problem found is the one reported for it.
     const checkChart=(n,where)=>{
       const label=v=>typeof v==='string'&&v.trim()&&v.length<=60,pie=n.kind==='pie';
@@ -176,6 +198,13 @@ export function validateComposition(comp,contract,{collect}={}) {
         if(dir&&n.fill!==undefined&&(n.fill===dir.focal||!allowedFills.includes(n.fill)))fail(where,`fill ${n.fill} is not in the deck direction (${allowedFills.join(', ')})`);
       }
       if(needsId||n.id!==undefined){claim(n.id,where);local.add(n.id);}
+      if(n.state!==undefined) {
+        if(!states.includes(n.state))fail(where,'state is normal, muted, struck or failed');
+        if(n.state==='failed'&&n.type!=='box')fail(where,'failed marks a box; put the words in a box, or use struck');
+        if(n.id===focalId&&n.state!=='normal')fail(where,'the focal node is the point of the slide; it cannot be muted, struck or failed');
+        // A failed box carries an × badge, grouped with it.
+        if(n.state==='failed'){claim(`${n.id}_state`,where);if(n.children===undefined&&n.style!=='bar')claim(`${n.id}_group`,where);}
+      }
       if(n.type==='chart')checkChart(n,where);
       if(n.group!==undefined&&typeof n.group!=='boolean')fail(where,'group must be boolean');
       if(n.weight!==undefined&&(!Number.isFinite(n.weight)||n.weight<=0||n.weight>10))fail(where,'weight must be above 0 and at most 10; weights are relative shares, so 9.5 and 0.5 give 95% and 5%');
@@ -210,6 +239,8 @@ export function validateComposition(comp,contract,{collect}={}) {
       }
       if(['box','text'].includes(n.type))leaves.add(n.id);
       if(n.type==='text'&&n.textRole==='metric')facts.metric=true;
+      // Two or more cards, each headed by a label, read in order: the parts are named where they sit.
+      if(['stack','grid'].includes(n.type)&&Array.isArray(n.children)&&n.children.filter(k=>k?.type==='box'&&Array.isArray(k.children)&&k.children.some(c=>c?.type==='text'&&c.textRole==='label')).length>1)facts.labelled=true;
       // Two or more comparable siblings: side by side they are a pair, in a single column they are layers.
       if(['stack','grid','free','ring'].includes(n.type)&&Array.isArray(n.children)&&n.children.filter(k=>['box','text','stack','grid'].includes(k?.type)).length>1){const column=n.type==='stack'&&n.direction==='column'||n.type==='grid'&&n.columns===1;if(n.children.filter(k=>['box','stack','grid'].includes(k?.type)).length>1)facts.peers=true;if(column){if(n.children.filter(k=>k?.type==='box').length>1)facts.layers=true;}else facts.pair=true;}
       if(n.type==='icon'&&n.asset!==undefined){if(n.icon!==undefined)fail(where,'icon takes icon or asset, not both');fail(where,`icon asset ${n.asset} resolves through the project's asset manifest; compile it with compose compile --asset-project DIR`);}
@@ -262,7 +293,8 @@ export function validateComposition(comp,contract,{collect}={}) {
     if(s.connect!==undefined&&(!Array.isArray(s.connect)||s.connect.length>40))fail(s.id,'connect must be a list of at most 40 edges');
     for(const c of s.connect??[])attempt(()=>{
       if(!c||typeof c!=='object')fail(s.id,'each edge must be an object');
-      if(Object.keys(c).some(k=>!['id','from','to','label','arrow','color','route'].includes(k)))fail(s.id,'unsupported edge field');
+      if(Object.keys(c).some(k=>!['id','from','to','label','arrow','color','route','style'].includes(k)))fail(s.id,'unsupported edge field');
+      if(c.style!==undefined&&!Object.hasOwn(edgeStyles,c.style))fail(`${s.id}/${c.id}`,'edge style is solid, dashed or dotted');
       if(c.route!==undefined&&!['straight','elbow','curve'].includes(c.route))fail(`${s.id}/${c.id}`,'route is straight, elbow or curve');
       claim(c.id,`${s.id}/edge`);
       if(!local.has(c.from)||!local.has(c.to)||c.from===c.to)fail(`${s.id}/${c.id}`,'edges connect two distinct nodes on this slide');
@@ -275,9 +307,9 @@ export function validateComposition(comp,contract,{collect}={}) {
     summary.push({id:s.id,nodes,fills:[...fills],edges:(s.connect??[]).length});
   } catch(error){invalid.push(error.message);if(s&&typeof s==='object')bad.add(s.id);}
   // A caller that goes on to check fit collects these and reports everything together.
-  if(collect){collect.push(...invalid);return {slides:summary,bad};}
+  if(collect){collect.push(...invalid);return {slides:summary,bad,supporting};}
   if(invalid.length)throw new Error(invalid.length===1?invalid[0]:`${invalid.length} problems to fix:\n${invalid.join('\n')}`);
-  return {slides:summary};
+  return {slides:summary,...(supporting.length?{supporting}:{})};
 }
 
 async function measurer(contract,options) {
@@ -316,7 +348,8 @@ export async function composeSizes(contract,{fonts}={}) {
   return `Sizes for ${contract.identity.id}, in points.
 Content area ${round(sl.contentBox.width)} wide by ${round(sl.contentBox.height)} high. The title holds ${lines} line${lines>1?'s':''} at ${t.title.size}pt across ${round(sl.titleBox.width)}.
 Gaps: tight ${inset/2}, normal ${inset}, wide ${sp.column??28}. A box pads its content by ${inset} on each side. An icon is ${sl.icon?.size??48} square, a badge ${Math.round((sl.icon?.size??48)*.6)}, and a rule takes ${inset/2}.
-One line of text needs: ${Object.keys(t).filter(k=>k!=='title').map(k=>`${k} ${line(k)}`).join(', ')}. Text with no textRole uses ${body}, the size for a deck delivered ${contract.medium.delivery==='live'?'live':'for reading'}. Do not step below it to make content fit.`;
+One line of text needs: ${Object.keys(t).filter(k=>k!=='title').map(k=>`${k} ${line(k)}`).join(', ')}. Text with no textRole uses ${body}, the size for a deck delivered ${contract.medium.delivery==='live'?'live':'for reading'}. Do not step below it to make content fit.
+Supporting fills for a direction that names no meanings, with ${t.title.colorRole} as its focal: ${supportingRoles(contract,{focal:t.title.colorRole,neutral:'canvasSecondary'}).join(', ')||'none; this palette has no other accent'}. Tint and bar cards take them; give them meanings for a long deck.`;
 }
 export async function compileComposition(comp,contract,{fonts}={}) {
   // Structure and fit are reported together: slides that break a rule are skipped, the rest are still laid out.
@@ -326,7 +359,7 @@ export async function compileComposition(comp,contract,{fonts}={}) {
   const gapSize={none:0,tight:inset/2,normal:inset,wide:sp.column??28};
   const bodyRole=contract.medium.delivery==='live'?'body':'bodyReference',measure=await measurer(contract,fonts);
   const iconSize=sl.icon?.size??48;
-  const scene={version:2,title:comp.title,mode:'new',canvas:sl.canvas,theme:brandTheme(contract),slides:[]},structure={groups:[],connectors:[],icons:[],layouts:[],adjusted:[],reading:[],unspoken:[],direction:comp.direction??null,briefs:[]},room=[],dir=comp.direction;
+  const scene={version:2,title:comp.title,mode:'new',canvas:sl.canvas,theme:brandTheme(contract),slides:[]},structure={groups:[],connectors:[],icons:[],layouts:[],adjusted:[],reading:[],unspoken:[],direction:comp.direction??null,...(summary.supporting?.length?{supporting:summary.supporting}:{}),briefs:[]},room=[],dir=comp.direction;
 
   const style=n=>roles[n.textRole??bodyRole];
   // Text and icons keep their own size; everything else shares the space that is left.
@@ -401,6 +434,10 @@ export async function compileComposition(comp,contract,{fonts}={}) {
       return onColor&&inks.includes(wanted)&&contrastRatio(onColor,surface)>contrastRatio(wanted,surface)?onColor:wanted;
     };
     const fillRole=n=>dir&&n.id===focalId?dir.focal:n.fill??dir?.neutral??'canvasSecondary';
+    // A muted, struck or failed node is quieted: a light surface and secondary ink. The point of the slide is never quieted.
+    const canvasHex=colors.canvasPrimary??'#FFFFFF',mutedInk=colors.inkSecondary??colors.inkDeep,neutralHex=colors[dir?.neutral??'canvasSecondary'];
+    const alarm=colors.statusCritical&&!(dir&&colors.statusCritical.toUpperCase()===colors[dir.focal].toUpperCase())?colors.statusCritical:colors.inkDeep;
+    const quiet=n=>Boolean(n.state&&n.state!=='normal'&&n.id!==focalId),struck=n=>quiet(n)&&['struck','failed'].includes(n.state);
     const put=(element,members)=>{elements.push(element);members?.push(element.id);return element;};
     // A column's shortfall is the sum of its parts, so the message lists them: the part to change is rarely the column itself.
     const parts=(n,width)=>{const kids=n.type==='box'?n.children:n.type==='stack'&&n.direction==='column'?n.children:null;if(!kids||kids.length<2)return '';const g=gapOf(n),w=n.type==='box'?Math.max(1,width-inset*2):width;return ` (${kids.map(k=>`${k.id??k.type} ${round(need(k,w))}`).join(' + ')}${g?`, plus ${kids.length-1} gap${kids.length>2?'s':''} of ${g}`:''}${n.type==='box'?`, plus padding of ${inset*2}`:''})`;};
@@ -420,9 +457,15 @@ export async function compileComposition(comp,contract,{fonts}={}) {
     // A role's own color may be one the direction has given a job (the focal, or a meaning). Ordinary text does not borrow it.
     const taken=dir?new Set([dir.focal,...Object.keys(dir.meanings??{})].map(role=>colors[role].toUpperCase())):new Set();
     const roleColor=st=>taken.has(colors[st.colorRole].toUpperCase())?colors.inkDeep:colors[st.colorRole];
-    const textProps=(n,surface)=>{const st=style(n);return {fontSize:st.size,bold:st.bold,color:n.color?colors[n.color]:dir&&n.id===focalId&&n.type==='text'?colors[dir.focal]:ink(roleColor(st),surface,st),...(n.align&&n.align!=='stretch'?{align:{start:'left',center:'center',end:'right'}[n.align]}:{})};};
+    const textProps=(n,surface)=>{const st=style(n);return {fontSize:st.size,bold:st.bold,color:quiet(n)?ink(mutedInk,surface,st):n.color?colors[n.color]:dir&&n.id===focalId&&n.type==='text'?colors[dir.focal]:ink(roleColor(st),surface,st),...(n.align&&n.align!=='stretch'?{align:{start:'left',center:'center',end:'right'}[n.align]}:{}),...(struck(n)?{strike:true}:{})};};
     const box=r=>({x:round(r.x),y:round(r.y),width:round(r.width),height:round(r.height)});
 
+    // A state on a box carries to what it holds: a failed or muted box mutes its contents, a struck one strikes them through.
+    const inherit=(n,mood)=>{
+      if(!n||typeof n!=='object')return n;
+      const here=['box','text'].includes(n.type)?n.state??mood:undefined,pass=['box','text'].includes(n.type)?here==='struck'?'struck':here&&here!=='normal'?'muted':undefined:mood;
+      return {...n,...(here&&here!=='normal'?{state:here}:{}),...(Array.isArray(n.children)?{children:n.children.map(k=>inherit(k,pass))}:{}),...(n.hub?{hub:inherit(n.hub,pass)}:{})};
+    };
     const place=(n,rect,members,surface=colors.canvasPrimary??'#FFFFFF')=>{
       // A spacer may be any size, and an icon reports the width it lacks rather than a general lack of room.
       if(n.type==='spacer')return;
@@ -431,6 +474,12 @@ export async function compileComposition(comp,contract,{fonts}={}) {
       // Leaves and column stacks own the fit check, so the error names the node to fix.
       const checks=!n.children||n.type==='stack'&&n.direction==='column';
       if(checks){const required=need(n,rect.width);if(required>rect.height+.5){short(n,rect,required);return;}}
+      // A word wider than its line would be broken mid-word by every renderer, so it is refused like any other shortfall.
+      if(typeof n.text==='string'&&['text','box'].includes(n.type)) {
+        const [,,,fx]=shapeKinds[n.shape??'rect'],room=n.type==='text'?rect.width:fx===1?rect.width-inset*2:rect.width*fx,st=style(n);
+        const word=n.text.split(/\s+/).filter(Boolean).map(w=>({w,width:measure.width(w,st)})).sort((a,b)=>b.width-a.width)[0];
+        if(word&&word.width>room+.5){tight.push(`${s.id}/${n.id}: the word "${word.w}" needs ${round(word.width)}pt but the text is ${round(room)}pt wide; widen the node, shorten the word or split it where a reader would`);return;}
+      }
       if(n.id)rects.set(n.id,rect);
       const own=n.group?[]:members;
       if(n.type==='spacer')return;
@@ -474,22 +523,33 @@ export async function compileComposition(comp,contract,{fonts}={}) {
         put({id:n.id,type:'shape',shape:'ellipse',x:round(rect.x+(rect.width-side)/2),y:round(rect.y+(rect.height-side)/2),width:round(side),height:round(side),fill:fillColor,text:n.text.trim(),fontSize:st.size,bold:true,color:ink(colors.inkDeep,fillColor,st),align:'center'},own);return;
       }
       if(n.type==='box') {
-        // Solid is a filled shape. Outline is a line in the box's color on whatever is behind it. Bar is a neutral card with a strip of the color down its left edge.
-        const look=n.style??'solid',point=dir&&n.id===focalId,accent=point?dir.focal:n.fill??(colors.inkSecondary?'inkSecondary':'inkDeep');
-        const base=look==='outline'?{id:n.id,type:'shape',...box(rect),shape:n.shape??'rect',stroke:colors[accent],strokeWeight:point?3:1.5}
-          :{id:n.id,type:'shape',...box(rect),shape:n.shape??'rect',fill:colors[look==='bar'?dir?.neutral??'canvasSecondary':fillRole(n)]};
-        const behind=base.fill??surface,strip=look==='bar'?{id:`${n.id}_bar`,type:'shape',shape:'rect',x:round(rect.x),y:round(rect.y),width:barWidth,height:round(rect.height),fill:colors[accent]}:null;
+        // Solid is a filled shape. Tint is a light surface of its color. Outline is a line in the box's color on whatever is behind it.
+        // Bar is a neutral card with a strip of the color down its left edge.
+        const look=n.style??'solid',point=dir&&n.id===focalId,accent=point?dir.focal:n.fill??(colors.inkSecondary?'inkSecondary':'inkDeep'),soft=quiet(n),failed=soft&&n.state==='failed';
+        const surfaceFill=look==='bar'?neutralHex:soft?mix(neutralHex,canvasHex,.45):look==='tint'?tintOf(colors[fillRole(n)],canvasHex):colors[fillRole(n)];
+        // A quieted card keeps a hairline edge, so it still reads as a node on a surface of the same light grey.
+        const base=look==='outline'?{id:n.id,type:'shape',...box(rect),shape:n.shape??'rect',stroke:soft?mutedInk:colors[accent],strokeWeight:soft?1:point?3:1.5}
+          :{id:n.id,type:'shape',...box(rect),shape:n.shape??'rect',fill:surfaceFill,...(look==='tint'&&point?{stroke:colors[dir.focal],strokeWeight:2}:soft?{stroke:mutedInk,strokeWeight:1}:{})};
+        // A failed box keeps its words readable: a status-colored dashed edge and an × badge mark it, not lines drawn across it.
+        if(failed)Object.assign(base,{stroke:alarm,strokeWeight:1.5,dash:'dash'});
+        const behind=base.fill??surface,strip=look==='bar'?{id:`${n.id}_bar`,type:'shape',shape:'rect',x:round(rect.x),y:round(rect.y),width:barWidth,height:round(rect.height),fill:soft?mutedInk:colors[accent]}:null;
+        const badge=()=>{if(!failed)return null;const side=Math.round(badgeSize*.8),st={...roles.caption,bold:true};return {id:`${n.id}_state`,type:'shape',shape:'ellipse',x:round(rect.x+rect.width-side-inset/4),y:round(rect.y+inset/4),width:side,height:side,fill:alarm,text:'×',fontSize:st.size,bold:true,color:ink(onColor??colors.inkDeep,alarm,st),align:'center'};};
         if(n.text!==undefined) {
           sized(n);
-          if(!strip){put({...base,text:n.text,...textProps(n,behind)},own);return;}
-          // The words sit in their own box, clear of the strip, so every emitter insets them the same way.
-          const members=[];put(base,members);put(strip,members);
-          put({id:`${n.id}_text`,type:'text',x:round(rect.x+inset),y:round(rect.y),width:round(rect.width-inset*2),height:round(rect.height),text:n.text,...textProps(n,behind)},members);
+          if(!strip&&!failed){put({...base,text:n.text,...textProps(n,behind)},own);return;}
+          const members=[];
+          if(strip){
+            // The words sit in their own box, clear of the strip, so every emitter insets them the same way.
+            put(base,members);put(strip,members);
+            put({id:`${n.id}_text`,type:'text',x:round(rect.x+inset),y:round(rect.y),width:round(rect.width-inset*2),height:round(rect.height),text:n.text,...textProps(n,behind)},members);
+          } else put({...base,text:n.text,...textProps(n,behind)},members);
+          if(failed)put(badge(),members);
           structure.groups.push({slide:s.id,id:`${n.id}_group`,members});own?.push(...members);return;
         }
         const inner=[];put(base,inner);if(strip)put(strip,inner);
         const [,,,fx,fy]=shapeKinds[base.shape],area=fx===1&&fy===1?{x:rect.x+inset,y:rect.y+inset,width:rect.width-inset*2,height:rect.height-inset*2}:{x:rect.x+rect.width*(1-fx)/2,y:rect.y+rect.height*(1-fy)/2,width:rect.width*fx,height:rect.height*fy};
         if(n.children)place({type:'stack',direction:'column',gap:n.gap,align:n.align,children:n.children,name:n.id},area,inner,behind);
+        if(failed)put(badge(),inner);
         if(inner.length>1)structure.groups.push({slide:s.id,id:`${n.id}_group`,members:inner});
         own?.push(...inner);return;
       }
@@ -570,7 +630,32 @@ export async function compileComposition(comp,contract,{fonts}={}) {
       // A picture goes into the layout's own picture slot, which gives it its place, shape and crop.
       const pictures=[];if(s.picture){put({id:`${s.id}_picture`,type:'image',x:0,y:0,width:sl.canvas.width,height:sl.canvas.height,src:s.picture.src,alt:s.picture.alt,fit:'cover'});pictures.push(`${s.id}_picture`);}
       structure.layouts.push({slide:s.id,layout:s.layout,placeholders,...(pictures.length?{pictures}:{})});
-    } else if(area.height>inset*2)place(s.canvas,area,null);
+    } else if(area.height>inset*2)place(inherit(s.canvas),area,null);
+    if(!s.layout) {
+      // A text an arrow points at is sized to its words, so the arrow meets them rather than the empty part of its slot.
+      const nodes=new Map(),index=n=>{if(!n||typeof n!=='object')return;if(n.id)nodes.set(n.id,n);(n.children??[]).forEach(index);index(n.hub);};index(s.canvas);
+      for(const id of new Set((s.connect??[]).flatMap(c=>[c.from,c.to]))) {
+        const n=nodes.get(id),e=elements.find(x=>x.id===id);if(n?.type!=='text'||!e)continue;
+        const st=style(n),h=measure.height(n.text,st,e.width),w=Math.min(e.width,measure.width(n.text,st)*1.04+2);
+        if(h<e.height-.5)e.height=round(h);
+        if(w<e.width-.5){e.x=round(e.x+({center:(e.width-w)/2,end:e.width-w}[n.align]??0));e.width=round(w);}
+        rects.set(id,{x:e.x,y:e.y,width:e.width,height:e.height});
+      }
+      // Words drawn over other words cannot be read, whatever was meant. Only the area the words cover counts, not empty padding.
+      const reach=e=>{
+        if(e.role==='title'||!(e.type==='text'||e.type==='shape'&&e.text))return null;
+        const st={size:e.fontSize,bold:e.bold},[,,,fx,fy]=shapeKinds[e.shape??'rect'],pad=e.type==='shape'&&fx===1&&fy===1?inset:0;
+        const a=e.type==='shape'?{x:e.x+e.width*(1-fx)/2+pad,y:e.y+e.height*(1-fy)/2+pad,width:e.width*fx-pad*2,height:e.height*fy-pad*2}:e;
+        if(!(a.width>7.2&&a.height>0))return null;
+        const h=Math.min(a.height,measure.height(e.text,st,a.width)),w=Math.min(a.width,measure.width(e.text,st));
+        return {x:a.x+({center:(a.width-w)/2,right:a.width-w}[e.align]??0),y:e.type==='shape'?a.y+(a.height-h)/2:a.y,width:w,height:h};
+      };
+      const worded=elements.map(e=>({e,r:reach(e)})).filter(x=>x.r);
+      worded.forEach(({e:b,r:rb},j)=>{
+        const hit=worded.slice(0,j).find(({e:a,r:ra})=>a.id!==`${b.id}_state`&&b.id!==`${a.id}_state`&&Math.min(ra.x+ra.width,rb.x+rb.width)-Math.max(ra.x,rb.x)>1&&Math.min(ra.y+ra.height,rb.y+rb.height)-Math.max(ra.y,rb.y)>1);
+        if(hit)tight.push(`${s.id}/${b.id}: its words overlap the words of ${hit.e.id}; give each its own room, move or resize one, or join them into one node`);
+      });
+    }
     if(!s.layout) {
       // Words over a picture need something solid behind them: contrast against a photograph cannot be checked, and
       // a see-through scrim changes a brand color. A filled box painted between the picture and the words does it.
@@ -613,7 +698,7 @@ export async function compileComposition(comp,contract,{fonts}={}) {
           p1=horizontal?{x:bc.x>ac.x?a.x+a.width:a.x,y:ac.y}:{x:ac.x,y:bc.y>ac.y?a.y+a.height:a.y};
           p2=horizontal?{x:bc.x,y:bc.y>ac.y?b.y:b.y+b.height}:{x:bc.x>ac.x?b.x:b.x+b.width,y:bc.y};}
       }
-      put({id:c.id,type:'line',x:round(Math.min(p1.x,p2.x)),y:round(Math.min(p1.y,p2.y)),width:round(Math.max(1,Math.abs(p2.x-p1.x))),height:round(Math.max(1,Math.abs(p2.y-p1.y))),color:colors[c.color??(dir?(Object.hasOwn(colors,'inkSecondary')?'inkSecondary':'inkDeep'):'headingPrimary')],weight:2,arrow:c.arrow??true,flipH:p2.x<p1.x,flipV:p2.y<p1.y,...(bent&&Math.abs(p2.x-p1.x)>1&&Math.abs(p2.y-p1.y)>1?{route:c.route,lead:horizontal?'horizontal':'vertical',...(turns?{turns}:{})}:{})});
+      put({id:c.id,type:'line',x:round(Math.min(p1.x,p2.x)),y:round(Math.min(p1.y,p2.y)),width:round(Math.max(1,Math.abs(p2.x-p1.x))),height:round(Math.max(1,Math.abs(p2.y-p1.y))),color:colors[c.color??(dir?(Object.hasOwn(colors,'inkSecondary')?'inkSecondary':'inkDeep'):'headingPrimary')],weight:2,arrow:c.arrow??true,...(edgeStyles[c.style]?{dash:edgeStyles[c.style]}:{}),flipH:p2.x<p1.x,flipV:p2.y<p1.y,...(bent&&Math.abs(p2.x-p1.x)>1&&Math.abs(p2.y-p1.y)>1?{route:c.route,lead:horizontal?'horizontal':'vertical',...(turns?{turns}:{})}:{})});
       const record={slide:s.id,id:c.id,from:c.from,to:c.to};
       if(c.label) {
         const st=roles.caption,width=measure.width(c.label,st)+1,height=measure.height(c.label,st,width),mid={x:(p1.x+p2.x)/2,y:(p1.y+p2.y)/2},cb=sl.contentBox;
@@ -641,7 +726,9 @@ export async function compileComposition(comp,contract,{fonts}={}) {
       structure.connectors.push(record);
     }
 
-    scene.slides.push({id:s.id,title:s.title,sources:s.sources,elements,...(s.notes!==undefined?{notes:s.notes}:{}),...(s.intent?{intent:s.intent}:{}),...(s.layoutId?{layoutId:s.layoutId}:{})});
+    // Provenance is for the presenter and the reviewer, never the slide: it follows the speaker notes.
+    const notes=[s.notes,s.provenance!==undefined?`Provenance: ${s.provenance}`:undefined].filter(x=>x!==undefined&&x!=='').join('\n\n');
+    scene.slides.push({id:s.id,title:s.title,sources:s.sources,elements,...(s.notes!==undefined||s.provenance!==undefined?{notes}:{}),...(s.intent?{intent:s.intent}:{}),...(s.layoutId?{layoutId:s.layoutId}:{})});
   } catch(error){problems.push(error.message.startsWith(`${s.id}`)?error.message:`${s.id}: ${error.message}`);}
   // Report every slide that does not fit in one pass, so the author fixes them together.
   if(problems.length)throw new Error(problems.length===1?problems[0]:`${problems.length} problems to fix:\n${problems.join('\n')}`);

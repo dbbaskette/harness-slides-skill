@@ -28,9 +28,15 @@ minutes a content slide. Then for each content slide:
 - **`points`:** the real units, counted from the content, each a label, a line
   of text or both. The title, the points, a focal statement of its own and the
   caveat are all the wording the slide will show; the build draws them and
-  adds no claims.
+  adds no claims. A point whose sentence lists things a diagram should show
+  separately may add `parts`, short labels for those nodes; the sentence itself
+  is never split across nodes.
 - **`caveat`** and **`source`**, if the claim needs them: one line each, shown
-  at the foot of the built slide.
+  at the foot of the built slide. The source is a citation the audience can
+  follow, such as a document title.
+- **`provenance`**: finding, objective or research IDs behind the slide. It is
+  never drawn; the build adds it to the notes. `check` reports a source line
+  that reads like provenance.
 - **`notes`**: what the presenter says, and the source behind the claim. They
   go into the built slide's notes.
 - **`sources`:** what the slide rests on, as IDs: a section of the source
@@ -66,15 +72,24 @@ approve, add what they said to the outline's `approval`, in their words.
 
 ## Choose the look from real slides
 
-The draft settles the story. Reuse an already approved brand, direction and
-artwork. Confirm brand identity with its cover when needed. A rendered content
-sample is useful only when a meaningful treatment, emphasis or color-role choice
-remains unresolved; do not ask for the same unchanged choice again. In
-Presentation Studio the runner owns the outline/brand checkpoint; record the
-actual answer there and bind that same answer to any engine design session.
-A cover confirms identity, not one layout to repeat across content slides.
+The draft settles the story; the brand drives the look. When a brand add-on
+supplies directions, such as Tanzu Brand's `look samples` and `look choose`,
+the look comes from that choice step: show its samples, wait, and build from the
+outline it writes with the chosen `direction`, `house`, `layouts` and the
+person's words in `approval`. A supplied direction replaces the step only when
+it is recorded as approved for this deck. Confirm brand identity with its cover
+when needed; a cover confirms identity, not one layout to repeat across content
+slides.
 
-When a visual choice remains open, use this optional comparison:
+A studio runner (Presentation Studio, Training Studio) hosts the checkpoints in
+its own interface: draft approval, the look choice and final acceptance. It
+records the person's actual answer and binds that same answer to any engine
+design session. Hosting a checkpoint never skips one.
+
+Without a brand add-on that supplies directions, reuse an already approved
+direction and artwork, and do not ask for the same unchanged choice again.
+When a treatment, emphasis or color-role choice remains open, use this optional
+comparison:
 
 1. Pick one content slide that will show the look well: one with a relation to
    draw and a point to mark.

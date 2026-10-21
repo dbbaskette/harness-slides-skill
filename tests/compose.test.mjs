@@ -490,7 +490,7 @@ test('badges, rules and metrics are small fixed parts with their own size',async
   assert.ok(byId(built,'big_share_label').y>=byId(built,'big_share').y+byId(built,'big_share').height);
   const bad=node=>()=>validateComposition(deck({type:'stack',direction:'row',children:[node,{type:'box',id:'other_box',text:'x'}]}),c);
   assert.throws(bad({type:'badge',id:'long_badge',text:'1234'}),/a badge holds one to three characters/);assert.throws(bad({type:'metric',id:'half_metric',value:'42%'}),/a metric needs an id, a value and a label/);
-  assert.throws(()=>validateComposition({version:1,title:'D',direction:dir,slides:[{id:'slide_one',title:'T',sources:['s1'],canvas:{type:'badge',id:'loud_badge',text:'1',fill:'accentAqua'}}]},c),/fill accentAqua is not in the deck direction/);
+  assert.throws(()=>validateComposition({version:1,title:'D',direction:dir,slides:[{id:'slide_one',title:'T',sources:['s1'],canvas:{type:'badge',id:'loud_badge',text:'1',fill:'inkSecondary'}}]},c),/fill inkSecondary is not in the deck direction/);
 });
 
 test('edges can bend, a ring places its children around a circle, and a table is measured row by row',async()=>{

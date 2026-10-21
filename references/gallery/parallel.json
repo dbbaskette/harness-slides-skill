@@ -18,62 +18,86 @@
    },
    "caveat": "All three must pass; none can be waived.",
    "canvas": {
-    "type": "grid",
-    "columns": 3,
+    "type": "stack",
+    "direction": "column",
     "children": [
      {
-      "type": "box",
-      "id": "checks_test",
-      "style": "outline",
+      "type": "stack",
+      "direction": "row",
       "children": [
        {
-        "type": "text",
-        "id": "checks_h1",
-        "text": "Tests",
-        "textRole": "label"
+        "type": "box",
+        "id": "checks_test",
+        "style": "tint",
+        "children": [
+         {
+          "type": "badge",
+          "id": "checks_b1",
+          "text": "A"
+         },
+         {
+          "type": "text",
+          "id": "checks_h1",
+          "text": "Tests",
+          "textRole": "label"
+         },
+         {
+          "type": "text",
+          "id": "checks_t1",
+          "text": "Does it still do what it did?"
+         }
+        ]
        },
        {
-        "type": "text",
-        "id": "checks_t1",
-        "text": "Does it still do what it did?"
+        "type": "box",
+        "id": "checks_scan",
+        "style": "tint",
+        "children": [
+         {
+          "type": "badge",
+          "id": "checks_b2",
+          "text": "B"
+         },
+         {
+          "type": "text",
+          "id": "checks_h2",
+          "text": "Security scan",
+          "textRole": "label"
+         },
+         {
+          "type": "text",
+          "id": "checks_t2",
+          "text": "Does it add a known weakness?"
+         }
+        ]
+       },
+       {
+        "type": "box",
+        "id": "checks_cost",
+        "style": "tint",
+        "children": [
+         {
+          "type": "badge",
+          "id": "checks_b3",
+          "text": "C"
+         },
+         {
+          "type": "text",
+          "id": "checks_h3",
+          "text": "Cost check",
+          "textRole": "label"
+         },
+         {
+          "type": "text",
+          "id": "checks_t3",
+          "text": "Does it raise the monthly bill?"
+         }
+        ]
        }
       ]
      },
      {
-      "type": "box",
-      "id": "checks_scan",
-      "style": "outline",
-      "children": [
-       {
-        "type": "text",
-        "id": "checks_h2",
-        "text": "Security scan",
-        "textRole": "label"
-       },
-       {
-        "type": "text",
-        "id": "checks_t2",
-        "text": "Does it add a known weakness?"
-       }
-      ]
-     },
-     {
-      "type": "box",
-      "id": "checks_cost",
-      "style": "outline",
-      "children": [
-       {
-        "type": "text",
-        "id": "checks_h3",
-        "text": "Cost check",
-        "textRole": "label"
-       },
-       {
-        "type": "text",
-        "id": "checks_t3",
-        "text": "Does it raise the monthly bill?"
-       }
-      ]
+      "type": "spacer"
      }
     ]
    }

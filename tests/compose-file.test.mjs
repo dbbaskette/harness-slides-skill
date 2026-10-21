@@ -62,5 +62,7 @@ test('every gallery example compiles on the neutral brand and draws the relation
     assert.match(result.status,/^fits/,name);assert.equal(result.weightOverridden,undefined,name);
     assert.equal(comp.slides.length,1);assert.equal(comp.slides[0].brief.relation,name.replace('.json',''));assert.ok(comp.slides[0].notes,name);
     assert.ok(index.includes(`(gallery/${name})`),name);
+    // Cards are filled; an outline is kept for a boundary, such as a hierarchy's levels or an overlap's regions.
+    if(!['hierarchy.json','overlap.json'].includes(name))assert.ok(!JSON.stringify(comp).includes('"style":"outline"'),`${name} draws its cards filled`);
   }
 });

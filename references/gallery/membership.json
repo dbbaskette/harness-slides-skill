@@ -3,7 +3,10 @@
  "title": "Gallery: membership",
  "direction": {
   "focal": "headingPrimary",
-  "neutral": "canvasSecondary"
+  "neutral": "canvasSecondary",
+  "meanings": {
+   "accentTeal": "the platform team"
+  }
  },
  "slides": [
   {
@@ -20,7 +23,7 @@
    "canvas": {
     "type": "box",
     "id": "member_group",
-    "style": "outline",
+    "style": "tint",
     "children": [
      {
       "type": "text",
@@ -36,29 +39,34 @@
         "type": "box",
         "id": "member_one",
         "text": "Sign-in",
-        "align": "center"
+        "align": "center",
+        "fill": "canvasPrimary"
        },
        {
         "type": "box",
         "id": "member_two",
         "text": "Logging",
-        "align": "center"
+        "align": "center",
+        "fill": "canvasPrimary"
        },
        {
         "type": "box",
         "id": "member_three",
         "text": "Build",
-        "align": "center"
+        "align": "center",
+        "fill": "canvasPrimary"
        },
        {
         "type": "box",
         "id": "member_four",
         "text": "Secrets",
-        "align": "center"
+        "align": "center",
+        "fill": "canvasPrimary"
        }
       ]
      }
-    ]
+    ],
+    "fill": "accentTeal"
    }
   }
  ]

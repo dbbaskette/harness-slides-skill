@@ -3,7 +3,11 @@
  "title": "Gallery: contrast",
  "direction": {
   "focal": "headingPrimary",
-  "neutral": "canvasSecondary"
+  "neutral": "canvasSecondary",
+  "meanings": {
+   "accentTeal": "buying",
+   "accentPlum": "building"
+  }
  },
  "slides": [
   {
@@ -29,7 +33,7 @@
        {
         "type": "box",
         "id": "versus_buy",
-        "style": "bar",
+        "style": "tint",
         "children": [
          {
           "type": "text",
@@ -47,12 +51,13 @@
           "id": "versus_t2",
           "text": "Higher yearly fee"
          }
-        ]
+        ],
+        "fill": "accentTeal"
        },
        {
         "type": "box",
         "id": "versus_make",
-        "style": "bar",
+        "style": "tint",
         "children": [
          {
           "type": "text",
@@ -70,7 +75,8 @@
           "id": "versus_t4",
           "text": "Lower running cost"
          }
-        ]
+        ],
+        "fill": "accentPlum"
        }
       ]
      },
