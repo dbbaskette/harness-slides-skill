@@ -31,6 +31,22 @@ test('studio supports object edits and rejects cross-origin, out-of-bounds and s
   assert.equal((await post(request)).status,200);assert.equal((await post(request)).status,400);
   assert.equal((await fetch(base+'/edit',{method:'POST',headers:{Origin:'https://untrusted.invalid','Content-Type':'application/json'},body:'{}'})).status,403);
   assert.equal((await fetch(origin+'/state')).status,404);
+  // Edited words take code spans in backticks, as an author writes them, and lose them when the backticks go.
+  const save=async(id,fields)=>{const current=await(await fetch(base+'/state')).json();return post({id,fields,expectedDigest:current.current.sceneDigest});};
+  const element=async id=>(await(await fetch(base+'/state')).json()).scene.slides[0].elements.find(e=>e.id===id);
+  assert.equal((await save('story_caption',{text:'Set `highAvailability` first'})).status,200);
+  const coded=await element('story_caption');assert.equal(coded.text,'Set highAvailability first');assert.deepEqual(coded.code,[[4,20]]);
+  assert.equal((await save('story_caption',{text:'Set high availability first'})).status,200);assert.equal((await element('story_caption')).code,undefined);
+  // A title is a plain-English claim: a code span in one is refused, as compose and outline refuse it.
+  const titled=await save('story_title',{text:'Set `highAvailability` first'});assert.equal(titled.status,400);assert.match((await titled.json()).error,/title is a plain-English claim/);
+  // Words the person did not change are left as they are: a legacy scene's literal backticks survive a geometry save.
+  assert.equal((await save('story_input',{text:'Press `q` to quit'})).status,200);
+  const {saveScene}=await import('../scripts/lib/workspace.mjs'),legacy=structuredClone((await(await fetch(base+'/state')).json()).scene);
+  legacy.slides[0].elements.find(e=>e.id==='story_input').text='Press `q` to quit';delete legacy.slides[0].elements.find(e=>e.id==='story_input').code;
+  await saveScene({root,scene:legacy,expectedDigest:(await(await fetch(base+'/state')).json()).current.sceneDigest,note:'Legacy words'});
+  // The studio shows them escaped (as withCodeTicks writes them) and sends that back with the new geometry.
+  assert.equal((await save('story_input',{x:61,text:'Press \\`q\\` to quit'})).status,200);
+  const kept=await element('story_input');assert.equal(kept.text,'Press `q` to quit');assert.equal(kept.code,undefined);assert.equal(kept.x,61);
 });
 test('shared installer links three harnesses to one verified version without replacing unrelated files',async t=>{
   const dir=await temporary(t),home=join(dir,'home'),shared=join(dir,'shared');const plan=await install({home,shared,dryRun:true});assert.equal(plan.targets.length,3);

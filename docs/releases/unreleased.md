@@ -25,6 +25,29 @@ the warnings and errors grouped per slide, blocking slides first. A failed box's
 badge is sized to hold its ×, and a solid icon's glyph is no longer judged
 against the card behind it.
 
+A muted or struck card is the neutral panel in secondary ink, never a bare
+outline box, and on a neutral surface it takes the canvas color. A struck card
+keeps its words readable, without a line through them, and carries a quiet ×
+badge in secondary ink beside them (`<id>_state`, grouped with the card); a
+struck text is still struck through. A struck or failed box is a rectangle or
+rounded rectangle, so its badge sits inside it. What a box holds is muted, whatever its
+state. Guidance says when to mute, strike or leave a thing out. The live Google
+check had shown a struck card on a brand without tints as an empty white
+outline with its word crossed out, which read as a wireframe typo.
+
+Slide text takes code spans: configuration fields, commands, API and file names
+in backticks, such as `` `highAvailability` ``, are set in the brand's code
+type (`design.slides.typography.code.fontFamily`) or in Courier New, as runs in
+the same text box in every writer, and are measured in that font; a fonts
+record may name its files as `code` and `codeBold`. `` \` `` is a literal
+backtick. Titles, edge labels, badges, tables and charts refuse code spans, as
+does a studio edit of a title, and the studio leaves words it was not asked to
+change as they were. Guidance asks for a plain-English
+lead the first time ("High availability (`highAvailability`) is empty or
+omitted"); `outline check` reports `unmarked-code` for camelCase and snake_case
+names, paths and configuration file names left unmarked, and the draft page
+shows code spans in a monospace face. Runtimes report `compose-code-spans`.
+
 The brand drives the look and Harness Slides drives iteration. When a brand
 add-on supplies directions, such as Tanzu Brand's `look samples` and `look
 choose`, the look comes from that choice step; without one, the optional
@@ -57,7 +80,8 @@ over words or has a word wider than its line, both now refused. An arrow to a
 text is now attached, and the text is sized to its words, so a rebuilt slide
 with such an arrow can change geometry. Google Slides import of dashed and
 dotted lines, strikethrough, the failed badge and connectors attached to text
-boxes has not been checked live.
+boxes has not been checked live. Nor has Google Slides import of code runs or
+of the struck badge.
 
 ## Earlier development: 0.15.0
 

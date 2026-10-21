@@ -6,7 +6,7 @@ import {join,resolve} from 'node:path';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {fileURLToPath} from 'node:url';
-import {validateScene,themeFor,color} from './scene.mjs';
+import {validateScene,themeFor,color,textRuns} from './scene.mjs';
 import {validateBrandContract,checkBrandSources} from './brand-contract.mjs';
 import {pptxTool} from './presentation-tools.mjs';
 
@@ -41,6 +41,8 @@ export async function emitNativePptx({scene,structure={groups:[],connectors:[]},
       if(e.href)throw new Error(`${e.id}: the native emitter does not write hyperlinks yet; use pptx render`);
       const out={...e};
       if(e.type==='text'||e.type==='shape'&&e.text!==undefined){out.fontSize=e.fontSize??(e.role==='title'?theme.titleSize:theme.bodySize);out.color=hex(e.color??'text');}
+      // Text with code goes to the writer as runs, so it never has to count characters the way JavaScript does.
+      if(e.code){delete out.code;out.runs=textRuns(e);}
       if(e.fill)out.fill=hex(e.fill);
       if(e.stroke)out.stroke=hex(e.stroke);
       if(e.type==='line')out.color=hex(e.color??'accent');
@@ -64,7 +66,7 @@ export async function emitNativePptx({scene,structure={groups:[],connectors:[]},
     slides.push({id:s.id,...(chosen?{layout:chosen.layout,placeholders:chosen.placeholders,...(chosen.pictures?{pictures:chosen.pictures}:{})}:{}),elements,...(s.notes?{notes:s.notes}:{}),groups:structure.groups.filter(g=>g.slide===s.id).map(({id,members})=>({id,members})),connectors:structure.connectors.filter(c=>c.slide===s.id).map(({id,from,to})=>({id,from,to}))});
   }
   const iconLibrary=await checkIcons(structure,brand);
-  const plan={layoutPart:native?.layoutPart??'ppt/slideLayouts/slideLayout1.xml',...(!native?{canvasBackground:hex('background')}:{}),...(iconLibrary?{iconLibrary}:{}),font:brand.design.fontFamily,shapeInset:sl.spacing?.inset??16,slides};
+  const plan={layoutPart:native?.layoutPart??'ppt/slideLayouts/slideLayout1.xml',...(!native?{canvasBackground:hex('background')}:{}),...(iconLibrary?{iconLibrary}:{}),font:brand.design.fontFamily,...(scene.slides.some(s=>s.elements.some(e=>e.code))?{codeFont:theme.codeFont}:{}),shapeInset:sl.spacing?.inset??16,slides};
   const dir=await mkdtemp(join(tmpdir(),'harness-native-'));
   try {
     // The deck is written and read back in this private folder. It takes its output name only once it reads back, so a failed render leaves nothing there.
