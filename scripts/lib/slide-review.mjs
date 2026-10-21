@@ -13,6 +13,7 @@ import {verifyBuiltAssets} from './assets.mjs';
 import {digest,canonicalDigest,recordedPath,recordedLocation} from './common.mjs';
 import { pptxTool } from './presentation-tools.mjs';
 import { importDeck, updateDeck, exportPdf, previewPrefix } from '../google-drive-deck.mjs';
+import { poolPreview, assertReceiptCurrent, poolRemoteCurrent } from './preview-pool.mjs';
 const exec = promisify(execFile);
 const hash = data => createHash('sha256').update(data).digest('hex');
 const pngMagic = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
@@ -96,7 +97,7 @@ async function save(output, record) {
   await atomic(join(output, 'contact-sheet.html'), html);
   await atomic(join(output, 'review.json'), `${JSON.stringify(record, null, 2)}\n`);
   return { output, record: join(output, 'review.json'), contactSheet: join(output, 'contact-sheet.html'), revision: record.revision, renderer: record.renderer,
-    ...(record.remote ? { fileId: record.remote.fileId, url: record.remote.url, next: `Reuse this Drive file for the next Google render: --file-id ${record.remote.fileId}` } : {}),
+    ...(record.remote ? { fileId: record.remote.fileId, url: record.remote.url, ...(record.remote.pool ? { pool: record.remote.pool, next: (await import('./compose-preview.mjs')).poolNext(record.remote.pool) } : { next: `Reuse this Drive file for the next Google render: --file-id ${record.remote.fileId} --new-preview-file` }) } : {}),
     slides: record.slides.length, changed: record.slides.filter(s => !s.reused).map(s => s.number), pending: record.pending,
     visualReviewComplete: record.visualReviewComplete, creativeReviewRequired:record.creativeReviewRequired??false, creativeReviewComplete:record.creativeReviewComplete, readyForUserReview:record.readyForUserReview, ...(record.creativeQuality?{designReview:categorizeReview(record.creativeQuality,record.creativeAssessment),qualityRevision:record.creativeQuality.revision,assessmentBinding:{schema:1,sceneDigest:record.creativeQuality.sceneDigest,qualityRevision:record.creativeQuality.revision,artifactDigest:record.creativeQuality.artifactDigest},qualityReport:join(output,'review.json')}:{} ) };
 }
@@ -117,27 +118,35 @@ export async function renderPptx({ file, output, selected, run = exec, soffice =
   } finally { await rm(profile, { recursive: true, force: true }); }
 }
 
-// Google Slides draws the deck by the route compose preview --renderer google takes: the exact bytes the review hashes are
-// uploaded (or replace a "Preview: …" file given by fileId), exported as a PDF and cut into pictures with Poppler. The Drive
-// copy only carries the render: the reviewed deck is still REVIEW/deck.pptx, so the receipts bind the same bytes.
-export async function renderGoogle({ file, output, selected, title, fileId, drive = {}, google, run = exec, pdftoppm = process.env.HARNESS_PDFTOPPM || 'pdftoppm', pdfinfo = process.env.HARNESS_PDFINFO || 'pdfinfo' }) {
-  const d = { importDeck, updateDeck, exportPdf, ...drive }, pdf = join(output, 'snapshot.pdf');
+// Google Slides draws the deck by the route compose preview --renderer google takes: the exact bytes the review hashes go
+// into a preview pool file (or, with newPreviewFile, a new "Preview: …" file), exported as a PDF and cut into pictures with
+// Poppler. The Drive copy only carries the render: the reviewed deck is still REVIEW/deck.pptx, so the receipts bind the same bytes.
+export async function renderGoogle({ file, output, selected, title, fileId, newPreviewFile, poolSize, drive = {}, google, run = exec, pdftoppm = process.env.HARNESS_PDFTOPPM || 'pdftoppm', pdfinfo = process.env.HARNESS_PDFINFO || 'pdfinfo' }) {
+  const d = { importDeck, updateDeck, exportPdf, poolPreview, ...drive }, pdf = join(output, 'snapshot.pdf');
   let remote = null;
   try {
     try {
-      remote = fileId ? await d.updateDeck({ fileId, file }, google) : await d.importDeck({ file, name: `${previewPrefix}${title || 'Review'}`, preview: true }, google);
-      await d.exportPdf({ fileId: remote.id, output: pdf }, google);
-    } catch (error) { throw refuse(`Google Slides could not render the deck: ${String(error.message).split('\n')[0]}`, { code: 'provider-failed', provider: 'google' }); }
+      if (newPreviewFile) {
+        remote = fileId ? await d.updateDeck({ fileId, file }, google) : await d.importDeck({ file, name: `${previewPrefix}${title || 'Review'}`, preview: true }, google);
+        await d.exportPdf({ fileId: remote.id, output: pdf }, google);
+      } else {
+        let leased = null;
+        try { remote = await d.poolPreview({ file, size: poolSize, fileId, render: async (r, pooled) => { leased = r; await d.exportPdf({ fileId: r.id, output: pdf }, pooled); } }, google); }
+        catch (error) { remote = leased; throw error; }
+      }
+    } catch (error) { if (error.problem?.code === 'preview-replaced' || error.problem?.code === 'input-invalid') throw error; throw refuse(`Google Slides could not render the deck: ${String(error.message).split('\n')[0]}`, { code: 'provider-failed', provider: 'google' }); }
     const { stdout } = await run(pdfinfo, [pdf], { timeout: 30000, maxBuffer: 1024 * 1024 });
     const count = Number(/^Pages:\s+(\d+)/m.exec(stdout)?.[1]);
     if (!Number.isSafeInteger(count) || count < 1) throw new Error('Renderer did not report a page count');
     for (const number of selected) await run(pdftoppm, ['-f', String(number), '-l', String(number), '-singlefile', '-scale-to', '1600', '-png', pdf, join(output, `page-${number}`)], { timeout: 60000, maxBuffer: 1024 * 1024 });
-    return { count, image: number => join(output, `page-${number}.png`), remote: { provider: 'google', fileId: remote.id, url: remote.url } };
+    return { count, image: number => join(output, `page-${number}.png`), remote: { provider: 'google', fileId: remote.id, url: remote.url, ...(remote.pool ? { pool: remote.pool } : {}) } };
   } catch (error) { throw stranded(error, remote); }
 }
 // The upload already happened: say where it is, so a retry reuses it instead of creating another file.
 function stranded(error, remote) {
-  if (remote && !String(error.message).includes(`--file-id ${remote.id}`)) error.message += ` The review deck is in Drive (${remote.url}); retry with --renderer google --file-id ${remote.id}.`;
+  // A pool file is named by its receipt: a bare ID would only take the least recently used file.
+  const named = remote?.pool ? remote.pool.receipt : remote?.id;
+  if (remote && !String(error.message).includes(`--file-id ${named}`)) error.message += ` The review deck is in Drive (${remote.url}); retry with --renderer google ${remote.pool ? '' : '--new-preview-file '}--file-id ${named}.`;
   return error;
 }
 
@@ -181,7 +190,11 @@ export async function prepareReview({ file, previews, compiled, output, designPr
   if (!['local', 'google'].includes(renderer)) throw refuse('--renderer is local (LibreOffice) or google (Google Slides through Drive)', { code: 'input-invalid' });
   if (previews && renderer !== 'local') throw refuse('--previews are already rendered: --renderer applies to --file and --compiled', { code: 'input-invalid' });
   if (fileId && renderer !== 'google') throw refuse('--file-id names the Drive file a Google render reuses: give it with --renderer google', { code: 'input-invalid' });
+  if ((options.newPreviewFile || options.poolSize !== undefined) && renderer !== 'google') throw refuse('--new-preview-file and --pool-size choose how a Google render is kept: give them with --renderer google', { code: 'input-invalid' });
+  if (options.newPreviewFile && options.poolSize !== undefined) throw refuse('--new-preview-file makes a new Drive file instead of using the preview pool, so it takes no --pool-size', { code: 'input-invalid' });
   if (compiled && !designProject) throw refuse('--compiled needs --design-project: a composition review is checked against the approved design', { code: 'input-invalid' });
+  // A preview pool receipt for a file that now shows a newer preview is refused before anything is rendered.
+  if (renderer === 'google' && fileId && !options.newPreviewFile) await assertReceiptCurrent(fileId, options.google);
   if (compiled && (nativeSnapshot || decisions || qualityReport)) throw refuse('--compiled takes no --native-snapshot, --decisions or --quality-report: the compiled build supplies them', { code: 'input-invalid' });
   return locked(output, async (dir, previous) => {
     if(previous?.creativeReviewRequired&&!designProject)throw new Error('Retain the design project and native/scene quality inputs; creative review cannot be downgraded');
@@ -209,7 +222,7 @@ export async function prepareReview({ file, previews, compiled, output, designPr
               // Composition preview and review consume exactly one editable
               // artifact and its verified native pixels, across output folders.
               bundleTemp=await mkdtemp(join(tmpdir(),'harness-bundle-review-'));
-              bundlePreview=await (await import('./compose-preview.mjs')).previewComposition({file:build.dir,output:join(bundleTemp,'render'),renderer,'file-id':fileId,'design-project':designProject,fonts:options.fonts,soffice:options.soffice,pdftoppm:options.pdftoppm,pdfinfo:options.pdfinfo,register:false},{run:options.run,drive:options.drive,google:options.google});
+              bundlePreview=await (await import('./compose-preview.mjs')).previewComposition({file:build.dir,output:join(bundleTemp,'render'),renderer,'file-id':fileId,'new-preview-file':options.newPreviewFile,'pool-size':options.poolSize,refresh,'design-project':designProject,fonts:options.fonts,soffice:options.soffice,pdftoppm:options.pdftoppm,pdfinfo:options.pdfinfo,register:false},{run:options.run,drive:options.drive,google:options.google});
               built={...bundlePreview,sha256:bundlePreview.deckSha256};
               await writeFile(join(scratch,'deck.pptx'),await bytes(bundlePreview.deck));
             }else{
@@ -235,11 +248,11 @@ export async function prepareReview({ file, previews, compiled, output, designPr
         label = renderer === 'google' ? 'Google Slides PDF export / Poppler; verify fidelity in the target editor' : 'LibreOffice PDF / Poppler; verify fidelity in the target editor';
         pages = deck.slides;
         images = async selected => {
-          if(bundlePreview){if(bundlePreview.fileId)remote={provider:'google',fileId:bundlePreview.fileId,url:bundlePreview.url};return number=>bundlePreview.slides.find(s=>s.number===number).image;}
+          if(bundlePreview){if(bundlePreview.fileId)remote={provider:'google',fileId:bundlePreview.fileId,url:bundlePreview.url,...(bundlePreview.pool?{pool:bundlePreview.pool}:{})};return number=>bundlePreview.slides.find(s=>s.number===number).image;}
           const draw = render ?? (renderer === 'google' ? renderGoogle : renderPptx);
           const result = await draw({ file: snapshot, output: temp, selected, ...options, ...(renderer === 'google' ? { title: build?.scene.title ?? basename(file).replace(/\.pptx$/i, ''), fileId } : {}) });
           remote = result.remote;
-          if (result.count !== pages.length) throw stranded(new Error(`Rendered ${result.count} pages for ${pages.length} slides. Hidden slides or export coverage are missing.`), remote && { id: remote.fileId, url: remote.url });
+          if (result.count !== pages.length) throw stranded(new Error(`Rendered ${result.count} pages for ${pages.length} slides. Hidden slides or export coverage are missing.`), remote && { id: remote.fileId, url: remote.url, pool: remote.pool });
           return result.image;
         };
       } else {
@@ -278,7 +291,10 @@ export async function prepareReview({ file, previews, compiled, output, designPr
       }
       const record={schemaVersion:1,tool:'harness-slides-review',source,revision,renderer:label,rendererKey,slides:resultPages};
       // The Drive file a Google render used, kept while the pictures it drew are, so a later render can reuse it.
-      const drawn=remote??(renderer==='google'&&previous?.rendererKey===rendererKey?previous.remote:null);if(drawn)record.remote=drawn;
+      let drawn=remote;
+      // A preview pool file that has since shown another preview no longer carries these pictures.
+      if(!drawn&&renderer==='google'&&previous?.rendererKey===rendererKey&&previous.remote&&(!previous.remote.pool||await poolRemoteCurrent(previous.remote,options.google)))drawn=previous.remote;
+      if(drawn)record.remote=drawn;
       if(designProject){
         const approved=await getApprovedDesign(designProject);record.designProject=resolve(designProject);record.designRevision=approved.revision;record.creativeReviewRequired=true;
         if(build){

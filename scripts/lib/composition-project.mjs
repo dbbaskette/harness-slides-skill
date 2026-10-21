@@ -39,7 +39,10 @@ export async function compositionStatus(root){
     const preview=resolve(root,w.current.preview.path),{verifyCriticPacket,assessCompositionCritique}=await import('./compose-preview.mjs');
     const packet=await verifyCriticPacket(preview,await json(join(preview,'critic.json')));
     if(packet.buildBinding!==w.current.binding)throw new Error('Preview belongs to another build');
-    result.preview=w.current.preview.path;result.remote=w.current.preview.remote;result.status='rendered; critique required';
+    result.preview=w.current.preview.path;result.remote=w.current.preview.remote;
+    // A preview pool file that now shows a newer preview is no longer this version's remote.
+    if(result.remote?.pool&&!await (await import('./preview-pool.mjs')).poolRemoteCurrent(result.remote)){result.remote=null;result.remoteReplaced='That preview has been replaced by a newer one; preview again.';}
+    result.status='rendered; critique required';
     const receipt=await json(join(preview,'critique.json'));
     if(receipt.packetDigest!==digest(packet))throw new Error('Critique is stale');
     const assessed=assessCompositionCritique(packet,{deckSha256:receipt.deckSha256,reviewer:receipt.reviewer,slides:receipt.slides,findings:receipt.findings,weakest:receipt.weakest});

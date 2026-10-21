@@ -55,6 +55,24 @@ comparison of content samples remains. A studio runner hosts the draft
 approval, look choice and final acceptance checkpoints in its own interface and
 never skips one by hosting it.
 
+Google previews stop filling Drive with files. `compose preview` and `review
+--renderer google` reuse a pool of Google Slides files, `Harness Slides preview
+1` to `4` in a `Harness Slides previews` folder made on first use for the
+signed-in gcloud account. Each preview replaces the least recently used file
+with one Drive media upload that converts the deck in place, keeping the file's
+ID and link; if Drive refuses, a new file takes the slot and the old one goes to
+the Drive trash, never deleted. Leases in the machine-local pool state keep two
+previews off the same file. Results carry `pool`, with a `FILE_ID:GENERATION`
+receipt; `--file-id` with a receipt whose file now shows a newer preview is
+refused as `preview-replaced`, and a bare ID still works. `--pool-size N` (or
+`HARNESS_PREVIEW_POOL_SIZE`) sets the size, `--new-preview-file` keeps the
+earlier file-per-preview route, `drive pool` lists the pool, and a renamed pool
+file is left alone. Leases are per computer; a render whose pool file was written
+by anyone else before it was read back (its `modifiedTime` moved) is refused, the
+generation is kept in Drive and rises before Drive is touched, one sign-in token
+serves a whole preview, and `compose preview --refresh` redraws a cached build
+for a new Drive link. The capability is `google-preview-pool`.
+
 Guidance for 0.16.0 requires runtime 0.16.0; 0.15.x retains guidance at
 `5ba00545e36a26b3f6011b65c9923e1f4efe145c`. A composition that uses none of
 the new vocabulary compiles to the same scene as before, unless it draws words

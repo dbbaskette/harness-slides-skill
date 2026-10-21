@@ -41,6 +41,42 @@ The check found two screening defects, fixed afterwards: the failed-box badge
 overflowing, and a solid icon's white glyph was judged against a white card and
 reported as blending in.
 
+### Live Google preview pool check — 0.16.0, 21 October 2026
+
+With the owner's approval, the Mac's existing gcloud sign-in ran three
+`compose preview --renderer google --pool-size 2` calls on small one-, two- and
+three-slide decks. A Drive `files.update` media upload of a PPTX onto an
+existing Google Slides file converted it in place (same ID, new version, the new
+slides in the PDF export), so the pool uses that route; the Slides API was again
+refused (HTTP 403) to this OAuth client. The first preview found the
+`Harness Slides previews` folder and its slot-1 file by their markers, left by
+the route probe, and replaced it in place; the second created slot 2; the third
+replaced slot 1 in place (generation 2). The folder then held exactly two files,
+neither trashed, and their Drive PDF exports showed the three-slide and two-slide
+decks. Each preview's PNGs showed its own deck. A `--file-id` with the first
+preview's receipt was refused as `preview-replaced` before anything was written,
+and a cached re-preview of the first deck kept its images and left out the
+replaced Drive link. The `replace-and-trash` fallback is covered by fixtures
+only; Drive did not refuse an in-place conversion.
+
+After the code review, later the same day, Drive answered most uploads with HTTP
+500 for over half an hour (reads also failed now and then). That period showed
+three things the pool now handles. Drive's `version` rose on its own (13 to 14
+with no write and `modifiedTime` unchanged), so the cross-computer check uses
+`modifiedTime`. A multipart update that answered 500 had still written its
+metadata. One pool file failed every upload while the other succeeded about
+one time in three. One hardened preview (generation stamp, then the upload, then
+the `modifiedTime` check after export) completed in place on slot 1. Every other
+attempt failed with "Drive is having trouble; preview again in a moment." The
+folder still held exactly the two pool files, nothing trashed and no stray file.
+
+Host (macOS, Node 22): **331 tests, 327 passed, four skipped, zero failures**,
+with a failing `gcloud` on `PATH` to show no test reaches Google (it was never
+called) and the real pool state unchanged; `context:check` and `docs:check` pass.
+Disposable Tart VM from `tanzu-brand-golden-gate-base` (macOS 27.0, Node 22.23.2)
+from a clean clone at cc87c78: `npm run test:native` **331 passed, zero failures
+or skips**.
+
 ## Development verification — 0.15.0, 19 October 2026
 
 Issue #72 closes the reproduced gaps in unbranded native structure, direct-source

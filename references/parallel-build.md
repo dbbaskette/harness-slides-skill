@@ -49,7 +49,8 @@ back, at the quality of a one-line sketch.
    things yourself; send a slide back to the worker that owns it when it needs
    redesigning.
 
-Tell the user which preview files the build left in their Drive.
+Previews reuse the preview pool; tell the user about any `--new-preview-file`
+files the build left in their Drive.
 
 ## The worker brief
 
@@ -67,11 +68,11 @@ Tell the user which preview files the build left in their Drive.
 - What the slides either side of the section look like, so it does not echo
   them.
 - An ID prefix for every node it creates, such as `s2_`.
-- Preview: its own Drive previews; use the latest returned ID with `--file-id` for ownership/version checks. The previous file is preserved.
+- Preview: Google previews share the preview pool, so a worker omits `--file-id` or passes its latest `pool.receipt`; a refused receipt means another preview took the file, so preview again. Give the pool at least as many files as workers previewing at once (`--pool-size N`); otherwise a preview waits for a free file.
 - Limits: titles, claims, the direction and the slide order are fixed. How each
   slide is drawn is the worker's to design.
-- What to return: the section file, the final preview directory, the Drive
-  file ID, what it changed after looking, and anything it could not do.
+- What to return: the section file, the final preview directory, the preview's
+  `pool.receipt`, what it changed after looking, and anything it could not do.
 
 ## If you are a worker
 
