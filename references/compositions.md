@@ -301,6 +301,7 @@ used one, so a returned `url` lasts only until a later preview takes that file.
 Omit `--file-id`, or pass the returned `pool.receipt` to replace that same file
 while it still shows your preview; a replaced receipt is refused. `--pool-size N`
 changes the size; `--new-preview-file` makes a separate `Preview: …` file instead.
+A cached render whose pool file moved on has no link; `--refresh` draws it again.
 To keep a preview, rename it in Drive. A cached local render does not verify a
 live deck's current state.
 Use `--renderer local` when

@@ -44,7 +44,11 @@ receipt; `--file-id` with a receipt whose file now shows a newer preview is
 refused as `preview-replaced`, and a bare ID still works. `--pool-size N` (or
 `HARNESS_PREVIEW_POOL_SIZE`) sets the size, `--new-preview-file` keeps the
 earlier file-per-preview route, `drive pool` lists the pool, and a renamed pool
-file is left alone. The capability is `google-preview-pool`.
+file is left alone. Leases are per computer; a render whose pool file was written
+by anyone else before it was read back (its `modifiedTime` moved) is refused, the
+generation is kept in Drive and rises before Drive is touched, one sign-in token
+serves a whole preview, and `compose preview --refresh` redraws a cached build
+for a new Drive link. The capability is `google-preview-pool`.
 
 Guidance for 0.16.0 requires runtime 0.16.0; 0.15.x retains guidance at
 `5ba00545e36a26b3f6011b65c9923e1f4efe145c`. A composition that uses none of

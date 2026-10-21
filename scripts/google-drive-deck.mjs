@@ -178,7 +178,12 @@ export async function exportPdf({ fileId, output }, deps = {}) {
   if (!output?.toLowerCase().endsWith('.pdf')) throw new Error('Output must be a .pdf path.');
   const url = new URL(`https://www.googleapis.com/drive/v3/files/${fileId}/export`);
   url.searchParams.set('mimeType', 'application/pdf');
-  const bytes = Buffer.from(await (await request(url, {}, deps)).arrayBuffer());
+  // An export is a read: after a Drive server error it is asked for again, a few times.
+  let bytes;
+  for (let attempt = 1; ; attempt++) {
+    try { bytes = Buffer.from(await (await request(url, {}, deps)).arrayBuffer()); break; }
+    catch (error) { if (attempt >= (deps.attempts ?? 3) || !/HTTP 5\d\d/.test(error.message)) throw error; await new Promise(r => setTimeout(r, (deps.retryMs ?? 1500) * attempt)); }
+  }
   if (!bytes.subarray(0, 5).equals(Buffer.from('%PDF-'))) throw new Error('Drive did not return a PDF; no output was saved.');
   await writeFile(output, bytes, { flag: 'wx', mode: 0o600 });
   return { output: resolve(output), bytes: bytes.length };

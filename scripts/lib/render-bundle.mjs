@@ -48,10 +48,11 @@ export async function compositionRenderBundle(options,deps,render){
   const input=resolve(options.file),cache=join(dirname(input),'.harness-slides','render-bundles');
   const id=await identity(options,deps);await mkdir(cache,{recursive:true,mode:0o700});
   if((await lstat(cache)).isSymbolicLink())throw new Error('Render cache must be a real directory');
-  if(options.slide)try{const dir=join(cache,id.wholeKey),record=await verify(dir);return {dir,record,reused:true};}catch{/* A selected render cannot trust a corrupt or missing whole-deck bundle. */}
+  // --refresh draws again instead of reusing a bundle, for example to get a new Drive preview.
+  if(options.slide&&!options.refresh)try{const dir=join(cache,id.wholeKey),record=await verify(dir);return {dir,record,reused:true};}catch{/* A selected render cannot trust a corrupt or missing whole-deck bundle. */}
   const target=join(cache,id.key),lockPath=target+'.lock',lock=await open(lockPath,'wx',0o600).catch(e=>{if(e.code==='EEXIST')throw new Error('Native render is already in progress; retry after it finishes');throw e;});
   try{
-    let record;try{record=await verify(target);}catch{await rm(target,{recursive:true,force:true});}
+    let record;try{if(options.refresh)throw new Error('refresh');record=await verify(target);}catch{await rm(target,{recursive:true,force:true});}
     let reused=Boolean(record);
     if(!record){
       const pixels=new Map();

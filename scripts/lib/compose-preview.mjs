@@ -178,7 +178,7 @@ export async function previewComposition(options,deps={}){
   const bundle=await compositionRenderBundle(options,deps,renderCompositionPreview),result=await materializeRenderBundle(bundle,options.output,{slide:options.slide});
   if(approved)result.design={revision:approved.revision,scope:approved.scope,slides:approved.slides};else delete result.design;
   // A reused render keeps its pictures, but a pool file that has since shown another preview no longer belongs to it.
-  if(bundle.reused&&result.pool&&!await poolRemoteCurrent({fileId:result.fileId,pool:result.pool},deps.google)){for(const key of ['fileId','url','pool','next'])delete result[key];result.remoteReplaced='The preview pool file this render used now shows a newer preview, so its Drive link is left out. These images still show this build.';}
+  if(bundle.reused&&result.pool&&!await poolRemoteCurrent({fileId:result.fileId,pool:result.pool},deps.google)){for(const key of ['fileId','url','pool','next'])delete result[key];result.remoteReplaced='The preview pool file this render used now shows a newer preview, so its Drive link is left out. These images still show this build; preview with --refresh for a new Drive link.';}
   const {compositionBinding,recordCompositionArtifact}=await import('./composition-project.mjs');
   result.buildBinding=await compositionBinding(options.file);
   if(!options.slide){const packet=JSON.parse(await readFile(join(options.output,'critic.json'),'utf8'));packet.buildBinding=result.buildBinding;await writeFile(join(options.output,'critic.json'),JSON.stringify(packet,null,2)+'\n');}
@@ -212,7 +212,7 @@ async function renderCompositionPreview({file,output,slide,'file-id':fileId,'new
       }else{
         // The pool replaces its least recently used file and exports the render while that file is leased to this preview.
         let leased=null;
-        try{remote=await drive.poolPreview({file:deck,size,fileId,render:async r=>{leased=r;await drive.exportPdf({fileId:r.id,output:pdf},deps.google);}},deps.google);}
+        try{remote=await drive.poolPreview({file:deck,size,fileId,render:async(r,google)=>{leased=r;await drive.exportPdf({fileId:r.id,output:pdf},google);}},deps.google);}
         catch(error){remote=leased;throw error;}
       }
     } else {
@@ -255,14 +255,15 @@ async function renderCompositionPreview({file,output,slide,'file-id':fileId,'new
     }
     const repair=repairClusters(slides);
     const result={schema:1,output,deck,deckSha256,...review,repair,...(approved?{design:{revision:approved.revision,scope:approved.scope,slides:approved.slides}}:{}),renderer:renderer==='google'?'Google Slides PDF export':'LibreOffice',emitter:built.emitter,native:built.native??[],...(remote?{fileId:remote.id,url:remote.url,...(remote.pool?{pool:remote.pool}:{})}:{}),slides,
-      status:repair.blocking.length?`rendered and screened; ${repair.blocking.length} slide${repair.blocking.length===1?'':'s'} (${repair.blocking.join(', ')}) carry blocking findings: repair them before delivery. Screens are prompts to look, not approval.`:'rendered and screened; open each image and judge it. Screens are prompts to look, not approval.',next:remote?.pool?poolNext(remote.pool):remote?`Reuse this Drive file for the next preview: --file-id ${remote.id}`:undefined};
+      status:repair.blocking.length?`rendered and screened; ${repair.blocking.length} slide${repair.blocking.length===1?'':'s'} (${repair.blocking.join(', ')}) carry blocking findings: repair them before delivery. Screens are prompts to look, not approval.`:'rendered and screened; open each image and judge it. Screens are prompts to look, not approval.',next:remote?.pool?poolNext(remote.pool):remote?`Reuse this Drive file for the next preview: --file-id ${remote.id} --new-preview-file`:undefined};
     await writeFile(join(output,'preview.json'),JSON.stringify(result,null,2)+'\n',{flag:'wx',mode:0o600});
     return result;
   } catch(error) {
     await rm(output,{recursive:true,force:true});
     // The upload already happened: say where it is so a retry reuses it instead of creating another file.
-    if(remote?.pool)throw Object.assign(new Error(`${error.message} The preview deck is in the preview pool (${remote.url}); retry with --file-id ${remote.id}.`,{cause:error}),error.problem?{problem:error.problem}:{});
-    if(remote)throw new Error(`${error.message} The preview deck is in Drive (${remote.url}); retry with --file-id ${remote.id}.`,{cause:error});
+    // The receipt names this preview's pool file; a bare ID would only take the least recently used one.
+    if(remote?.pool)throw Object.assign(new Error(`${error.message} The preview deck is in Drive (${remote.url}); retry with --file-id ${remote.pool.receipt}.`,{cause:error}),error.problem?{problem:error.problem}:{});
+    if(remote)throw new Error(`${error.message} The preview deck is in Drive (${remote.url}); retry with --new-preview-file --file-id ${remote.id}.`,{cause:error});
     throw error;
   }
 }

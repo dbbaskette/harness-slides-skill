@@ -69,7 +69,7 @@ test('a preview builds the deck, puts it in the preview pool once, exports the r
 
 test('with --new-preview-file a later preview checks the named Drive file, keeps it and can render one slide',async t=>{
   const {dir,output}=await compiled(t),{calls,deps}=fakes(),result=await previewComposition({file:output,output:join(dir,'preview'),slide:'cards_one','file-id':'drive_file_9','new-preview-file':true},deps);
-  assert.ok(!calls.some(c=>c[0]==='pool'));
+  assert.ok(!calls.some(c=>c[0]==='pool'));assert.equal(result.next,'Reuse this Drive file for the next preview: --file-id drive_file_9 --new-preview-file');
   assert.deepEqual(calls.find(c=>c[0]==='update'),['update','drive_file_9']);assert.ok(!calls.some(c=>c[0]==='import'));
   assert.deepEqual(result.slides.map(s=>[s.id,s.number]),[['cards_one',3]]);assert.deepEqual(calls.filter(c=>c[0]==='pdftoppm'&&c[1]!=='-v'),[['pdftoppm','-f','3','-l','3']]);
   assert.deepEqual((await readdir(join(dir,'preview'))).filter(n=>n.endsWith('.png')),['slide-03.png']);
@@ -77,7 +77,7 @@ test('with --new-preview-file a later preview checks the named Drive file, keeps
 
 test('a render with the wrong page count, an unknown slide or a missing renderer fails and leaves nothing behind',async t=>{
   const {dir,output}=await compiled(t);
-  await assert.rejects(()=>previewComposition({file:output,output:join(dir,'short')},fakes(3).deps),/render has 3 pages for 4 slides.*preview deck is in the preview pool.*retry with --file-id drive_file_1\./);
+  await assert.rejects(()=>previewComposition({file:output,output:join(dir,'short')},fakes(3).deps),/render has 3 pages for 4 slides.*The preview deck is in Drive \(https:\/\/docs.google.com\/presentation\/d\/drive_file_1\/edit\); retry with --file-id drive_file_1:1\.$/);
   const missing=fakes();missing.deps.run=async()=>{throw Object.assign(new Error('spawn pdfinfo ENOENT'),{code:'ENOENT'});};
   await assert.rejects(()=>previewComposition({file:output,output:join(dir,'tools')},missing.deps),/Poppler/);assert.deepEqual(missing.calls,[]);
   await assert.rejects(()=>previewComposition({file:output,output:join(dir,'unknown'),slide:'missing_slide'},fakes().deps),/No slide missing_slide/);
@@ -101,7 +101,9 @@ test('a reused render keeps its Drive link only while its pool file still shows 
   assert.equal(replaced.fileId,first.fileId);assert.equal(replaced.pool.generation,2);assert.equal(replaced.pool.route,'drive-update');assert.equal(drive.live().length,1);
   const status=await compositionStatus(output);
   assert.equal(status.remote,null);assert.match(status.remoteReplaced,/replaced by a newer one/);
-  const later=await preview('later');assert.equal(later.reused,true);assert.equal(later.fileId,undefined);assert.match(later.remoteReplaced,/now shows a newer preview/);
+  const later=await preview('later');assert.equal(later.reused,true);assert.equal(later.fileId,undefined);assert.match(later.remoteReplaced,/now shows a newer preview.*--refresh for a new Drive link/);
+  // --refresh draws the build again and puts it back in the pool, with a new link.
+  const fresh=await preview('fresh',{refresh:true});assert.equal(fresh.reused,false);assert.equal(fresh.fileId,first.fileId);assert.equal(fresh.pool.generation,3);
   const refused=await preview('stale',{'file-id':first.pool.receipt}).catch(error=>error);
   assert.equal(refused.message,'That preview has been replaced by a newer one; preview again.');assert.equal(problemsOf(refused)[0].code,'preview-replaced');
   await assert.rejects(()=>readdir(join(dir,'stale')),/ENOENT/);

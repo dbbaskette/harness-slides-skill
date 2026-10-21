@@ -118,3 +118,81 @@ test('drive pool lists the folder and files from this computer\'s state without 
   const listed=JSON.parse(stdout);
   assert.equal(listed.pools[0].folder.url,made.pool.folder.url);assert.deepEqual(listed.pools[0].files.map(f=>[f.slot,f.receipt,f.inUse]),[[1,made.pool.receipt,false]]);
 });
+
+test('one sign-in serves the whole preview: a token that changes halfway does not mix two accounts\' pools',async t=>{
+  const dir=await temporary(t),state=join(dir,'pool'),file=join(dir,'deck.pptx');await writeFile(file,pptx('deck'));
+  const drive=fakeDrive({accountFor:auth=>auth==='Bearer first-token'?'first@example.invalid':'second@example.invalid'});
+  let asked=0;const tokenProvider=async()=>++asked===1?'first-token':'second-token';
+  const remote=await poolPreview({file,size:2,render:async(r,google)=>{await (await import('../scripts/google-drive-deck.mjs')).exportPdf({fileId:r.id,output:join(dir,'deck.pdf')},google);}},{tokenProvider,fetcher:drive.fetcher,poolState:state});
+  assert.equal(asked,1);assert.ok(drive.calls.every(c=>c[3]==='Bearer first-token'));
+  assert.deepEqual((await poolStatus({poolState:state})).pools.map(p=>p.account),['first@example.invalid']);assert.equal(remote.pool.generation,1);
+});
+
+test('a write from another computer while the render is read back is refused, and Drive server errors are retried',async t=>{
+  const dir=await temporary(t),file=join(dir,'deck.pptx');await writeFile(file,pptx('mine'));
+  let other=null;const drive=fakeDrive({onExport:async id=>{if(other)drive.writeAsAnother(id,other);}}),deps=depsFor(drive,join(dir,'pool'),{retryMs:1});
+  const exportIt=async(r,google)=>{await (await import('../scripts/google-drive-deck.mjs')).exportPdf({fileId:r.id,output:join(dir,`${r.pool.generation}.pdf`)},google);};
+  await poolPreview({file,size:1,render:exportIt},deps);
+  other='theirs';
+  const error=await poolPreview({file,size:1,render:exportIt},deps).catch(e=>e);
+  assert.equal(error.message,'The preview deck changed while it was being read; preview again.');assert.deepEqual([problemsOf(error)[0].code,problemsOf(error)[0].provider],['provider-failed','google']);
+  other=null;drive.state.serverErrors=2;
+  const retried=await poolPreview({file,size:1,render:exportIt},deps);assert.equal(retried.pool.route,'drive-update');assert.equal(drive.live().length,1);
+});
+
+test('the generation rises before Drive is touched, so a failed or uncertain replacement still retires older receipts',async t=>{
+  const dir=await temporary(t),file=join(dir,'deck.pptx');await writeFile(file,pptx('deck'));
+  const drive=fakeDrive(),deps=depsFor(drive,join(dir,'pool'),{retryMs:1});
+  const first=await poolPreview({file,size:1},deps);
+  // The upload may have landed although Drive answered with errors, and the fallback could not create a file either.
+  const failing=fakeDrive({files:drive.files,serverErrors:9,refuseCreate:true,prefix:'x_'});
+  await assert.rejects(()=>poolPreview({file,size:1},depsFor(failing,join(dir,'pool'),{retryMs:1})),/HTTP 500/);
+  await assert.rejects(()=>assertReceiptCurrent(first.pool.receipt,deps),/replaced by a newer one/);
+  // A render that fails after the upload leaves a receipt for exactly that upload, which retry advice names.
+  const broken=await poolPreview({file,size:1,render:async()=>{throw new Error('export failed');}},deps).catch(e=>e);assert.match(broken.message,/export failed/);
+  const status=(await poolStatus(deps)).pools[0].files[0];assert.equal(status.generation,3);
+  await assert.doesNotReject(()=>assertReceiptCurrent(status.receipt,deps));
+  const again=await poolPreview({file,size:1,fileId:status.receipt},deps);assert.equal(again.id,first.id);assert.equal(again.pool.generation,4);
+  assert.equal(drive.files.get(first.id).appProperties.harnessPreviewGeneration,'4');
+});
+
+test('a lease held by a stopped process on this computer expires at once, and a lost state continues Drive\'s generations',async t=>{
+  const dir=await temporary(t),state=join(dir,'pool'),drive=fakeDrive(),file=join(dir,'deck.pptx');await writeFile(file,pptx('deck'));
+  const first=await poolPreview({file,size:1},depsFor(drive,state));await poolPreview({file,size:1},depsFor(drive,state));
+  const {hostname}=await import('node:os'),saved=JSON.parse(await readFile(join(state,'state.json'),'utf8')),slot=Object.values(saved.pools)[0].slots[1];
+  slot.lease={token:'gone',until:Date.now()+60_000,pid:2**22+12345,host:hostname()};await writeFile(join(state,'state.json'),JSON.stringify(saved));
+  const taken=await poolPreview({file,size:1},depsFor(drive,state,{waitMs:50,pollMs:5}));assert.equal(taken.id,first.id);assert.equal(taken.pool.generation,3);
+  // A computer with no state adopts the file and carries on from the generation Drive records.
+  const adopted=await poolPreview({file,size:1},depsFor(drive,join(dir,'other-computer')));assert.equal(adopted.id,first.id);assert.equal(adopted.pool.generation,4);
+  // Its receipt is unknown to the first computer's state, and Drive says the file has moved on from it.
+  await assert.rejects(()=>assertReceiptCurrent(taken.pool.receipt,depsFor(drive,join(dir,'third-computer'))),/replaced by a newer one/);
+});
+
+test('a pool file moved out of the folder is left alone and a new file takes its place',async t=>{
+  const dir=await temporary(t),drive=fakeDrive(),deps=depsFor(drive,join(dir,'pool')),file=join(dir,'deck.pptx');await writeFile(file,pptx('kept'));
+  const first=await poolPreview({file,size:1},deps);drive.files.get(first.id).parents=['somewhere_else'];
+  await writeFile(file,pptx('next'));const next=await poolPreview({file,size:1},deps);
+  assert.notEqual(next.id,first.id);assert.equal(next.pool.route,'created');assert.equal(drive.files.get(first.id).content.slice(4),'kept');assert.equal(drive.files.get(first.id).trashed,undefined);
+  await assert.rejects(()=>assertReceiptCurrent(first.pool.receipt,deps),/replaced by a newer one/);
+});
+
+test('when the end of a preview cannot be recorded it is retried, then reported, and older receipts stay refused',async t=>{
+  const dir=await temporary(t),state=join(dir,'pool'),drive=fakeDrive(),deps=depsFor(drive,state),file=join(dir,'deck.pptx');await writeFile(file,pptx('deck'));
+  const first=await poolPreview({file,size:1},deps);
+  const {chmod}=await import('node:fs/promises'),warnings=[],warn=w=>warnings.push(String(w.message));process.on('warning',warn);
+  t.after(async()=>{process.off('warning',warn);await chmod(state,0o700).catch(()=>{});});
+  const second=await poolPreview({file,size:1,render:async()=>{await chmod(state,0o500);}},deps);
+  await new Promise(r=>setImmediate(r));
+  assert.equal(second.pool.generation,2);assert.equal(warnings.length,1);assert.match(warnings[0],/could not record the end of a preview/);
+  await chmod(state,0o700);
+  await assert.rejects(()=>assertReceiptCurrent(first.pool.receipt,deps),/replaced by a newer one/);
+});
+
+test('a review render that fails after the upload names the pool file by its receipt, in the wording runners parse',async t=>{
+  const dir=await temporary(t),file=join(dir,'deck.pptx');await writeFile(file,pptx('deck'));
+  const {renderGoogle}=await import('../scripts/lib/slide-review.mjs'),{poolStub}=await import('./pool-fixtures.mjs');
+  const drive={poolPreview:poolStub([],{id:'pool_file_7',generation:3}),exportPdf:async()=>{throw new Error('Drive did not return a PDF; no output was saved.');}};
+  const error=await renderGoogle({file,output:dir,selected:[1],title:'Deck',drive,run:async()=>({stdout:''})}).catch(e=>e);
+  assert.match(error.message,/The review deck is in Drive \(https:\/\/docs.google.com\/presentation\/d\/pool_file_7\/edit\); retry with --renderer google --file-id pool_file_7:3\.$/);
+  assert.match(error.message,/(?:--renderer google )?--file-id (\S+?)\.$/);
+});

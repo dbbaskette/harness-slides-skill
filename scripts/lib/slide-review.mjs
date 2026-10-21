@@ -97,7 +97,7 @@ async function save(output, record) {
   await atomic(join(output, 'contact-sheet.html'), html);
   await atomic(join(output, 'review.json'), `${JSON.stringify(record, null, 2)}\n`);
   return { output, record: join(output, 'review.json'), contactSheet: join(output, 'contact-sheet.html'), revision: record.revision, renderer: record.renderer,
-    ...(record.remote ? { fileId: record.remote.fileId, url: record.remote.url, ...(record.remote.pool ? { pool: record.remote.pool, next: (await import('./compose-preview.mjs')).poolNext(record.remote.pool) } : { next: `Reuse this Drive file for the next Google render: --file-id ${record.remote.fileId}` }) } : {}),
+    ...(record.remote ? { fileId: record.remote.fileId, url: record.remote.url, ...(record.remote.pool ? { pool: record.remote.pool, next: (await import('./compose-preview.mjs')).poolNext(record.remote.pool) } : { next: `Reuse this Drive file for the next Google render: --file-id ${record.remote.fileId} --new-preview-file` }) } : {}),
     slides: record.slides.length, changed: record.slides.filter(s => !s.reused).map(s => s.number), pending: record.pending,
     visualReviewComplete: record.visualReviewComplete, creativeReviewRequired:record.creativeReviewRequired??false, creativeReviewComplete:record.creativeReviewComplete, readyForUserReview:record.readyForUserReview, ...(record.creativeQuality?{designReview:categorizeReview(record.creativeQuality,record.creativeAssessment),qualityRevision:record.creativeQuality.revision,assessmentBinding:{schema:1,sceneDigest:record.creativeQuality.sceneDigest,qualityRevision:record.creativeQuality.revision,artifactDigest:record.creativeQuality.artifactDigest},qualityReport:join(output,'review.json')}:{} ) };
 }
@@ -131,7 +131,7 @@ export async function renderGoogle({ file, output, selected, title, fileId, newP
         await d.exportPdf({ fileId: remote.id, output: pdf }, google);
       } else {
         let leased = null;
-        try { remote = await d.poolPreview({ file, size: poolSize, fileId, render: async r => { leased = r; await d.exportPdf({ fileId: r.id, output: pdf }, google); } }, google); }
+        try { remote = await d.poolPreview({ file, size: poolSize, fileId, render: async (r, pooled) => { leased = r; await d.exportPdf({ fileId: r.id, output: pdf }, pooled); } }, google); }
         catch (error) { remote = leased; throw error; }
       }
     } catch (error) { if (error.problem?.code === 'preview-replaced' || error.problem?.code === 'input-invalid') throw error; throw refuse(`Google Slides could not render the deck: ${String(error.message).split('\n')[0]}`, { code: 'provider-failed', provider: 'google' }); }
@@ -144,7 +144,9 @@ export async function renderGoogle({ file, output, selected, title, fileId, newP
 }
 // The upload already happened: say where it is, so a retry reuses it instead of creating another file.
 function stranded(error, remote) {
-  if (remote && !String(error.message).includes(`--file-id ${remote.id}`)) error.message += ` The review deck is in Drive (${remote.url}); retry with --renderer google --file-id ${remote.id}.`;
+  // A pool file is named by its receipt: a bare ID would only take the least recently used file.
+  const named = remote?.pool ? remote.pool.receipt : remote?.id;
+  if (remote && !String(error.message).includes(`--file-id ${named}`)) error.message += ` The review deck is in Drive (${remote.url}); retry with --renderer google ${remote.pool ? '' : '--new-preview-file '}--file-id ${named}.`;
   return error;
 }
 
@@ -220,7 +222,7 @@ export async function prepareReview({ file, previews, compiled, output, designPr
               // Composition preview and review consume exactly one editable
               // artifact and its verified native pixels, across output folders.
               bundleTemp=await mkdtemp(join(tmpdir(),'harness-bundle-review-'));
-              bundlePreview=await (await import('./compose-preview.mjs')).previewComposition({file:build.dir,output:join(bundleTemp,'render'),renderer,'file-id':fileId,'new-preview-file':options.newPreviewFile,'pool-size':options.poolSize,'design-project':designProject,fonts:options.fonts,soffice:options.soffice,pdftoppm:options.pdftoppm,pdfinfo:options.pdfinfo,register:false},{run:options.run,drive:options.drive,google:options.google});
+              bundlePreview=await (await import('./compose-preview.mjs')).previewComposition({file:build.dir,output:join(bundleTemp,'render'),renderer,'file-id':fileId,'new-preview-file':options.newPreviewFile,'pool-size':options.poolSize,refresh,'design-project':designProject,fonts:options.fonts,soffice:options.soffice,pdftoppm:options.pdftoppm,pdfinfo:options.pdfinfo,register:false},{run:options.run,drive:options.drive,google:options.google});
               built={...bundlePreview,sha256:bundlePreview.deckSha256};
               await writeFile(join(scratch,'deck.pptx'),await bytes(bundlePreview.deck));
             }else{
@@ -250,7 +252,7 @@ export async function prepareReview({ file, previews, compiled, output, designPr
           const draw = render ?? (renderer === 'google' ? renderGoogle : renderPptx);
           const result = await draw({ file: snapshot, output: temp, selected, ...options, ...(renderer === 'google' ? { title: build?.scene.title ?? basename(file).replace(/\.pptx$/i, ''), fileId } : {}) });
           remote = result.remote;
-          if (result.count !== pages.length) throw stranded(new Error(`Rendered ${result.count} pages for ${pages.length} slides. Hidden slides or export coverage are missing.`), remote && { id: remote.fileId, url: remote.url });
+          if (result.count !== pages.length) throw stranded(new Error(`Rendered ${result.count} pages for ${pages.length} slides. Hidden slides or export coverage are missing.`), remote && { id: remote.fileId, url: remote.url, pool: remote.pool });
           return result.image;
         };
       } else {

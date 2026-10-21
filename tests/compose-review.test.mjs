@@ -232,10 +232,12 @@ test('review --compiled renders through Google Drive, binding the receipts to th
   const refreshed=googleRoute(f.plan.slides.length);await prepareReview(googleOptions(f,refreshed,{refresh:true,fileId:'drive_review_1'}));
   assert.deepEqual(refreshed.calls.filter(c=>['pool','import','update'].includes(c[0])),[['pool','drive_review_1']]);
   // With --new-preview-file the review takes the earlier route: the named preview is checked and kept, and a new file is made.
-  const kept=googleRoute(f.plan.slides.length);await prepareReview(googleOptions(f,kept,{refresh:true,fileId:'drive_review_1',newPreviewFile:true}));
+  const kept=googleRoute(f.plan.slides.length),keptResult=await prepareReview(googleOptions(f,kept,{refresh:true,fileId:'drive_review_1',newPreviewFile:true}));
+  assert.match(keptResult.next,/--file-id drive_review_1 --new-preview-file$/);
   assert.deepEqual(kept.calls.filter(c=>['pool','import','update'].includes(c[0])),[['update','drive_review_1']]);
-  // A receipt this computer's pool does not know is refused before anything is rendered.
-  const unknown=await problemOf(prepareReview(googleOptions(f,googleRoute(3),{output:join(f.project,'review-unknown'),fileId:'drive_review_1:1'})));
+  // A receipt this computer's pool does not know is judged by Drive, before anything is rendered: a file without the pool marker is not a receipt.
+  const drive404={tokenProvider:async()=>'token',fetcher:async()=>new Response('{}',{status:404})};
+  const unknown=await problemOf(prepareReview(googleOptions(f,googleRoute(3),{output:join(f.project,'review-unknown'),fileId:'drive_review_1:1',google:drive404})));
   assert.equal(unknown.code,'input-invalid');assert.match(unknown.detail,/not a preview pool file/);
 });
 
@@ -246,7 +248,7 @@ test('a Google review names a missing Poppler before uploading, and a Drive fail
   const refused=await problemOf(prepareReview(googleOptions(f,googleRoute(3,{importFails:true}),{output:join(f.project,'review-2')})));
   assert.deepEqual([refused.code,refused.provider],['provider-failed','google']);
   const stranded=await problemOf(prepareReview(googleOptions(f,googleRoute(3,{exportFails:true}),{output:join(f.project,'review-3')})));
-  assert.deepEqual([stranded.code,stranded.provider],['provider-failed','google']);assert.match(stranded.detail,/--file-id drive_review_1/);
+  assert.deepEqual([stranded.code,stranded.provider],['provider-failed','google']);assert.match(stranded.detail,/The (preview|review) deck is in Drive \(https:\/\/docs.google.com\/presentation\/d\/drive_review_1\/edit\); retry with (--renderer google )?--file-id drive_review_1:1\.$/);
   // On the command line: --renderer is checked, and Poppler is checked before Google is reached.
   const bad=await run(['review','--compiled',f.compiled,'--output',join(f.project,'cli-1'),'--design-project',f.project,'--renderer','paper','--json']);
   assert.equal(JSON.parse(bad.stdout).problems[0].code,'input-invalid');
