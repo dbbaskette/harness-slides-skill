@@ -14,7 +14,7 @@ You need **Git**, **Node.js 20+**, **Python 3.9+**, and one of the agents above.
 Run this in your terminal:
 
 ```sh
-git clone --branch v0.14.1 --depth 1 https://github.com/dbbaskette/harness-slides-skill.git
+git clone --branch v0.16.0 --depth 1 https://github.com/dbbaskette/harness-slides-skill.git
 cd harness-slides-skill
 bash scripts/Install-Harness-Slides.sh
 ```
@@ -22,8 +22,8 @@ bash scripts/Install-Harness-Slides.sh
 The installer adds the skill to all three agents. Look for `"status": "installed"`
 and `"dependencies": "installed"` in the result, then start a new agent session.
 
-[Published release: v0.14.1](https://github.com/dbbaskette/harness-slides-skill/releases/tag/v0.14.1)
-· [Development changes: 0.16.0, unreleased](docs/releases/unreleased.md)
+[Published release: v0.16.0](https://github.com/dbbaskette/harness-slides-skill/releases/tag/v0.16.0)
+· [Release notes: 0.16.0](docs/releases/v0.16.0.md)
 
 ### 2. Open your project
 

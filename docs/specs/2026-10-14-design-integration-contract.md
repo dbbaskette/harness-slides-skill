@@ -1,7 +1,8 @@
 # Design integration contract
 
 Status: released in 0.14.0 (issue #51); the composition review gaps of issue #67
-were released in 0.14.1. Written 2026-10-14 for
+were released in 0.14.1. The 0.15.0 and 0.16.0 sections below were first
+published as a release in 0.16.0. Written 2026-10-14 for
 Training Studio's visual teaching plan, milestone 1 (issue #46). The
 section-scoped check is milestone 2 (issue #47), the
 [asset manifest](#the-asset-manifest) was added for milestone 3 (issue #49), and the
@@ -64,10 +65,13 @@ number cannot tell a caller what a runtime supports. To detect support, read
 versions, and do not provoke a refusal to find out.
 
 ```json
-{"package":"harness-slides","runtimeVersion":"0.14.1","runtime":"/…/harness-slides",
- "capabilities":["assets","assets-approved-candidates","canonical-digests","compose-icon-assets",
-   "compose-review","compose-section","design-batch","design-icon-ids","design-present-findings",
-   "design-schema-2","json-refusals","native-charts","relative-records","review-google-renderer",
+{"package":"harness-slides","runtimeVersion":"0.16.0","runtime":"/…/harness-slides",
+ "capabilities":["assets","assets-approved-candidates","canonical-digests","compose-code-spans",
+   "compose-icon-assets","compose-projects","compose-provenance","compose-review","compose-section",
+   "compose-split-point","compose-verified-critique","compose-visual-vocabulary","design-batch",
+   "design-icon-ids","design-present-findings","design-schema-2","google-preview-pool",
+   "json-refusals","native-charts","neutral-native-composition","owned-google-previews",
+   "preview-repair-clusters","relative-records","render-bundles","review-google-renderer",
    "review-input-refusals","review-packets","review-sources-from-slide"]}
 ```
 
@@ -84,11 +88,11 @@ or reused. A runtime without `capabilities` (0.13.1 and earlier) has none of the
 | `compose-verified-critique` | Critic packet schema 2 binds the deck and each image hash; assessments answer all eight questions for every slide and give an inspection note |
 | `compose-visual-vocabulary` | Box `style: tint`, `state: muted\|struck\|failed` on a box or text, edge `style: solid\|dashed\|dotted`, edges attached to texts, labelled cards for `dependency`, supporting fills for a direction without meanings, `design.slides.fills: {tints: false}` in a brand contract, refusal of words over words and of a word wider than its line (warnings, `unverified-fit`, when measurement is estimated), and `no-meanings` and `ascii-art` findings |
 | `neutral-native-composition` | Neutral live/reading contracts and Cover/Section/Closing layouts, with the same native writer for groups, tables, routed/attached connectors and chart data |
-| `google-preview-pool` | `compose preview` and `review --renderer google` reuse a pool of Google Slides files by default, `--pool-size N` and `--new-preview-file` choose how a preview is kept, results carry `pool` with a `FILE_ID:GENERATION` receipt, a replaced receipt is refused as `preview-replaced`, and `drive pool` lists the pool ([the Google preview pool](#the-google-preview-pool-in-0160-unreleased)) |
+| `google-preview-pool` | `compose preview` and `review --renderer google` reuse a pool of Google Slides files by default, `--pool-size N` and `--new-preview-file` choose how a preview is kept, results carry `pool` with a `FILE_ID:GENERATION` receipt, a replaced receipt is refused as `preview-replaced`, and `drive pool` lists the pool ([the Google preview pool](#the-google-preview-pool-in-0160)) |
 | `owned-google-previews` | Preview creation stores ownership and remote version receipts; a stale/unowned file is refused, and an owned unchanged preview is preserved while a fresh file is created |
-| `preview-repair-clusters` | `compose preview` returns `repair`: each slide's warning and error findings grouped by slide, blocking slides first, with codes and object IDs ([visual vocabulary](#visual-vocabulary-in-0160-unreleased)) |
+| `preview-repair-clusters` | `compose preview` returns `repair`: each slide's warning and error findings grouped by slide, blocking slides first, with codes and object IDs ([visual vocabulary](#visual-vocabulary-in-0160)) |
 | `render-bundles` | Verified immutable native PPTX/PDF/PNG bundles shared by composition preview and design-bound review; cached artifacts contain no critique or user approval |
-| `compose-code-spans` | Code spans in backticks in composition texts, boxes, `subtitle`, `detail`, `caveat` and `source`, set in the brand contract's `design.slides.typography.code.fontFamily` (Courier New without one) as runs in every writer and measured in that font; scene element `code` ranges and `theme.codeFont`; titles, edge labels, badges, tables and charts refuse them; `unmarked-code` findings from `outline check` ([code spans](#code-spans-in-0160-unreleased)) |
+| `compose-code-spans` | Code spans in backticks in composition texts, boxes, `subtitle`, `detail`, `caveat` and `source`, set in the brand contract's `design.slides.typography.code.fontFamily` (Courier New without one) as runs in every writer and measured in that font; scene element `code` ranges and `theme.codeFont`; titles, edge labels, badges, tables and charts refuse them; `unmarked-code` findings from `outline check` ([code spans](#code-spans-in-0160)) |
 | `compose-icon-assets` | `{type:icon,asset:ID}` in a composition, resolved through the asset manifest and listed in `compose-report.json` `inputs.assets` ([the asset manifest](#the-asset-manifest)) |
 | `compose-review` | `review --compiled COMPILED --design-project DIR`, the [design-bound review of a composition](#design-bound-review-of-a-composition) |
 | `compose-section` | `--section` on `compose compile` and `compose preview` ([sections](#sections)), `--design-project` on `compose preview`, and `compose compile --design-project` checking without `--output` |
@@ -395,7 +399,7 @@ again. A changed deck, image, build file or design revision is refused as
 `compose preview --renderer google` takes. It works for `--compiled` and `--file`.
 Poppler (`pdfinfo`, `pdftoppm`) is checked first, before anything is uploaded.
 The exact bytes of `REVIEW/deck.pptx` that the review hashes go into a file of
-[the Google preview pool](#the-google-preview-pool-in-0160-unreleased), or, with
+[the Google preview pool](#the-google-preview-pool-in-0160), or, with
 `--new-preview-file`, are imported as a new `Preview: <deck title>` file after
 the ownership/version of the file named by `--file-id` is checked (the 0.15.0
 route). Drive exports that file as a PDF, and Poppler cuts it into the pictures. The receipts do not change: `builtArtifactDigest` is the hash of the
@@ -916,7 +920,7 @@ which raised `minimumRuntime` to 0.14.1:
   > `design respond`. Never answer it for them.
 
 
-## Workflow integrity in 0.15.0 (unreleased)
+## Workflow integrity in 0.15.0
 
 Composition compilation now stores `composition.json` with copied image paths and a
 `project.json` record. `--project ROOT` on `compose compile` registers builds under
@@ -951,9 +955,9 @@ Always use the returned ID. A lost receipt, missing version or intervening edit
 requires a new preview without `--file-id`. No cached local render certifies a
 live Drive deck's current state. In 0.16.0 these receipts apply only with
 `--new-preview-file`; Google previews use
-[the preview pool](#the-google-preview-pool-in-0160-unreleased) by default.
+[the preview pool](#the-google-preview-pool-in-0160) by default.
 
-## The Google preview pool in 0.16.0 (unreleased)
+## The Google preview pool in 0.16.0
 
 Every Google preview used to create another `Preview: …` file in Drive. A
 Google preview now reuses a small pool of Google Slides files, named
@@ -986,7 +990,7 @@ pictures came from. Pass `--new-preview-file` where a separate Drive file per
 preview is wanted. Detect support with the `google-preview-pool` capability.
 
 
-## Visual vocabulary in 0.16.0 (unreleased)
+## Visual vocabulary in 0.16.0
 
 Decks built through Training Studio with 0.14.1 came out as thin outlined boxes,
 sentences chopped across diagram nodes, internal finding IDs on the slides and
@@ -1031,7 +1035,7 @@ What a caller does:
 - Detect support with the `compose-visual-vocabulary`, `compose-split-point`,
   `compose-provenance` and `preview-repair-clusters` capabilities.
 
-## Code spans in 0.16.0 (unreleased)
+## Code spans in 0.16.0
 
 Configuration fields, commands, API and file names in slide text are written
 as code spans in backticks and drawn in a monospace face, so a reader can tell
