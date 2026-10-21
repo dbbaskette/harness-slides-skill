@@ -46,6 +46,15 @@ const expand=n=>{
   return Array.isArray(n.children)?{...n,children:n.children.map(expand)}:n;
 };
 const expanded=comp=>comp&&Array.isArray(comp.slides)?{...comp,slides:comp.slides.map(s=>s&&typeof s==='object'&&!Array.isArray(s)&&s.canvas?{...s,canvas:expand(s.canvas)}:s)}:comp;
+// A brand whose rules forbid lightening a color (fills.tints false) draws a tint card the way it allows: a neutral panel,
+// with a strip of the meaning color when the card has one. A tint on the focal node becomes the solid focal shape.
+const untinted=(n,focal)=>{
+  if(!n||typeof n!=='object'||Array.isArray(n))return n;
+  let out=n;
+  if(n.type==='box'&&n.style==='tint'){const {style,...rest}=n;const {fill,...plain}=rest;out=n.id===focal||fill===undefined||(n.shape??'rect')!=='rect'?plain:{...rest,style:'bar'};}
+  return Array.isArray(out.children)?{...out,children:out.children.map(k=>untinted(k,focal)),...(out.hub?{hub:untinted(out.hub,focal)}:{})}:out.hub?{...out,hub:untinted(out.hub,focal)}:out;
+};
+const branded=(comp,contract)=>contract?.design?.slides?.fills?.tints===false&&comp&&Array.isArray(comp.slides)?{...comp,slides:comp.slides.map(s=>s&&typeof s==='object'&&!Array.isArray(s)&&s.canvas?{...s,canvas:untinted(s.canvas,s.brief?.focal)}:s)}:comp;
 const relations=['order','dependency','hierarchy','membership','contrast','parallel','overlap','quantity','none'],rhythms=['anchor','dense','breathing'];
 // How each relation must show up in the structure, and what to tell the author when it does not.
 const drawn={
@@ -86,7 +95,7 @@ NODE leaves: {type:icon,id,icon:STABLE ICON ID from the brand's icon search,colo
 sources name what a slide rests on: a document section, a finding, or one ID such as request or author_knowledge when it comes from the brief or general knowledge.
 Any node may set weight (relative share, above 0 up to 10, default 1). A node never goes below the size its content needs; when that overrides a weight you set, compile and preview report it as weight-overridden. An empty box has no minimum, so use empty boxes for bars drawn to scale.
 An icon keeps the library's own colors unless you set color (a brand color role) or style: solid is a light icon on a colored disc, outline a colored icon in a ring, plain a colored icon with no container, drawn a little larger. On a filled card use plain or outline with a color that reads on the fill.
-A box is solid by default. style tint is a light surface of its fill (the neutral when it sets none): the supporting card, filled, in the color of what it stands for. style bar draws a neutral card with a strip of color down the left edge. style outline draws it as a line on whatever is behind it; keep it for what is secondary, empty or a boundary. The line or strip is the focal color on the slide's focal node, the box's fill where it sets one, and secondary ink otherwise; a tint on the focal node gets a focal edge.
+A box is solid by default. style tint is a light surface of its fill (the neutral when it sets none): the supporting card, filled, in the color of what it stands for; a brand whose contract sets fills.tints false draws it as a neutral bar card instead, so use bar there. style bar draws a neutral card with a strip of color down the left edge. style outline draws it as a line on whatever is behind it; keep it for what is secondary, empty or a boundary. The line or strip is the focal color on the slide's focal node, the box's fill where it sets one, and secondary ink otherwise; a tint on the focal node gets a focal edge.
 state on a box or text: muted quiets it (light surface, secondary ink), struck also strikes its words through, failed (a box) adds a status-colored dashed edge and an × badge. What a muted, struck or failed box holds is muted with it. Never draw lines across words to cross something out.
 metric is a number with its label beneath, in the brand's metric size: {type:metric,id,value:"42%",label:"of teams"}. badge is a small numbered or lettered disc for steps and references. rule is a thin line between the parts of a column or a row.
 A card's content sits inside its shape's text area, so a diamond, ellipse or hexagon holds much less than a rectangle of the same size. Containers may set group:true and an id.
@@ -110,7 +119,7 @@ Text is measured with the brand font. Content that cannot fit at its role's size
 A diagram node carries a short label. An approved point's sentence stays whole: in one node, or in the notes beside short node labels; never split one sentence across several nodes.`;
 
 export function validateComposition(comp,contract,{collect}={}) {
-  validateBrandContract(contract,{medium:'slides'});comp=expanded(comp);
+  validateBrandContract(contract,{medium:'slides'});comp=branded(expanded(comp),contract);
   const d=contract.design,roles=d.slides.typography,colors=d.colors;
   if(comp?.version!==1)throw new Error('Use composition version 1 (run compose contract)');
   if(Object.keys(comp).some(k=>!['version','title','slides','direction'].includes(k)))throw new Error('Unsupported composition field');
@@ -349,11 +358,11 @@ export async function composeSizes(contract,{fonts}={}) {
 Content area ${round(sl.contentBox.width)} wide by ${round(sl.contentBox.height)} high. The title holds ${lines} line${lines>1?'s':''} at ${t.title.size}pt across ${round(sl.titleBox.width)}.
 Gaps: tight ${inset/2}, normal ${inset}, wide ${sp.column??28}. A box pads its content by ${inset} on each side. An icon is ${sl.icon?.size??48} square, a badge ${Math.round((sl.icon?.size??48)*.6)}, and a rule takes ${inset/2}.
 One line of text needs: ${Object.keys(t).filter(k=>k!=='title').map(k=>`${k} ${line(k)}`).join(', ')}. Text with no textRole uses ${body}, the size for a deck delivered ${contract.medium.delivery==='live'?'live':'for reading'}. Do not step below it to make content fit.
-Supporting fills for a direction that names no meanings, with ${t.title.colorRole} as its focal: ${supportingRoles(contract,{focal:t.title.colorRole,neutral:'canvasSecondary'}).join(', ')||'none; this palette has no other accent'}. Tint and bar cards take them; give them meanings for a long deck.`;
+Supporting fills for a direction that names no meanings, with ${t.title.colorRole} as its focal: ${supportingRoles(contract,{focal:t.title.colorRole,neutral:'canvasSecondary'}).join(', ')||'none; this palette has no other accent'}. Tint and bar cards take them; give them meanings for a long deck.${sl.fills?.tints===false?'\nThis brand does not allow tints: a tint card is drawn as a neutral bar card with a strip of its fill color. Use bar cards.':''}`;
 }
 export async function compileComposition(comp,contract,{fonts}={}) {
   // Structure and fit are reported together: slides that break a rule are skipped, the rest are still laid out.
-  comp=expanded(comp);
+  comp=branded(expanded(comp),contract);
   const problems=[],summary=validateComposition(comp,contract,{collect:problems});
   const d=contract.design,sl=d.slides,roles=sl.typography,colors=d.colors,sp=sl.spacing??{},inset=sp.inset??16;
   const gapSize={none:0,tight:inset/2,normal:inset,wide:sp.column??28};
@@ -526,7 +535,8 @@ export async function compileComposition(comp,contract,{fonts}={}) {
         // Solid is a filled shape. Tint is a light surface of its color. Outline is a line in the box's color on whatever is behind it.
         // Bar is a neutral card with a strip of the color down its left edge.
         const look=n.style??'solid',point=dir&&n.id===focalId,accent=point?dir.focal:n.fill??(colors.inkSecondary?'inkSecondary':'inkDeep'),soft=quiet(n),failed=soft&&n.state==='failed';
-        const surfaceFill=look==='bar'?neutralHex:soft?mix(neutralHex,canvasHex,.45):look==='tint'?tintOf(colors[fillRole(n)],canvasHex):colors[fillRole(n)];
+        // A brand that forbids tints quiets a card with its plain canvas color, not a lightened one.
+        const surfaceFill=look==='bar'?neutralHex:soft?(sl.fills?.tints===false?canvasHex:mix(neutralHex,canvasHex,.45)):look==='tint'?tintOf(colors[fillRole(n)],canvasHex):colors[fillRole(n)];
         // A quieted card keeps a hairline edge, so it still reads as a node on a surface of the same light grey.
         const base=look==='outline'?{id:n.id,type:'shape',...box(rect),shape:n.shape??'rect',stroke:soft?mutedInk:colors[accent],strokeWeight:soft?1:point?3:1.5}
           :{id:n.id,type:'shape',...box(rect),shape:n.shape??'rect',fill:surfaceFill,...(look==='tint'&&point?{stroke:colors[dir.focal],strokeWeight:2}:soft?{stroke:mutedInk,strokeWeight:1}:{})};

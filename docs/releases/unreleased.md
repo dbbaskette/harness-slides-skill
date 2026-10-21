@@ -2,7 +2,9 @@
 
 Compositions get a fuller visual vocabulary. A `tint` card is a light surface of
 the color it stands for, and guidance makes `tint` or `bar` the supporting card,
-keeping `outline` for boundaries. A direction without meanings may fill with up
+keeping `outline` for boundaries. A brand contract with `fills: {tints: false}`
+never has a color lightened: its tint cards compile as neutral bar cards with a
+strip of the meaning color. A direction without meanings may fill with up
 to three supporting brand colors; a deck of more than ten content slides without
 meanings gets a `no-meanings` warning. Nodes take `state: muted|struck|failed`
 and edges `style: dashed|dotted`, so nothing is crossed out with lines or typed

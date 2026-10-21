@@ -268,3 +268,22 @@ test('a word wider than its box is refused rather than broken mid-word, and a mu
   const {scene}=await compileComposition(deck({type:'stack',direction:'row',children:[{type:'box',id:'quiet_box',state:'muted',style:'tint',text:'Standby'},{type:'box',id:'loud_box',text:'Primary'}]}),c);
   assert.deepEqual([byId(scene,'quiet_box').stroke,byId(scene,'quiet_box').strokeWeight],['#53565A',1]);assert.equal(byId(scene,'loud_box').stroke,undefined);
 });
+
+test('a brand that forbids tints gets a neutral card with a strip of the meaning color instead',async()=>{
+  const c=brand({fills:{tints:false}}),dir={...dir0,meanings:{accentAqua:'Tanzu'}};
+  const {scene,structure}=await compileComposition(deck({type:'stack',direction:'row',children:[
+    {type:'box',id:'tint_aqua',style:'tint',fill:'accentAqua',text:'Tanzu surface'},
+    {type:'box',id:'tint_plain',style:'tint',text:'Neutral surface'},
+    {type:'box',id:'tint_card',style:'tint',fill:'accentAqua',children:[{type:'text',id:'tint_card_text',text:'Inside'}]},
+    {type:'box',id:'zone_gone',state:'failed',children:[{type:'box',id:'zone_node',style:'tint',text:'Primary'}]}]},{direction:dir}),c),e=id=>byId(scene,id);
+  // No color is lightened: the card is the neutral panel and the meaning color is a strip, as a bar card draws it.
+  assert.equal(e('tint_aqua').fill,'#E2E3E4');assert.equal(e('tint_aqua_bar').fill,'#007B8C');assert.equal(e('tint_aqua_text').text,'Tanzu surface');
+  assert.ok(structure.groups.some(g=>g.id==='tint_aqua_group'));assert.equal(e('tint_plain').fill,'#E2E3E4');assert.equal(e('tint_plain_bar'),undefined);
+  assert.equal(e('tint_card_bar').fill,'#007B8C');
+  const brandColors=new Set(Object.values(c.design.colors).map(v=>v.toUpperCase()));
+  for(const x of scene.slides[0].elements)for(const k of ['fill','stroke','color'])if(x[k])assert.ok(brandColors.has(x[k].toUpperCase()),`${x.id}.${k} ${x[k]} is a brand color`);
+  // The contract says so, and a malformed rule is refused. Without the rule, tints stay.
+  assert.match(await composeSizes(c),/does not allow tints/);
+  assert.throws(()=>validateComposition(deck({type:'text',id:'only_words',text:'x'}),brand({fills:{tints:'no'}})),/fills\.tints/);
+  assert.notEqual(byId((await compileComposition(deck({type:'box',id:'tint_aqua',style:'tint',fill:'accentAqua',text:'x'},{direction:dir}),brand())).scene,'tint_aqua').fill,'#E2E3E4');
+});

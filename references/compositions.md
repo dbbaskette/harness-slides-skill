@@ -102,7 +102,9 @@ from four containers and a handful of leaves:
 A box has four looks, set with `style`:
 
 - `tint` is a light surface of its `fill`, or of the neutral when it sets none.
-  It is the supporting card: filled, in the color of what it stands for.
+  It is the supporting card: filled, in the color of what it stands for. A
+  brand that forbids lightening its colors (`compose contract --brand` says so)
+  draws it as a neutral `bar` card instead; for such a brand, write `bar`.
 - `bar` is a neutral card with a strip of its color down the left edge.
 - `solid` fills it at full strength. Keep that for the point of the slide.
 - `outline` draws only a line. Keep it for a boundary, such as a zone or a

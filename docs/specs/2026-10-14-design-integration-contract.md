@@ -955,7 +955,7 @@ words drawn over other words are now refused and an arrow to a text now attaches
 
 | Addition | What it does |
 | --- | --- |
-| `style: "tint"` on a box | A light surface of its `fill` (the neutral by default); the focal node keeps a focal edge. Guidance now makes `tint` or `bar` the supporting card and keeps `outline` for boundaries |
+| `style: "tint"` on a box | A light surface of its `fill` (the neutral by default); the focal node keeps a focal edge. Guidance now makes `tint` or `bar` the supporting card and keeps `outline` for boundaries. A brand contract with `design.slides.fills: {tints: false}` forbids lightening its colors: there `tint` compiles as a neutral bar card with a strip of its fill color (or a plain neutral card without a fill), and `compose contract --brand` says to use `bar` |
 | Supporting fills | A direction without `meanings` may fill with up to three brand colors: its chart colors, then other `accent*` roles, minus the focal and the neutral. `compose contract --brand` lists them; `compile` reports `supportingColors`; `structure.json` records `supporting` |
 | `state` on a box or text | `muted`, `struck` (strikethrough) or `failed` (a box: status-colored dashed edge and a grouped `<id>_state` × badge). A box's state carries to what it holds. The focal node cannot take one |
 | Edge `style` | `dashed` or `dotted`, written as a native dash in PPTX and Google Slides |
@@ -977,6 +977,9 @@ What a caller does:
   slides back for repair before the critique; treat `split-point` as blocking.
 - Put finding and objective IDs in `provenance`, not `source`.
 - Give long decks `direction.meanings`; brand add-ons may suggest them.
+- A brand add-on whose rules forbid tints (Broadcom, Tanzu) exports
+  `design.slides.fills: {tints: false}` in its contract; the engine then never
+  lightens a brand color.
 - Host the checkpoints in the studio's own interface: draft approval, the look
   choice and final acceptance. Hosting one never skips it. When the brand add-on
   supplies directions (Tanzu Brand's `look samples|choose` writing the outline's
