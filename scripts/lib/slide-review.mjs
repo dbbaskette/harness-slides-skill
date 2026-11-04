@@ -83,6 +83,7 @@ async function saveImage(output, number, data) {
 function relativePaths(output, record) {
   const at = p => recordedLocation(output, p), project = record.designProject ? at(record.designProject) : output, keep = p => recordedPath(output, at(p), project);
   if (record.source.file) record.source.file = keep(record.source.file);
+  if(record.draftContext?.file)record.draftContext.file=keep(record.draftContext.file);
   for (const key of ['designProject', 'nativeSnapshot']) if (record[key]) record[key] = keep(record[key]);
   if (record.compiled) record.compiled.dir = keep(record.compiled.dir);
 }
@@ -91,13 +92,14 @@ async function save(output, record) {
   record.pending = record.slides.filter(s => s.finalReview?.revision !== record.revision || s.finalReview?.status !== 'reviewed').map(s => s.number);
   record.visualReviewComplete = !record.pending.length;
   record.creativeReviewComplete = Boolean(record.creativeQuality && record.creativeAssessment && assessNativeCritique(record.creativeQuality,record.creativeAssessment).complete);
-  record.readyForUserReview = record.visualReviewComplete && (!record.creativeReviewRequired || record.creativeReviewComplete);
+  record.readyForUserReview = record.visualReviewComplete && (!record.creativeReviewRequired || record.creativeReviewComplete) && (!record.draftContext || record.deckConsistency?.revision === record.revision);
   const figures = record.slides.map(s => `<figure><a href="${s.image}"><img src="${s.image}" alt="${escape(s.title || `Slide ${s.number}`)}"></a><figcaption>${s.number}. ${escape(s.title)}${s.hidden ? ' (hidden)' : ''}<br>${s.finalReview?.status === 'reviewed' ? 'Reviewed' : 'Needs final review'}</figcaption></figure>`).join('\n');
   const html = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Slide review</title><style>body{font:16px Arial,sans-serif;margin:24px;color:#1b1d36;background:#eee}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px}figure{margin:0;background:white;padding:12px}img{width:100%;height:auto}figcaption{padding-top:8px}code{overflow-wrap:anywhere}</style><h1>Slide review</h1><p>${record.slides.length} slides · ${record.pending.length} pending · ${escape(record.renderer)}</p><p>Revision: <code>${escape(record.revision)}</code></p><p>Open each image at full size. Rendering does not certify visual quality or native editability.</p><main>${figures}</main></html>`;
   await atomic(join(output, 'contact-sheet.html'), html);
   await atomic(join(output, 'review.json'), `${JSON.stringify(record, null, 2)}\n`);
   return { output, record: join(output, 'review.json'), contactSheet: join(output, 'contact-sheet.html'), revision: record.revision, renderer: record.renderer,
     ...(record.remote ? { fileId: record.remote.fileId, url: record.remote.url, ...(record.remote.pool ? { pool: record.remote.pool, next: (await import('./compose-preview.mjs')).poolNext(record.remote.pool) } : { next: `Reuse this Drive file for the next Google render: --file-id ${record.remote.fileId} --new-preview-file` }) } : {}),
+    ...(record.draftContext ? {draftPending:draftCoverage(record).flatMap((covered,i)=>covered?[]:[record.slides[i].number]), reusableInspections:record.slides.filter(s=>s.draftReview).map(s=>s.number), finalConsistencyRequired:!record.deckConsistency || record.deckConsistency.revision!==record.revision} : {}),
     slides: record.slides.length, changed: record.slides.filter(s => !s.reused).map(s => s.number), pending: record.pending,
     visualReviewComplete: record.visualReviewComplete, creativeReviewRequired:record.creativeReviewRequired??false, creativeReviewComplete:record.creativeReviewComplete, readyForUserReview:record.readyForUserReview, ...(record.creativeQuality?{designReview:categorizeReview(record.creativeQuality,record.creativeAssessment),qualityRevision:record.creativeQuality.revision,assessmentBinding:{schema:1,sceneDigest:record.creativeQuality.sceneDigest,qualityRevision:record.creativeQuality.revision,artifactDigest:record.creativeQuality.artifactDigest},qualityReport:join(output,'review.json')}:{} ) };
 }
@@ -184,8 +186,29 @@ export async function renderSignature(options) {
   return hash(JSON.stringify(versions));
 }
 
-export async function prepareReview({ file, previews, compiled, output, designProject, nativeSnapshot, decisions, qualityReport, refresh = false, renderer = 'local', fileId, render, inventory = file => pptxTool('inventory', [file]), signature = renderSignature, renderComposition, screen, ...options }) {
+// Opt-in draft inspection reuse has its own identity and never carries final readiness.
+async function reviewContext(file) {
+  if (!file) return null;
+  const raw = await bytes(resolve(file));
+  if (raw.length > 64000) throw new Error('Draft review context exceeds 64,000 bytes');
+  const value = JSON.parse(raw);
+  const keys = ['brand','fonts','layout','questions'];
+  if (value?.schema !== 1 || Object.keys(value).some(k => !['schema',...keys].includes(k)) || keys.some(k => typeof value[k] !== 'string' || !value[k].trim() || value[k].length > 12000)) throw new Error('Draft review context needs schema 1 and brand, fonts, layout and questions identities');
+  return {protocol:'harness-slide-inspection-reuse-v1', digest:canonicalDigest(value), file:resolve(file)};
+}
+function draftIdentity(record, index) {
+  const slide = record.slides[index];
+  const prompt = record.creativeQuality?.prompts?.find(p => p.slide === slide.id || record.designBinding?.some(b => b.nativeId === slide.id && b.planId === p.slide));
+  return canonicalDigest({context:{protocol:record.draftContext?.protocol,digest:record.draftContext?.digest}, global:record.draftGlobal??null, renderer:record.rendererKey, slide:[slide.id,slide.number,slide.hidden,slide.fingerprint,slide.imageSha256],
+    order:record.slides.map(s=>s.id), neighbors:record.slides.slice(Math.max(0,index-1),index+2).map(s=>[s.id,s.fingerprint,s.imageSha256]), prompt:prompt??null});
+}
+function draftCoverage(record) {
+  return record.slides.map((s,i) => s.finalReview?.revision === record.revision && s.finalReview.status === 'reviewed' ||
+    Boolean(record.draftContext && s.draftReview?.status === 'reviewed' && s.draftReview.basis === draftIdentity(record,i)));
+}
+export async function prepareReview({ file, previews, compiled, output, designProject, nativeSnapshot, decisions, qualityReport, reviewContextFile, refresh = false, renderer = 'local', fileId, render, inventory = file => pptxTool('inventory', [file]), signature = renderSignature, renderComposition, screen, ...options }) {
   if ([file, previews, compiled].filter(Boolean).length !== 1 || !output) throw refuse('Provide --output and exactly one of --file, --previews or --compiled', { code: 'input-invalid' });
+  const draftContext = await reviewContext(reviewContextFile);
   renderer ??= 'local';
   if (!['local', 'google'].includes(renderer)) throw refuse('--renderer is local (LibreOffice) or google (Google Slides through Drive)', { code: 'input-invalid' });
   if (previews && renderer !== 'local') throw refuse('--previews are already rendered: --renderer applies to --file and --compiled', { code: 'input-invalid' });
@@ -296,7 +319,7 @@ export async function prepareReview({ file, previews, compiled, output, designPr
       if(!drawn&&renderer==='google'&&previous?.rendererKey===rendererKey&&previous.remote&&(!previous.remote.pool||await poolRemoteCurrent(previous.remote,options.google)))drawn=previous.remote;
       if(drawn)record.remote=drawn;
       if(designProject){
-        const approved=await getApprovedDesign(designProject);record.designProject=resolve(designProject);record.designRevision=approved.revision;record.creativeReviewRequired=true;
+        const approved=await getApprovedDesign(designProject);record.designProject=resolve(designProject);record.designRevision=approved.revision;record.creativeReviewRequired=true;record.draftGlobal=canonicalDigest({design:Object.fromEntries(Object.entries(approved.plan).filter(([k])=>k!=='slides')),brand:build?.files?.['brand-contract.json']??null});
         if(build){
           if(pages.length!==approved.plan.slides.length)throw new Error('The rendered deck and the approved design have different slide counts');
           const screens=await (screen??(await import('./compose-preview.mjs')).screenComposition)({scene:build.scene,structure:build.structure,native:build.native});
@@ -319,6 +342,21 @@ export async function prepareReview({ file, previews, compiled, output, designPr
         }
         if(previous?.revision===record.revision&&previous?.creativeQuality?.revision===record.creativeQuality.revision)record.creativeAssessment=previous.creativeAssessment;
       }else if(nativeSnapshot||decisions||qualityReport)throw new Error('Creative inputs need --design-project');
+      if (draftContext) {
+        record.draftContext = draftContext;
+        for (let index=0; index<record.slides.length; index++) {
+          const slide=record.slides[index], prior=previous?.slides?.[index];
+          const basis=draftIdentity(record,index);
+          slide.draftBasis=basis;
+          if (refresh || prior?.draftBasis!==basis) slide.finalReview=null;
+          if (!refresh && slide.reused && previous?.draftContext?.digest===draftContext.digest && prior?.draftBasis===basis) {
+            const checked=prior.finalReview?.status==='reviewed' && prior.finalReview.revision===previous.revision ? prior.finalReview : prior.draftReview;
+            if (checked?.status==='reviewed' && (checked===prior.finalReview || checked.basis===basis))
+              slide.draftReview={...checked,basis,fromRevision:checked.fromRevision??previous.revision};
+          }
+        }
+      }
+      if (record.draftContext && previous?.revision===revision && !refresh && record.slides.every((s,i)=>s.draftBasis===previous.slides[i]?.draftBasis)) record.deckConsistency=previous.deckConsistency;
       const result=await save(dir,record);
       if(compiled)await (await import('./composition-project.mjs')).recordCompositionArtifact(resolve(compiled,build.report.project??'.'),compiled,'review',{path:dir});
       return result;
@@ -334,8 +372,23 @@ export async function markReview({ output, revision, numbers, status = 'reviewed
     for (const number of numbers) if (!Number.isInteger(number) || !record.slides.some(s => s.number === number)) throw new Error('Unknown slide number');
     for (const slide of record.slides.filter(s => numbers.includes(s.number))) {
       slide.finalReview = { revision, status, note: note.trim(), checkedAt: new Date().toISOString() };
+      if (record.draftContext) slide.draftReview={...slide.finalReview,basis:draftIdentity(record,record.slides.indexOf(slide)),fromRevision:revision};
     }
     return save(dir, record);
+  });
+}
+
+export async function finalizeReview({output,revision,note}) {
+  if (!revision || typeof note!=='string' || !note.trim()) throw new Error('Final deck consistency needs the exact revision and an inspection note');
+  return locked(output,async(dir,record)=>{
+    if (!record?.draftContext || record.revision!==revision) throw new Error('Finalize the current opted-in draft review revision');
+    await verifyReview(dir,record);
+    if (draftCoverage(record).some(covered=>!covered)) throw new Error('Inspect pending slides before final deck consistency');
+    // The caller inspected the exact final whole deck. Evidence is traceable; no user approval is carried.
+    for (const slide of record.slides) if (slide.finalReview?.revision!==revision)
+      slide.finalReview={...slide.draftReview,revision,reusedInspection:true};
+    record.deckConsistency={revision,note:note.trim(),checkedAt:new Date().toISOString()};
+    return save(dir,record);
   });
 }
 
@@ -358,10 +411,15 @@ export async function verifyReview(output,record){
     if(revision!==digest(payload)||record.creativeQuality.artifactDigest!==digest(record.slides.map(s=>[s.id,s.imageSha256]))||record.source.type==='pptx'&&record.creativeQuality.builtArtifactDigest!==digest({'deck.pptx':record.source.sha256})||record.compiled&&record.creativeQuality.build!==record.compiled.binding)throw stale('Creative quality binding changed');
     if(record.creativeAssessment)assessNativeCritique(record.creativeQuality,record.creativeAssessment);
   }
+  if (record.draftContext) {
+    const current=await reviewContext(at(record.draftContext.file));
+    if (current.digest!==record.draftContext.digest) throw stale('Draft review context changed; prepare review again');
+    for (const [index,slide] of record.slides.entries()) if (slide.draftBasis!==draftIdentity(record,index)) throw stale('Draft inspection context changed; prepare review again');
+  }
   // Derive readiness from bound receipts rather than trusting stored summary flags.
   record.visualReviewComplete=record.slides.every(s=>s.finalReview?.revision===record.revision&&s.finalReview?.status==='reviewed');
   record.creativeReviewComplete=Boolean(record.creativeQuality&&record.creativeAssessment&&assessNativeCritique(record.creativeQuality,record.creativeAssessment).complete);
-  record.readyForUserReview=record.visualReviewComplete&&(!record.creativeReviewRequired||record.creativeReviewComplete);
+  record.readyForUserReview=record.visualReviewComplete&&(!record.creativeReviewRequired||record.creativeReviewComplete)&&(!record.draftContext||record.deckConsistency?.revision===record.revision);
   return record;
 }
 export async function assessReview({output,revision,assessment}){
@@ -389,7 +447,7 @@ export async function reviewPackets({output}){
   if(!quality)throw noPacket();
   const slides=record.slides.map(s=>{
     const planId=planIdOf(record,s.id),packet=quality.prompts.find(p=>p.slide===s.id||p.slide===planId);
-    return {number:s.number,id:s.id,planId,title:s.title,hidden:s.hidden,image:join(output,s.image),imageSha256:s.imageSha256,mark:s.finalReview??null,packet,findings:quality.findings.filter(f=>f.slide===packet?.slide)};
+    return {number:s.number,id:s.id,planId,title:s.title,hidden:s.hidden,image:join(output,s.image),imageSha256:s.imageSha256,mark:s.finalReview??null,draftInspection:s.draftReview??null,packet,findings:quality.findings.filter(f=>f.slide===packet?.slide)};
   });
   return {schema:1,output,revision:record.revision,designRevision:record.designRevision??null,renderer:record.renderer,
     assessmentBinding:{schema:1,sceneDigest:quality.sceneDigest,qualityRevision:quality.revision,artifactDigest:quality.artifactDigest},contactSheet:join(output,'contact-sheet.html'),

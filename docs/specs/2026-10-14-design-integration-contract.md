@@ -1056,3 +1056,12 @@ What a caller does:
 - Treat `unmarked-code` as wording to fix in the draft: put the name in
   backticks and lead with plain English the first time.
 - Detect support with the `compose-code-spans` capability.
+
+### Verified draft inspection reuse
+
+`verified-draft-inspection-reuse` adds opt-in `review --review-context FILE`,
+`draftPending`/`reusableInspections`, and the explicit exact-revision
+`review --finalize --revision HASH --note TEXT` consistency gate. See the
+[review contract](../../references/review.md#focused-draft-iteration). Legacy
+preparation/mark behavior stays revision-based. Inspection evidence is reusable;
+user approval is never inferred.

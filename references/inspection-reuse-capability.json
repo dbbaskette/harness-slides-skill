@@ -1,0 +1,7 @@
+{
+  "schema": 1,
+  "protocol": "harness-slide-inspection-reuse-v1",
+  "context_flag": "--review-context",
+  "finalize_flag": "--finalize",
+  "record_schema": 1
+}
