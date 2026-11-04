@@ -108,6 +108,7 @@ or reused. A runtime without `capabilities` (0.13.1 and earlier) has none of the
 | `review-input-refusals` | `input-invalid`, with the next step, for a `review` operation on a folder that holds no review and for a call that mixes preparing with another operation |
 | `review-packets` | `review --output REVIEW --packets` ([every packet in one call](#every-packet-in-one-call)) |
 | `review-sources-from-slide` | A `review --assessment` check without `sources` taking its slide's ([sources from the slide](#sources-from-the-slide)) |
+| `verified-draft-inspection-reuse` | Opt-in context-bound draft inspection evidence, changed/neighbor scope and explicit final consistency. |
 
 ## Proposal schema 2
 
