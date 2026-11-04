@@ -100,3 +100,25 @@ render fingerprints, pixels, shared dependencies and order still match. Inspect
 changed slides and their neighbors, check the current whole-deck contact sheet,
 and retain explicit per-slide coverage with reuse provenance. This carries no
 user approval. Missing or mismatched evidence requires fresh inspection.
+
+## Focused draft iteration
+
+An integration may opt in with `review --file deck.pptx --output DIR
+--review-context context.json`. The local context has schema 1 and nonempty
+`brand`, `fonts`, `layout` and `questions` identity strings. Change an identity
+when its inputs or review recipe change. Keep the file with the project.
+
+`draftPending` lists the slides needing inspection; `reusableInspections` lists
+traceable earlier checks. Each reuse binds the exact pixels, native content,
+renderer/fonts, context, slide order, immediate neighbors and design prompt.
+Changed brand/global design, fonts, review questions or order expands the scope.
+`--refresh` discards draft reuse. Existing calls retain revision-based behavior.
+
+Inspect pending slides at full size and mark them. Then inspect the exact whole
+deck for consistency and run `review --output DIR --finalize --revision HASH
+--note TEXT`. This separate revision-bound consistency receipt is required for
+readiness in the opted-in flow; creative assessment is still required when the
+review has one. Retained inspection evidence never carries user approval.
+Rendering one changed slide still converts the source deck to PDF; only the
+invalidated pages are rasterized. Synthetic call counts are not live-model or
+end-to-end rendering speed measurements.

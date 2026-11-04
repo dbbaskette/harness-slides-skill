@@ -1,6 +1,6 @@
 # Versioned releases
 
-The current published release is [0.16.0](releases/v0.16.0.md).
+The current published release is [0.17.0](releases/v0.17.0.md).
 
 GitHub Releases and immutable `v<package-version>` tags identify supported runtime
 code. The release ZIP contains the exact tagged source and installer; its SHA-256
@@ -32,7 +32,7 @@ else made, and git honours its config, hooks, alternates, replacement refs and
 grafts. Each `start` and `pin` deletes it and fetches into a fresh one, with git's
 system and global config ignored, so only the trusted URL decides what is read.
 
-Users see “Using Harness Slides v0.16.0”. `--version` is an offline human-readable
+Users see “Using Harness Slides v0.17.0”. `--version` is an offline human-readable
 check; `version` returns `package`, `runtimeVersion`, resolved `runtime` and
 `capabilities` as JSON. Run it from the returned runtime. `capabilities` names the
 features a caller can rely on, as listed in the

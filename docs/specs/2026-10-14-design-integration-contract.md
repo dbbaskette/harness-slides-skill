@@ -108,6 +108,7 @@ or reused. A runtime without `capabilities` (0.13.1 and earlier) has none of the
 | `review-input-refusals` | `input-invalid`, with the next step, for a `review` operation on a folder that holds no review and for a call that mixes preparing with another operation |
 | `review-packets` | `review --output REVIEW --packets` ([every packet in one call](#every-packet-in-one-call)) |
 | `review-sources-from-slide` | A `review --assessment` check without `sources` taking its slide's ([sources from the slide](#sources-from-the-slide)) |
+| `verified-draft-inspection-reuse` | Opt-in context-bound draft inspection evidence, changed/neighbor scope and explicit final consistency. |
 
 ## Proposal schema 2
 
@@ -1056,3 +1057,12 @@ What a caller does:
 - Treat `unmarked-code` as wording to fix in the draft: put the name in
   backticks and lead with plain English the first time.
 - Detect support with the `compose-code-spans` capability.
+
+### Verified draft inspection reuse
+
+`verified-draft-inspection-reuse` adds opt-in `review --review-context FILE`,
+`draftPending`/`reusableInspections`, and the explicit exact-revision
+`review --finalize --revision HASH --note TEXT` consistency gate. See the
+[review contract](../../references/review.md#focused-draft-iteration). Legacy
+preparation/mark behavior stays revision-based. Inspection evidence is reusable;
+user approval is never inferred.
