@@ -18,9 +18,9 @@ representative guidance-start response. Bootstrap activation is shown separately
 | New PPTX deck from native template + review | 7,871 |
 | New Google deck from native template + review | 8,898 |
 | Draft stage only: outline + contract | 5,400 |
-| New composed deck: draft, then build | 14,807 |
-| Parallel build, lead | 12,987 |
-| Parallel build, each worker | 11,338 |
+| New composed deck: draft, then build | 14,854 |
+| Parallel build, lead | 13,126 |
+| Parallel build, each worker | 11,477 |
 | New PPTX scene + contract + review | 7,055 |
 | New Google scene + contract + review | 8,194 |
 | Content-led PPTX + selected component + review | 9,059 |
