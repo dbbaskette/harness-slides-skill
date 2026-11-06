@@ -392,10 +392,13 @@ certified by an empty findings list.
 
 Each no is a finding: `critical` when the slide misleads or its point cannot be
 found, `major` when it is clearly weaker than it should be, `minor` otherwise.
-The critique also names the three weakest slides. A critical finding blocks
-delivery. Fix the critical and major findings in one pass, preview again and
-have the new render critiqued; undo a fix that causes a new finding. A reviewer
-does not change brand colors or what a slide says.
+The critique also names the three weakest slides; this ranking focuses inspection,
+not a mandatory change to each slide. A clean inspected build needs no invented
+repair or extra preview. Current artifact hashes and receipts must still match,
+and the whole-deck review and user checkpoint below still apply.
+A critical finding blocks delivery. Fix the critical and major findings in one
+pass, preview again and have the new render critiqued; undo a fix that causes a
+new finding. A reviewer does not change brand colors or what a slide says.
 
 When the deck is bound to an approved design, review the build against it
 as well: `review --compiled NEW_DIR --output REVIEW --design-project CONTENT`.

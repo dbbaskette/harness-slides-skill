@@ -45,9 +45,10 @@ back, at the quality of a one-line sketch.
    every approved slide, in order. Preview the whole deck and do the final review in
    [compositions](compositions.md). Rhythm, a layout echoed across a section
    boundary and one concept drawn two ways only show up here, on the contact
-   sheet. Have the deck critiqued and name its three weakest slides. Fix small
-   things yourself; send a slide back to the worker that owns it when it needs
-   redesigning.
+   sheet. Have the deck critiqued and name its three weakest slides. Repair
+   observed defects; the ranking alone does not require changes. Fix small
+   defects yourself; send a slide back to its worker when it needs redesigning.
+   Preview and inspect repairs before completing the final review.
 
 Previews reuse the preview pool; tell the user about any `--new-preview-file`
 files the build left in their Drive.
@@ -90,8 +91,14 @@ image files into a section. Place a recorded icon as `{type:icon,id,asset:ID}`.
 Under an approved design, add `--design-project CONTENT --section` to each
 `compile` and `preview`. A refusal names the slide that is missing, extra,
 out of order, retitled or given a changed `intent`.
-Check with `compose compile` and no `--output` until it
-fits, then preview your slides together, and revise and look again where one
-needs it, twice at most. Give each slide speaker `notes`. Before returning, name your weakest slide, fix it and preview
-once more. Report what still bothers you instead of polishing further: the
-lead reviews the deck as a whole.
+Give each slide speaker `notes`. Check with `compose compile` and no `--output`
+until it fits, then preview your slides together and inspect every image. Name
+your weakest slide and explain its observed defect or why it passes inspection.
+Repair only observed defects, within two repair rounds total, including that
+slide. After each repair, preview the changed revision and inspect every changed
+image. Return remaining defects to the lead after that bound.
+
+If inspection finds no actionable defect and nothing changes, return the existing
+inspected preview and its still-valid receipt; do not invent a fix or another
+preview pass. A missing or refused receipt needs a fresh preview. The lead still
+reviews the whole deck and completes its exact-revision review and user approval.
