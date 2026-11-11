@@ -70,7 +70,7 @@ versions, and do not provoke a refusal to find out.
    "compose-icon-assets","compose-projects","compose-provenance","compose-review","compose-section",
    "compose-split-point","compose-verified-critique","compose-visual-vocabulary","design-batch",
    "design-icon-ids","design-present-findings","design-schema-2","google-preview-pool",
-   "json-refusals","native-charts","neutral-native-composition","owned-google-previews",
+   "json-refusals","native-charts","neutral-native-composition","owned-google-previews","pptx-align","pptx-changes",
    "preview-repair-clusters","relative-records","render-bundles","review-google-renderer",
    "review-input-refusals","review-packets","review-sources-from-slide"]}
 ```
@@ -90,6 +90,8 @@ or reused. A runtime without `capabilities` (0.13.1 and earlier) has none of the
 | `neutral-native-composition` | Neutral live/reading contracts and Cover/Section/Closing layouts, with the same native writer for groups, tables, routed/attached connectors and chart data |
 | `google-preview-pool` | `compose preview` and `review --renderer google` reuse a pool of Google Slides files by default, `--pool-size N` and `--new-preview-file` choose how a preview is kept, results carry `pool` with a `FILE_ID:GENERATION` receipt, a replaced receipt is refused as `preview-replaced`, and `drive pool` lists the pool ([the Google preview pool](#the-google-preview-pool-in-0160)) |
 | `owned-google-previews` | Preview creation stores ownership and remote version receipts; a stale/unowned file is refused, and an owned unchanged preview is preserved while a fresh file is created |
+| `pptx-align` | `pptx align` audits an existing deck for peers that are nearly aligned, sized or spaced, and with `--output` settles them without changing content |
+| `pptx-changes` | `pptx changes` writes a slide-by-slide summary of the differences between two versions of a deck |
 | `preview-repair-clusters` | `compose preview` returns `repair`: each slide's warning and error findings grouped by slide, blocking slides first, with codes and object IDs ([visual vocabulary](#visual-vocabulary-in-0160)) |
 | `render-bundles` | Verified immutable native PPTX/PDF/PNG bundles shared by composition preview and design-bound review; cached artifacts contain no critique or user approval |
 | `compose-code-spans` | Code spans in backticks in composition texts, boxes, `subtitle`, `detail`, `caveat` and `source`, set in the brand contract's `design.slides.typography.code.fontFamily` (Courier New without one) as runs in every writer and measured in that font; scene element `code` ranges and `theme.codeFont`; titles, edge labels, badges, tables and charts refuse them; `unmarked-code` findings from `outline check` ([code spans](#code-spans-in-0160)) |
