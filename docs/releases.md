@@ -1,6 +1,6 @@
 # Versioned releases
 
-The current published release is [0.17.0](releases/v0.17.0.md).
+The current published release is [0.17.0](releases/v0.17.0.md). [0.18.0](releases/v0.18.0.md) is merged and not yet published as a GitHub Release.
 
 GitHub Releases and immutable `v<package-version>` tags identify supported runtime
 code. The release ZIP contains the exact tagged source and installer; its SHA-256

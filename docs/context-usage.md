@@ -13,7 +13,7 @@ representative guidance-start response. Bootstrap activation is shown separately
 | Discovery metadata | 39 |
 | Installed bootstrap | 412 |
 | Bootstrap + current guidance entry | 1,590 |
-| Scoped PPTX edit + final review | 3,721 |
+| Scoped PPTX edit + final review | 4,177 |
 | Scoped Google edit + final review | 4,308 |
 | New PPTX deck from native template + review | 7,871 |
 | New Google deck from native template + review | 8,898 |
