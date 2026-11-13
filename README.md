@@ -119,3 +119,14 @@ See [versions and updates](docs/releases.md) for details.
 See [development setup and checks](docs/development.md),
 [verification and known limits](docs/verification.md), and
 [instruction context measurements](docs/context-usage.md).
+
+## Working with brands
+
+[Harness Brand](https://github.com/dbbaskette/harness-brand-skill) is the optional
+brand companion. Install it once and select a local folder containing your brand
+packs. Company assets stay in that separate folder; these public skills do not
+include them or require access to a private brand repository.
+
+Harness Brand supplies the selected visual contract, templates and icons; Harness
+Slides creates and redesigns editable decks. For content-preserving branding of an
+existing Google deck or Doc, use Harness Brand’s shared `rebrand` workflow.
