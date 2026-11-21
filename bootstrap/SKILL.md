@@ -41,3 +41,7 @@ installed version; guidance refresh never installs or executes repository script
 
 Honor the user’s scope, sources, editing freedom, and completion boundary.
 Research and slide delivery requirements live in the selected guidance.
+
+For an icon assessment or requested icon additions, also read the installed
+runtime's `references/icon-opportunities.md`. This bundled workflow uses the
+selected brand's approved catalog and preserves the authorized editing scope.

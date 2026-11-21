@@ -70,3 +70,14 @@ person named or one this task created; otherwise import a new copy.
 For template inspection or composition, load [template reuse](templates.md).
 For Google-only edits, use [Google operations](google-slides.md), scoped native
 objects and revision controls; the PPTX patch schema above is not needed.
+
+## Slide roles and icons
+
+Preserve the role of each existing slide. The first slide in an excerpt can be
+content; neither its position nor a short title makes it a cover. Repair its
+heading within scope. Add a separate cover only when authorized, retaining the
+existing content slide. Do not trade content for title-slide chrome.
+
+When the request includes icon assessment/additions, use the scoped
+[icon opportunities](icon-opportunities.md) pass before patching. Preserve native
+labels, ordering, and business imagery; review the approved glyphs in context.
