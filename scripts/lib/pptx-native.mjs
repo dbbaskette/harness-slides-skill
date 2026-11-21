@@ -10,24 +10,21 @@ import {validateScene,themeFor,color,textRuns} from './scene.mjs';
 import {validateBrandContract,checkBrandSources} from './brand-contract.mjs';
 import {pptxTool} from './presentation-tools.mjs';
 
+import {iconIndexFor,nativeIcon} from './icon-index.mjs';
+
 const exec=promisify(execFile);
 
 // Check every requested icon against the brand's hashed library index before anything is built.
-export async function checkIcons(structure,brand) {
+export async function checkIcons(structure,brand,getIndex=iconIndexFor(brand)) {
   const icons=structure.icons??[];if(!icons.length)return null;
-  const library=brand.design.slides.icon?.library;
-  if(!library?.path||!library?.index||![library.path,library.index].every(path=>brand.sources.some(s=>s.path===path)))throw new Error('This composition uses icons, but the brand contract names no hashed icon library and index');
-  const index=JSON.parse(await readFile(library.index,'utf8'));
-  const wrong=[];
-  for(const i of icons) {
-    const entry=index.entries.find(e=>e.id===i.icon);
-    if(!entry)wrong.push(`${i.id}: unknown icon ${i.icon}; search the brand icon library for a current ID`);
-    else if(!entry.native||!(entry.bounds?.[2]>0)||!(entry.bounds?.[3]>0))wrong.push(`${i.id}: icon ${i.icon} is a picture, not native geometry; choose another`);
-    // Every library icon is a disc and a drawing; an entry that lists one shape would be copied as an empty disc.
-    else if(Array.isArray(entry.shapeIds)&&entry.shapeIds.length<2)wrong.push(`${i.id}: icon ${i.icon} has no drawing in the library index, only its disc; choose another`);
+  const index = await getIndex();
+  const wrong = [];
+  for (const {id,icon} of icons) {
+    try { nativeIcon(index,id,icon); }
+    catch (error) { wrong.push(error.message); }
   }
-  if(wrong.length)throw new Error(wrong.join('\n'));
-  return library;
+  if (wrong.length) throw new Error(wrong.join('\n'));
+  return index.library;
 }
 
 export async function emitNativePptx({scene,structure={groups:[],connectors:[]},brand,output,base=process.cwd()}) {

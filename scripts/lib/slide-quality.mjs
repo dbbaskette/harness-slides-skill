@@ -1,7 +1,7 @@
 import {compositionGeometry,validateSlideDecision} from './slide-decisions.mjs';
 import {validateScene,themeFor,sceneFindings} from './scene.mjs';
 import {resolveFont,measureText} from './text-metrics.mjs';
-import {digest,json} from './common.mjs';
+import {digest} from './common.mjs';
 
 const criteria=['title-support','visual-relationship','reading-order','technical-fit'];
 const overlap=(a,b)=>Math.min(a.x+a.width,b.x+b.width)-Math.max(a.x,b.x)>1&&Math.min(a.y+a.height,b.y+b.height)-Math.max(a.y,b.y)>1;
@@ -57,4 +57,3 @@ export function assessCritique(quality,assessment) {
   }
   return {schema:1,sceneDigest:quality.sceneDigest,qualityRevision:quality.revision,assessment,unresolved,complete:!unresolved.length,status:unresolved.length?'content critique unresolved':'content critique recorded; native visual review still required'};
 }
-export async function qualityFile({file,designReport,fonts}){return auditSceneQuality(await json(file),{designReport:designReport?await json(designReport):undefined,fonts:fonts?await json(fonts):undefined});}

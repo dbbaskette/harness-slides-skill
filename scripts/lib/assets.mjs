@@ -3,6 +3,7 @@
 import {readFile,writeFile,mkdir,rename,rm,open,lstat,realpath} from 'node:fs/promises';
 import {join,resolve,relative,dirname,basename,extname,isAbsolute,sep} from 'node:path';
 import {randomUUID} from 'node:crypto';
+import {iconIndexFor,nativeIcon} from './icon-index.mjs';
 import {hash,regularInside} from './common.mjs';
 import {refuse,refuseAll} from './refusals.mjs';
 
@@ -104,7 +105,7 @@ export async function recordIcon({project,icon,id,alt,brand}){
   const base=await root(project);let found=null,provenance=null,sha256=null;
   if(brand){
     const contract=JSON.parse(await readFile(brand,'utf8')),{checkBrandSources}=await import('./brand-contract.mjs');await checkBrandSources(contract);
-    found=await libraryEntry(contract,icon,assetId);
+    found=await libraryEntry(iconIndexFor(contract),icon,assetId);
     sha256=hash(JSON.stringify(found.entry));provenance={brandRevision:contract.revision,brand:contract.identity?.id??null,label:found.entry.label??null,indexSha256:found.indexSha256};
   }
   const label=alt??found?.entry.label??null;
@@ -116,11 +117,13 @@ export async function recordIcon({project,icon,id,alt,brand}){
     return {status:put(m,entry),assetId,kind:'icon',ref:icon,alt:entry.alt,checked:!!provenance};
   });
 }
-async function libraryEntry(contract,icon,assetId){
-  const {checkIcons}=await import('./pptx-native.mjs');
-  try{await checkIcons({icons:[{id:assetId,icon}]},contract);}catch(error){throw refuse(error.message,{code:'icon-unavailable',asset:assetId});}
-  const index=contract.design.slides.icon.library.index;
-  return {entry:JSON.parse(await readFile(index,'utf8')).entries.find(e=>e.id===icon),indexSha256:contract.sources.find(s=>s.path===index).sha256};
+async function libraryEntry(getIndex,icon,assetId){
+  try {
+    const index = await getIndex();
+    return {entry:nativeIcon(index,assetId,icon),indexSha256:index.indexSha256};
+  } catch (error) {
+    throw refuse(error.message,{code:'icon-unavailable',asset:assetId});
+  }
 }
 
 // images generate and download call this once the artwork is in the project. The request ID is the asset ID.
@@ -167,11 +170,11 @@ const states={'asset-file-missing':'file-missing','asset-hash-changed':'hash-cha
 
 // An icon candidate named by library ID, checked against the brand's icon index. An ID the library lacks is unresolved;
 // one it holds only as a picture, or without a drawing, is unavailable. Each problem names the slide and the candidate.
-export async function candidateIconProblems(slides,contract){
-  const {checkIcons}=await import('./pptx-native.mjs'),problems=[];
+export async function candidateIconProblems(slides,contract,getIndex=iconIndexFor(contract)){
+  const problems=[];
   for(const s of slides)for(const c of s.asset?.candidates??[]){
     if(c.kind!=='icon'||c.refType!=='library-id')continue;
-    try{await checkIcons({icons:[{id:c.assetId,icon:c.ref}]},contract);}
+    try{nativeIcon(await getIndex(),c.assetId,c.ref);}
     catch(error){
       if(/unknown icon/.test(error.message))problems.push({code:'asset-unresolved',slide:s.id,asset:c.assetId,detail:`${s.id}: candidate ${c.assetId} names icon ${c.ref}, which is not in the brand icon library`,next:'Search the brand icon library for a current icon ID and propose it, or propose the fallback for approval'});
       else problems.push({code:'icon-unavailable',slide:s.id,asset:c.assetId,detail:`${s.id}: candidate ${c.assetId}: ${/hashed icon library/.test(error.message)?`icon ${c.ref} cannot be checked, because the brand contract names no hashed icon library and index`:error.message.replace(new RegExp(`^${c.assetId}: `),'')}`});
@@ -182,9 +185,9 @@ export async function candidateIconProblems(slides,contract){
 
 // Design candidates are matched to manifest entries by assetId. Those missing are pending; generated art also needs a provider.
 // They are read from the stored plan, so a design waiting for approval and an approved one are checked alike.
-async function candidates(base,m,designProject,env,contract){
+async function candidates(base,m,designProject,env,contract,getIndex){
   const {designPlan}=await import('./design-session.mjs'),{apiKey}=await import('./gemini-api.mjs'),plan=await designPlan(designProject);
-  const resolved=[],pending=[],problems=[],brandProblems=contract?await candidateIconProblems(plan.slides,contract):[];
+  const resolved=[],pending=[],problems=[],brandProblems=contract?await candidateIconProblems(plan.slides,contract,getIndex):[];
   for(const s of plan.slides)for(const c of s.asset?.candidates??[]){
     const entry=m.assets.find(a=>a.assetId===c.assetId),exact=c.kind==='icon'&&c.refType==='library-id',item={slide:s.id,assetId:c.assetId,kind:c.kind,concept:c.concept,...(exact?{ref:c.ref}:{})};
     if(entry&&entry.kind!==c.kind){problems.push({code:'asset-conflict',slide:s.id,asset:c.assetId,detail:`${s.id}: candidate ${c.assetId} is a ${c.kind}, but the manifest records a ${entry.kind}`,next:'Record the candidate under its own asset ID, or correct the candidate\'s kind in the proposal'});pending.push(item);continue;}
@@ -210,16 +213,17 @@ export async function assetStatus({project,'design-project':designProject},env=p
 export async function checkAssets({project,'design-project':designProject,brand},env=process.env){
   const base=await root(project),m=await readManifest(base),problems=[];
   for(const a of m.assets){const p=await problemOf(base,a);if(p)problems.push(p);}
-  let contract=null;
+  let contract=null,getIndex;
   if(brand){
     contract=JSON.parse(await readFile(brand,'utf8'));const {checkBrandSources}=await import('./brand-contract.mjs');await checkBrandSources(contract);
+    getIndex=iconIndexFor(contract);
     for(const a of m.assets.filter(a=>a.kind==='icon')){
-      let found;try{found=await libraryEntry(contract,a.ref,a.assetId);}catch(error){problems.push({...error.problem,detail:error.message});continue;}
+      let found;try{found=await libraryEntry(getIndex,a.ref,a.assetId);}catch(error){problems.push({...error.problem,detail:error.message});continue;}
       if(a.sha256&&hash(JSON.stringify(found.entry))!==a.sha256)problems.push({code:'asset-hash-changed',asset:a.assetId,detail:`Asset ${a.assetId}: icon ${a.ref} changed in the brand library since it was recorded`,next:'Look at the icon again, then record it with assets icon --brand'});
     }
   }
   let design=null;
-  if(designProject){design=await candidates(base,m,designProject,env,contract);problems.push(...design.problems);}
+  if(designProject){design=await candidates(base,m,designProject,env,contract,getIndex);problems.push(...design.problems);}
   if(problems.length)throw refuseAll(problems.length===1?problems[0].detail:`${problems.length} asset problems:\n${problems.map(p=>p.detail).join('\n')}`,problems.map(p=>({...p,detail:p.detail})));
   return {status:'ready',manifest:manifestPath,assets:m.assets.length,...(design?{candidates:{resolved:design.resolved,pending:design.pending}}:{})};
 }
@@ -263,11 +267,11 @@ export async function resolveCompositionAssets(comp,project){
 }
 // An icon placed by asset ID that was checked against the brand when recorded must still be that index entry.
 // Unknown and picture-only icons are left to the brand's icon check, which reports them for every icon alike.
-export async function iconAssetProblems(icons,contract){
+export async function iconAssetProblems(icons,contract,getIndex=iconIndexFor(contract)){
   const index=contract.design?.slides?.icon?.library?.index;if(!icons.size||!index)return [];
-  let entries;try{entries=JSON.parse(await readFile(index,'utf8')).entries??[];}catch{return [];}
+  let entries;try{({entries}=await getIndex());}catch{return [];}
   const lines=[];
-  for(const [id,use] of icons){const entry=entries.find(e=>e.id===use.ref);if(entry&&use.sha256&&hash(JSON.stringify(entry))!==use.sha256)lines.push(`${id}: asset ${use.assetId} (icon ${use.ref}) changed since it was recorded from the brand icon library; look at it, then record it again with assets icon --brand`);}
+  for(const [id,use] of icons){const entry=entries.get(use.ref);if(entry&&use.sha256&&hash(JSON.stringify(entry))!==use.sha256)lines.push(`${id}: asset ${use.assetId} (icon ${use.ref}) changed since it was recorded from the brand icon library; look at it, then record it again with assets icon --brand`);}
   return lines;
 }
 
