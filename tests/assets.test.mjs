@@ -324,3 +324,18 @@ test('a composition places {type:icon,asset} from the manifest and records it in
   // The pure compiler names the icon asset it cannot resolve on its own.
   await assert.rejects(compileComposition(comp({asset:'icon_database'}),brand.contract),/db_icon: icon asset icon_database resolves through the project's asset manifest/);
 });
+
+test('a repeated asset checks every expected digest and is verified anew on the next render', async t => {
+  const {verifyBuiltAssets} = await import('../scripts/lib/assets.mjs');
+  const dir = await temporary(t);
+  const path = 'repeat.png';
+  const placement = {path, object:'logo', slide:'first', sha256:sha(png)};
+  const report = assets => writeFile(join(dir,'compose-report.json'), JSON.stringify({inputs:{assets}}));
+  await writeFile(join(dir,path),png);
+  await report([placement,{...placement,slide:'second',sha256:sha(other)}]);
+  await assert.rejects(verifyBuiltAssets(dir), /changed since it was compiled/);
+  await report([placement,{...placement,slide:'second'}]);
+  await verifyBuiltAssets(dir);
+  await writeFile(join(dir,path),other);
+  await assert.rejects(verifyBuiltAssets(dir), /changed since it was compiled/);
+});
