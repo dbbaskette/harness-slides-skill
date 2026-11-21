@@ -54,7 +54,8 @@ this engine. Apply its selected contract and assets; do not mix identities.
 | Final rendering and verification, other than of a composed deck | [Review](references/review.md); its first table says which checks apply to the method used |
 | Scene or composition project browser, resume and version controls | [Workspace](references/workspace.md) |
 | Custom image generation or image setup | [Images](references/images.md) |
-| Supplied images, brand icons or generated art a deck uses | [Images](references/images.md) |
+| Assess, add or replace meaningful icons | [Icon opportunities](references/icon-opportunities.md) |
+| Supplied images or generated art a deck uses | [Images](references/images.md) |
 
 The guidance snapshot contains instructions only. Resolve references here; run
 commands from the **runtime** this session's start or resume returned, never this

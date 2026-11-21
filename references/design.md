@@ -57,9 +57,10 @@ Preserve required content and qualifications, and keep a caveat next to the
 claim it limits. Where evidence is missing, say so; do not invent a connection,
 a number or a quote. Sample data is never a claim.
 
-Use an approved icon where a concept is recognisable, the same icon for the
-same concept throughout. Use an image when it shows something the slide is
-about; generated art may illustrate an idea but must not pass as measured
+Use the [icon opportunities](icon-opportunities.md) pass when icons help a
+concept become recognizable, with the same icon for the same concept
+throughout. Use an image when it shows something the slide is about;
+generated art may illustrate an idea but must not pass as measured
 evidence or a real product screenshot. Follow the selected brand's asset
 policy and the user's chosen and excluded colors.
 
