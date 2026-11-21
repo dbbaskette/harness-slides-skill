@@ -23,26 +23,34 @@ async function fixture(t) {
   const commit = async () => { await exec('git', ['-C', source, 'add', '.']); await exec('git', ['-C', source, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-qm', 'Fixture update']); return (await exec('git', ['-C', source, 'rev-parse', 'HEAD'])).stdout.trim(); };
   return { dir, source, runtime, project, commit, first: await commit() };
 }
-test('new work sees main advancement; resumed work retains guidance and installed runtime without network', async t => {
+test('new work sees main advancement; resumed work retains its guidance without network and pins no runtime', async t => {
   const f = await fixture(t), first = await start(f);
   assert.equal(first.runtimeVersion,'0.2.0');assert.match(first.runtimeDigest,/^[a-f0-9]{64}$/);assert.equal(first.revision, f.first); assert.equal(first.runtime, f.runtime);
   const snapshot = join(first.guidance, '..');
   assert.deepEqual((await readdir(snapshot)).sort(), ['SKILL.md', 'pin.json', 'references']);
+  // The pin binds the instructions only: the version the work started on is information, and no folder or file hash of the runtime is kept.
+  const pin = JSON.parse(await readFile(join(snapshot, 'pin.json'), 'utf8'));
+  assert.deepEqual(Object.keys(pin).sort(), ['createdAt', 'files', 'minimumRuntime', 'repository', 'revision', 'runtimeVersion', 'schema', 'skill', 'task']);
+  assert.equal(pin.runtimeVersion, '0.2.0'); assert.equal(pin.minimumRuntime, '0.2.0'); assert.doesNotMatch(JSON.stringify(pin), new RegExp(f.runtime.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   await writeFile(join(f.source, 'SKILL.md'), `---\nname: ${skill}\n---\nSecond guidance\n`); const secondCommit = await f.commit();
   const second = await start(f); assert.equal(second.revision, secondCommit);
   await rm(f.source, { recursive: true });
   const continued = await resume({ ...f, task: first.task });
   assert.equal(continued.runtimeVersion,'0.2.0');assert.equal(continued.runtimeDigest,first.runtimeDigest);assert.equal(continued.freshness, 'pinned'); assert.equal(continued.revision, f.first);
+  assert.equal(continued.runtime, f.runtime); assert.equal('notice' in continued, false); assert.equal('startedRuntimeVersion' in continued, false);
   assert.match(await readFile(continued.guidance, 'utf8'), /First guidance/);
   const cached=await resume({ ...f, task: first.task, cached: true });assert.equal(cached.freshness, 'cached-by-choice');assert.equal(cached.runtimeVersion,'0.2.0');
 });
-test('guidance and executable changes are detected when resuming saved work', async t => {
+test('a changed guidance snapshot is refused on resume; a changed runtime is not', async t => {
   const f = await fixture(t), pin = await start(f);
   await chmod(join(pin.guidance, '../references/design.md'), 0o600);
   await writeFile(join(pin.guidance, '../references/design.md'), 'Changed');
   await assert.rejects(resume({ ...f, task: pin.task }), /guidance changed/);
+  // The same version with different bytes: the work continues on what is installed, and its digest says the code differs.
   const second = await start(f); await writeFile(join(f.runtime, 'scripts/helper.mjs'), 'Changed runtime');
-  await assert.rejects(resume({ ...f, task: second.task }), /runtime changed/);
+  const continued = await resume({ ...f, task: second.task });
+  assert.equal(continued.runtime, f.runtime); assert.equal(continued.runtimeVersion, '0.2.0'); assert.notEqual(continued.runtimeDigest, second.runtimeDigest); assert.equal('notice' in continued, false);
+  assert.match(await readFile(continued.guidance, 'utf8'), /First guidance/);
 });
 test('incompatible guidance does not create a task and releases the refresh lock', async t => {
   const f = await fixture(t);
@@ -65,6 +73,8 @@ test('a runtime one minimum behind gets the last compatible guidance and is told
   assert.match(await readFile(older.guidance, 'utf8'), /Second guidance/);
   assert.deepEqual((await readdir(join(older.guidance, '..'))).sort(), ['SKILL.md', 'pin.json', 'references']);
   assert.equal((await resume({ ...f, task: older.task })).revision, last);
+  // The pin records what the older guidance itself needs, not what current guidance needs.
+  assert.equal(JSON.parse(await readFile(join(older.guidance, '..', 'pin.json'), 'utf8')).minimumRuntime, '0.2.0');
   assert.equal((await start(f)).revision, last);
   await installed(f, '0.3.0'); const current = await start(f);
   assert.equal(current.freshness, 'current-at-start'); assert.match(await readFile(current.guidance, 'utf8'), /Third guidance/);
@@ -174,7 +184,76 @@ test('installed discovery entry is the small bootstrap while executable helpers 
  assert.match(await readFile(join(result.runtime,'scripts/sync-guidance.mjs'),'utf8'),/Refresh instructions only/);
 });
 
-test('resuming through a newer installation reports the saved executable version, not the new pointer',async t=>{const f=await fixture(t),pin=await start(f),newRuntime=join(f.dir,'new runtime'),current=join(f.dir,'current');await mkdir(join(newRuntime,'scripts'),{recursive:true});await writeFile(join(newRuntime,'package.json'),JSON.stringify({name:pkg.name,version:'0.3.0'}));await writeFile(join(newRuntime,'package-lock.json'),'{}');await writeFile(join(newRuntime,'scripts/helper.mjs'),'New installed helper');await symlink(newRuntime,current);const continued=await resume({project:f.project,task:pin.task,runtime:current});assert.equal(continued.runtime,f.runtime);assert.equal(continued.runtimeVersion,'0.2.0');assert.equal(continued.runtimeDigest,pin.runtimeDigest);});
+// The installed layout: <shared>/versions/<id> holds the code and <shared>/current points at it. An update installs a
+// new folder, moves the pointer and removes the old folder.
+async function installedFixture(t) {
+  const f = await fixture(t), shared = join(f.dir, 'shared'), current = join(shared, 'current');
+  const put = async (id, version, helper) => {
+    const folder = join(shared, 'versions', id); await mkdir(join(folder, 'scripts'), { recursive: true });
+    await writeFile(join(folder, 'package.json'), JSON.stringify({ name: pkg.name, version })); await writeFile(join(folder, 'package-lock.json'), '{}'); await writeFile(join(folder, 'scripts/helper.mjs'), helper);
+    await rm(current, { force: true }); await symlink('versions/' + id, current); return folder;
+  };
+  return { ...f, shared, current, put, runtime: await put('0.2.0-aaaaaaaaaaaaaaaaaaaa', '0.2.0', 'First helper') };
+}
+test('start, resume and cached hand out the stable installed address, never the version folder', async t => {
+  const f = await installedFixture(t);
+  // Reached through the pointer, through the version folder itself (as Node reports a running script), or through a skill link.
+  const link = join(f.dir, 'skill-link'); await symlink(f.current, link);
+  for (const runtime of [f.current, f.runtime, link]) {
+    const started = await start({ ...f, runtime }); assert.equal(started.runtime, f.current);
+    assert.equal((await resume({ ...f, runtime, task: started.task })).runtime, f.current);
+    assert.equal((await resume({ ...f, runtime, task: started.task, cached: true })).runtime, f.current);
+    assert.equal((await start({ ...f, runtime, revision: f.first })).runtime, f.current);
+    assert.doesNotMatch(await readFile(join(started.guidance, '..', 'pin.json'), 'utf8'), /versions/);
+  }
+});
+test('after an update, saved work resumes on the installed runtime at the same address, with a notice', async t => {
+  const f = await installedFixture(t), pin = await start({ ...f, runtime: f.current });
+  assert.equal(pin.runtime, f.current); assert.equal(pin.runtimeVersion, '0.2.0'); assert.equal('notice' in pin, false);
+  const old = f.runtime; await f.put('0.3.0-bbbbbbbbbbbbbbbbbbbb', '0.3.0', 'New installed helper'); await rm(old, { recursive: true }); await rm(f.source, { recursive: true });
+  for (const cached of [false, true]) {
+    const continued = await resume({ project: f.project, task: pin.task, runtime: f.current, cached });
+    assert.equal(continued.runtime, f.current); assert.equal(continued.runtimeVersion, '0.3.0'); assert.equal(continued.startedRuntimeVersion, '0.2.0');
+    assert.notEqual(continued.runtimeDigest, pin.runtimeDigest); assert.equal(continued.revision, f.first); assert.equal(continued.freshness, cached ? 'cached-by-choice' : 'pinned');
+    assert.match(continued.notice, /started on runtime 0\.2\.0 and continues on the installed 0\.3\.0/); assert.equal(continued.notice.includes('\n'), false);
+    assert.match(await readFile(continued.guidance, 'utf8'), /First guidance/);
+  }
+});
+test('a pin written by an earlier version resumes on the current runtime after its version folder is deleted', async t => {
+  const f = await installedFixture(t), started = await start({ ...f, runtime: f.current }), file = join(started.guidance, '..', 'pin.json');
+  // What 0.18.0 and earlier wrote: the absolute version folder, its version and a hash of every runtime file; no minimumRuntime.
+  const { minimumRuntime, ...kept } = JSON.parse(await readFile(file, 'utf8')), { files, ...head } = kept;
+  const legacy = { ...head, runtime: f.runtime, runtimeVersion: '0.2.0', runtimeFiles: { 'package-lock.json': 'a'.repeat(64), 'package.json': 'b'.repeat(64), 'scripts/helper.mjs': 'c'.repeat(64) }, files };
+  await chmod(file, 0o600); await writeFile(file, JSON.stringify(legacy, null, 2) + '\n'); await chmod(file, 0o400);
+  const old = f.runtime; await f.put('0.3.0-bbbbbbbbbbbbbbbbbbbb', '0.3.0', 'New installed helper'); await rm(old, { recursive: true }); await rm(f.source, { recursive: true });
+  await assert.rejects(readdir(old), /ENOENT/);
+  const continued = await resume({ project: f.project, task: started.task, runtime: f.current });
+  assert.equal(continued.runtime, f.current); assert.equal(continued.runtimeVersion, '0.3.0'); assert.equal(continued.startedRuntimeVersion, '0.2.0'); assert.match(continued.notice, /0\.2\.0.*0\.3\.0/);
+  assert.equal(continued.revision, f.first); assert.match(await readFile(continued.guidance, 'utf8'), /First guidance/);
+  // Nothing was migrated: the saved pin is exactly as the earlier version left it.
+  assert.deepEqual(JSON.parse(await readFile(file, 'utf8')), legacy);
+  // A pin whose recorded folder still exists but no longer matches is equally unbound.
+  await mkdir(join(old, 'scripts'), { recursive: true }); await writeFile(join(old, 'package.json'), JSON.stringify({ name: 'something-else', version: '9.9.9' }));
+  assert.equal((await resume({ project: f.project, task: started.task, runtime: f.current })).runtime, f.current);
+});
+test('saved guidance that needs a newer runtime than the one installed is refused with the update message', async t => {
+  const f = await installedFixture(t); await f.put('0.3.0-bbbbbbbbbbbbbbbbbbbb', '0.3.0', 'Newer helper');
+  await guide(f, 'Second'); await needs(f, '0.3.0'); await f.commit();
+  const pin = await start({ ...f, runtime: f.current }); assert.equal(pin.runtimeVersion, '0.3.0'); assert.equal(pin.freshness, 'current-at-start');
+  // An older release is installed again: these instructions may name commands it does not have.
+  await f.put('0.2.0-aaaaaaaaaaaaaaaaaaaa', '0.2.0', 'First helper');
+  for (const cached of [false, true]) await assert.rejects(resume({ project: f.project, task: pin.task, runtime: f.current, cached }), /^Error: Saved guidance needs a newer installed runtime: requires 0\.3\.0 or newer; installed 0\.2\.0\. Update with this skill’s trusted installer\.$/);
+  // New work on that older runtime still gets the existing refusal, or older guidance through the compatibility index.
+  await assert.rejects(start({ ...f, runtime: f.current }), /^Error: Current guidance needs a newer installed runtime: requires 0\.3\.0 or newer; installed 0\.2\.0\. Update with this skill’s trusted installer\.$/);
+  await index(f, { '0.2.0': f.first }); await f.commit();
+  const older = await start({ ...f, runtime: f.current }); assert.equal(older.freshness, 'last-compatible'); assert.equal(older.revision, f.first); assert.equal(older.runtime, f.current);
+  // With the newer runtime back, the saved task continues; a pin with a malformed minimum is invalid rather than trusted.
+  await f.put('0.3.0-bbbbbbbbbbbbbbbbbbbb', '0.3.0', 'Newer helper');
+  assert.equal((await resume({ project: f.project, task: pin.task, runtime: f.current })).runtimeVersion, '0.3.0');
+  const file = join(pin.guidance, '..', 'pin.json'), saved = JSON.parse(await readFile(file, 'utf8'));
+  await chmod(file, 0o600); await writeFile(file, JSON.stringify({ ...saved, minimumRuntime: 'latest' }));
+  await assert.rejects(resume({ project: f.project, task: pin.task, runtime: f.current }), /Invalid saved guidance pin/);
+});
 
 // A project can arrive with a .harness-slides/guidance/repository.git someone else made. Nothing in it may choose
 // which guidance start returns or run a command: not its config, its hooks, or files that redirect what git reads.

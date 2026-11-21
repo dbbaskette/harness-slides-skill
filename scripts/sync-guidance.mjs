@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 // Refresh instructions only. All executable operations use the installed runtime.
+// A task keeps its guidance snapshot, never a runtime: start and resume both return the runtime installed now.
 import { readFile, writeFile, mkdir, rename, rm, lstat, readdir, realpath, open } from 'node:fs/promises';
 import { resolve, join, dirname, relative, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFile } from 'node:child_process';
 import { promisify, parseArgs } from 'node:util';
 import { createHash, randomUUID } from 'node:crypto';
+import { stableRuntime } from './lib/runtime-address.mjs';
 const exec = promisify(execFile), root = fileURLToPath(new URL('../', import.meta.url));
 const sources = {
   'harness-slides': { skill: 'harness-slides', repository: 'https://github.com/dbbaskette/harness-slides-skill.git' },
@@ -20,7 +22,8 @@ async function settings(runtime) {
   runtime = await realpath(runtime);
   const pkg = JSON.parse(await readFile(join(runtime, 'package.json'), 'utf8')), config = sources[pkg.name];
   if (!config) throw new Error('Unrecognized installed skill runtime.');
-  return { ...config, packageName: pkg.name, version: pkg.version, runtime };
+  // runtime is where this code is; address is what callers are given, which stays valid when an update replaces the code.
+  return { ...config, packageName: pkg.name, version: pkg.version, runtime, address: await stableRuntime(runtime) };
 }
 async function directory(path) {
   const parent = dirname(path);
@@ -63,7 +66,7 @@ function newer(required, actual) {
   const a = version(required), b = version(actual);
   return a.some((n, i) => n > b[i] && a.slice(0, i).every((v, j) => v === b[j]));
 }
-const refusal = (required, actual, detail = '') => new Error(`Current guidance needs a newer installed runtime: requires ${required} or newer; installed ${actual}. Update with this skill’s trusted installer.${detail}`);
+const refusal = (required, actual, detail = '', subject = 'Current guidance') => new Error(`${subject} needs a newer installed runtime: requires ${required} or newer; installed ${actual}. Update with this skill’s trusted installer.${detail}`);
 async function runtimeHashes(runtime) {
   const hashes = {};
   async function walk(name) {
@@ -121,8 +124,9 @@ async function lastCompatible(repository, source, commit, listing, config, needs
   try {
     await git(repository, 'merge-base', '--is-ancestor', best[1], commit);
     const older = await tree(repository, best[1]);
-    if (newer(await required(repository, older, config), config.version)) throw invalid;
-    return { commit: best[1], listing: older };
+    const minimum = await required(repository, older, config);
+    if (newer(minimum, config.version)) throw invalid;
+    return { commit: best[1], listing: older, minimum };
   } catch { throw invalid; }
 }
 export async function start({ project, runtime = root, source, revision } = {}) {
@@ -147,7 +151,8 @@ export async function start({ project, runtime = root, source, revision } = {}) 
     let listing = await tree(repository, commit);
     const needs = await required(repository, listing, config), behind = newer(needs, config.version);
     if (behind && revision) throw refusal(needs, config.version);
-    if (behind) ({ commit, listing } = await lastCompatible(repository, trustedSource, commit, listing, config, needs));
+    let minimum = needs;
+    if (behind) ({ commit, listing, minimum } = await lastCompatible(repository, trustedSource, commit, listing, config, needs));
     const selected = listing.filter(item => allowed(item.name));
     if (!selected.some(item => item.name === 'SKILL.md') || selected.length > 500 || selected.reduce((n, item) => n + item.size, 0) > 8 * 1024 * 1024) throw new Error('Guidance inventory is missing or too large.');
     const task = randomUUID().replaceAll('-', '');
@@ -160,10 +165,12 @@ export async function start({ project, runtime = root, source, revision } = {}) 
       await mkdir(dirname(path), { recursive: true, mode: 0o700 }); await writeFile(path, bytes, { flag: 'wx', mode: 0o400 });
       hashes[item.name] = sha(bytes);
     }
-    const pin = { schema: 1, skill: config.skill, repository: config.repository, revision: commit, task, createdAt: new Date().toISOString(), runtime: config.runtime, runtimeVersion: config.version, runtimeFiles: await runtimeHashes(config.runtime), files: hashes };
+    // The pin binds the instructions. runtimeVersion only records what the work started on; minimumRuntime is what these
+    // instructions need, checked again on resume in case an older runtime is installed by then.
+    const pin = { schema: 1, skill: config.skill, repository: config.repository, revision: commit, task, createdAt: new Date().toISOString(), runtimeVersion: config.version, minimumRuntime: minimum, files: hashes };
     await writeFile(join(stage, 'pin.json'), JSON.stringify(pin, null, 2) + '\n', { flag: 'wx', mode: 0o400 });
     const snapshot = join(cache, 'tasks', task); await rename(stage, snapshot); stage = null;
-    const result = { freshness: behind ? 'last-compatible' : 'current-at-start', revision: commit, task, guidance: join(snapshot, 'SKILL.md'), runtime: config.runtime, runtimeVersion: config.version, runtimeDigest: sha(JSON.stringify(pin.runtimeFiles)) };
+    const result = { freshness: behind ? 'last-compatible' : 'current-at-start', revision: commit, task, guidance: join(snapshot, 'SKILL.md'), runtime: config.address, runtimeVersion: config.version, runtimeDigest: sha(JSON.stringify(await runtimeHashes(config.runtime))) };
     return behind ? { ...result, currentMinimumRuntime: needs, notice: `Using older guidance: the installed runtime is ${config.version} and current guidance needs ${needs} or newer. Update with this skill’s trusted installer to use current guidance.` } : result;
   } finally { if (stage) await rm(stage, { recursive: true, force: true }); await lock.close(); await rm(join(cache, '.sync-lock')); }
 }
@@ -180,14 +187,20 @@ export async function resume({ project, task, runtime = root, cached = false } =
     while (parent !== snapshot) { const stat = await lstat(parent); if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error('Unsafe saved guidance path.'); parent = dirname(parent); }
     if (sha(await file(join(snapshot, name))) !== digest) throw new Error('Saved guidance changed; reopen an intact task or start new work.');
   }
-  const saved = await settings(pin.runtime);
-  if (saved.skill !== config.skill || saved.version !== pin.runtimeVersion || JSON.stringify(await runtimeHashes(saved.runtime)) !== JSON.stringify(pin.runtimeFiles)) throw new Error('Saved executable runtime changed or is unavailable; restore it with its trusted installer.');
-  return { freshness: cached ? 'cached-by-choice' : 'pinned', revision: pin.revision, task, guidance: join(snapshot, 'SKILL.md'), runtime: saved.runtime, runtimeVersion: saved.version, runtimeDigest: sha(JSON.stringify(pin.runtimeFiles)) };
+  // Earlier versions also pinned the runtime folder and a hash of every file in it. Those fields are ignored: the work
+  // continues on whatever is installed now. Only instructions that need more than the installed runtime are refused.
+  if (pin.minimumRuntime !== undefined) {
+    if (typeof pin.minimumRuntime !== 'string' || !/^\d+\.\d+\.\d+$/.test(pin.minimumRuntime)) throw new Error('Invalid saved guidance pin.');
+    if (newer(pin.minimumRuntime, config.version)) throw refusal(pin.minimumRuntime, config.version, '', 'Saved guidance');
+  }
+  const result = { freshness: cached ? 'cached-by-choice' : 'pinned', revision: pin.revision, task, guidance: join(snapshot, 'SKILL.md'), runtime: config.address, runtimeVersion: config.version, runtimeDigest: sha(JSON.stringify(await runtimeHashes(config.runtime))) };
+  const started = typeof pin.runtimeVersion === 'string' && /^\d+\.\d+\.\d+$/.test(pin.runtimeVersion) ? pin.runtimeVersion : null;
+  return started && started !== config.version ? { ...result, startedRuntimeVersion: started, notice: `This work started on runtime ${started} and continues on the installed ${config.version}, with its saved instructions.` } : result;
 }
 async function main() {
   const { values, positionals } = parseArgs({ options: { project: { type: 'string' }, task: { type: 'string' }, revision: { type: 'string' }, help: { type: 'boolean' } }, allowPositionals: true });
   const [action, ...extra] = positionals;
-  if (values.help || !action) { console.log('Usage: node scripts/sync-guidance.mjs start|resume|cached|pin --project DIR [--task ID] [--revision COMMIT]\nOnly guidance refreshes. Executable helpers stay in the installed runtime.'); return; }
+  if (values.help || !action) { console.log('Usage: node scripts/sync-guidance.mjs start|resume|cached|pin --project DIR [--task ID] [--revision COMMIT]\nOnly guidance refreshes. Executable helpers stay in the installed runtime; every action returns the one installed now.'); return; }
   if (extra.length || !values.project || !['start', 'resume', 'cached', 'pin'].includes(action)) throw new Error('Choose an action and --project DIR.');
   if ((action === 'start' && (values.task || values.revision)) || (action === 'pin' && (!values.revision || values.task)) || (['resume', 'cached'].includes(action) && (!values.task || values.revision))) throw new Error('Invalid guidance action options.');
   const result = ['start', 'pin'].includes(action) ? await start({ project: values.project, revision: values.revision }) : await resume({ project: values.project, task: values.task, cached: action === 'cached' });

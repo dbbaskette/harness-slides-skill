@@ -57,7 +57,8 @@ this engine. Apply its selected contract and assets; do not mix identities.
 | Supplied images, brand icons or generated art a deck uses | [Images](references/images.md) |
 
 The guidance snapshot contains instructions only. Resolve references here; run
-commands from the task's returned installed **runtime**, never this snapshot. Write artifacts in the user's project. Keep the installed skill unchanged.
+commands from the **runtime** this session's start or resume returned, never this
+snapshot or a path kept from an earlier session. Write artifacts in the user's project. Keep the installed skill unchanged.
 
 ```sh
 node scripts/harness-slides.mjs --help

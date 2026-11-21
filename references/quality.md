@@ -66,5 +66,5 @@ finding. Geometry signals request judgment and never force variety.
 Native-template authoring requires [structured native critique](native-critique.md)
 against the native revision and actual slide/object IDs, plus the approved proposal.
 A bulk pixel note does not complete this assessment. Custom scenes
-carry optional intent; new creative work should supply it. Existing pinned tasks
-keep their recorded guidance/runtime; don't rewrite them to meet new contracts.
+carry optional intent; new creative work should supply it. Existing tasks keep
+their recorded guidance; don't rewrite them to meet new contracts.

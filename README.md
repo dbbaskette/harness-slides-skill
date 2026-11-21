@@ -111,7 +111,8 @@ for key setup, provider options, and limitations.
 
 To update, install a newer published release with the same installer. Guidance
 refreshes automatically for new work; executable helpers update through the
-installer. Existing projects keep their saved runtime so you can resume them.
+installer, which replaces the previous version. Existing projects continue on
+the new version with their saved instructions.
 See [versions and updates](docs/releases.md) for details.
 
 ## For developers

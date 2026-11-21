@@ -1,13 +1,15 @@
-// Report the executing package, never the content project's package or current pointer.
+// Report the executing package, never the content project's package. Its address is the stable installed pointer when
+// that pointer selects this package (see runtime-address.mjs), so a caller can keep the path across updates.
 import {readFile,realpath} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {join} from 'node:path';
+import {stableRuntime} from './runtime-address.mjs';
 // What this code supports, for callers that cannot tell from the version alone. A name is added with the feature, is never
 // renamed, removed or reused, and is documented in docs/specs/2026-10-14-design-integration-contract.md.
-export const capabilities=Object.freeze(['assets','assets-approved-candidates','canonical-digests','compose-code-spans','compose-icon-assets','compose-projects','compose-provenance','compose-review','compose-section','compose-split-point','compose-verified-critique','compose-visual-vocabulary','design-batch','design-icon-ids','design-present-findings','design-schema-2','google-preview-pool','json-refusals','native-charts','neutral-native-composition','owned-google-previews','pptx-align','pptx-changes','preview-repair-clusters','relative-records','render-bundles','review-google-renderer','review-input-refusals','review-packets','review-sources-from-slide','verified-draft-inspection-reuse']);
+export const capabilities=Object.freeze(['assets','assets-approved-candidates','canonical-digests','compose-code-spans','compose-icon-assets','compose-projects','compose-provenance','compose-review','compose-section','compose-split-point','compose-verified-critique','compose-visual-vocabulary','design-batch','design-icon-ids','design-present-findings','design-schema-2','google-preview-pool','json-refusals','native-charts','neutral-native-composition','owned-google-previews','pptx-align','pptx-changes','preview-repair-clusters','relative-records','render-bundles','review-google-renderer','review-input-refusals','review-packets','review-sources-from-slide','stable-runtime','verified-draft-inspection-reuse']);
 const packageRoot=fileURLToPath(new URL('../../',import.meta.url));
 export async function runtimeVersion(runtime=packageRoot){
   runtime=await realpath(runtime);const pkg=JSON.parse(await readFile(join(runtime,'package.json'),'utf8'));
   if(!['harness-slides','harness-research-skill'].includes(pkg.name)||!/^\d+\.\d+\.\d+$/.test(pkg.version??''))throw new Error('Unrecognized runtime package/version');
-  return {package:pkg.name,runtimeVersion:pkg.version,runtime};
+  return {package:pkg.name,runtimeVersion:pkg.version,runtime:await stableRuntime(runtime)};
 }

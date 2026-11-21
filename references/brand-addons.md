@@ -18,8 +18,9 @@ wins. Ambiguous matches require a decision; previews do not establish authority.
 
 `tanzu-brand` keeps private assets and thin adapters; it resolves this separately
 installed runtime. New tasks fetch public instructions, while existing work
-retains its guidance revision and installed runtime. Use the returned runtime
-for executable commands and set `HARNESS_SLIDES_ROOT` to it for Brand adapters.
+retains its guidance revision. Each start or resume returns the runtime to use:
+run executable commands from it and set `HARNESS_SLIDES_ROOT` to it for Brand
+adapters, and do not keep a runtime path from an earlier session.
 Instruction refresh never installs or executes repository scripts. The trusted
 standalone installer serves Codex, Claude Code and Cursor; runtime updates remain
 separate from guidance updates. No additional model or provider account is needed.

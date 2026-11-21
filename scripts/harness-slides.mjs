@@ -197,7 +197,9 @@ async function run(v,p) {
   else if(command==='icons'&&action==='copy')result=await pptxTool('icon-copy',[JSON.stringify(await json(v.plan))]);
   else if(command==='install')result=await install({home:v.home,shared:v.shared,dryRun:v['dry-run'],dependencies:true});
   else if(command==='doctor'){
-    result={...await (await import('./lib/doctor.mjs')).diagnose({format:v.format}),google:v['google-check']?{drive:await checkDriveAccess(),native:v['file-id']?await probeGooglePresentation(v['file-id']):'untested: provide --file-id'}:'not checked'};
+    // Which installation answered: the stable address to run helpers from, and the version behind it now.
+    const {runtime,runtimeVersion:installedVersion}=await runtimeVersion();
+    result={runtime,runtimeVersion:installedVersion,...await (await import('./lib/doctor.mjs')).diagnose({format:v.format}),google:v['google-check']?{drive:await checkDriveAccess(),native:v['file-id']?await probeGooglePresentation(v['file-id']):'untested: provide --file-id'}:'not checked'};
   } else throw new Error('Unknown command; run --help');
   console.log(JSON.stringify(result,null,['setup','images'].includes(command)?undefined:2));
   if(result?.preserved===false||result?.coverage?.complete===false)process.exitCode=1;

@@ -30,7 +30,7 @@ export HARNESS_IMAGE_TEST_PYTHON="$(cat "$work/image-python.txt")"
 HARNESS_BROWSER_TESTS=1 HARNESS_RENDER_TESTS=1 npm test 2>&1 | tee "$results_dir/tests.log"
 npm run context:check 2>&1 | tee "$results_dir/context.log"
 bash scripts/Install-Harness-Slides.sh --home "$work/home" --shared "$work/shared" 2>&1 | tee "$results_dir/installer.log"
-# Inspect the newly installed immutable runtime, not the source checkout.
+# Inspect the newly installed runtime through its stable address, not the source checkout.
 node --input-type=module - "$results_dir/installer.log" <<'JS' | tee "$results_dir/installed-version.log"
 import {readFile} from 'node:fs/promises';
 import {execFileSync} from 'node:child_process';
