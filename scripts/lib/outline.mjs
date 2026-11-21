@@ -7,6 +7,7 @@ import {validateComposition,titleLines,relationNames,rhythmNames,codeFamily} fro
 import {hash,escape} from './common.mjs';
 import {internalSource,unmarkedCode} from './compose-audit.mjs';
 import {codeSpans,codeFallback} from './scene.mjs';
+import {stableRuntime} from './runtime-address.mjs';
 
 const idPattern=/^[a-zA-Z_][a-zA-Z0-9_-]{4,40}$/,kinds=['cover','section','content','closing'];
 const str=v=>typeof v==='string'&&v.trim()&&v.length<=20000;
@@ -223,7 +224,8 @@ export async function startOutlineFile({file,brand,output,fonts}) {
   if(!brand){brand=join(output,'brand-contract.json');await save('brand-contract.json',JSON.stringify(contract,null,2)+'\n');}
   const composition=slides=>JSON.stringify({version:1,title:outline.title,direction:outline.direction,slides},null,2)+'\n';
   const fixed=s=>({id:s.id,title:s.title,layout:outline.layouts[s.kind],...(s.subtitle?{subtitle:s.subtitle}:{}),...(s.detail?{detail:s.detail}:{}),...(s.notes?{notes:s.notes}:{}),sources:['outline'],brief:{rhythm:'anchor'}});
-  const runtime=resolve(dirname(fileURLToPath(import.meta.url)),'..','..'),house=outline.house??[];
+  // A brief is read later, perhaps after an update: it names the stable installed address, not this version's folder.
+  const runtime=await stableRuntime(resolve(dirname(fileURLToPath(import.meta.url)),'..','..')),house=outline.house??[];
   let lead=[],run=[],leads=0,number=0;
   const flushLead=async()=>{if(!lead.length)return;const name=`lead-${++leads}.json`;await save(name,composition(lead.map(fixed)));parts.push(name);table.push(`| Lead | ${name} | ${lead.map(s=>s.id).join(', ')} |`);lead=[];};
   const flushRun=async(before,after)=>{

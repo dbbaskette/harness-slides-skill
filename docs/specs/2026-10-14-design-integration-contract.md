@@ -110,6 +110,7 @@ or reused. A runtime without `capabilities` (0.13.1 and earlier) has none of the
 | `review-input-refusals` | `input-invalid`, with the next step, for a `review` operation on a folder that holds no review and for a call that mixes preparing with another operation |
 | `review-packets` | `review --output REVIEW --packets` ([every packet in one call](#every-packet-in-one-call)) |
 | `review-sources-from-slide` | A `review --assessment` check without `sources` taking its slide's ([sources from the slide](#sources-from-the-slide)) |
+| `stable-runtime` | [One runtime address](#one-runtime-address-in-0190): `runtime` from `start`, `resume`, `cached`, `pin`, `version`, `doctor` and the installer is the installed pointer, and a saved task resumes on whatever is installed |
 | `verified-draft-inspection-reuse` | Opt-in context-bound draft inspection evidence, changed/neighbor scope and explicit final consistency. |
 
 ## Proposal schema 2
@@ -1068,3 +1069,35 @@ What a caller does:
 [review contract](../../references/review.md#focused-draft-iteration). Legacy
 preparation/mark behavior stays revision-based. Inspection evidence is reusable;
 user approval is never inferred.
+
+## One runtime address in 0.19.0
+
+Until 0.19.0 a task was pinned to the version folder it started in. `start`
+returned that folder as `runtime`, the task's `pin.json` kept it with a hash of
+every runtime file, and `resume` refused when the folder was missing or changed.
+An update therefore left saved work on old code, or unable to continue.
+
+| Addition | What it does |
+| --- | --- |
+| One address | `runtime` is `<shared>/current`, the pointer the installer moves, in the results of `sync-guidance.mjs start`, `resume`, `cached` and `pin`, of `harness-slides.mjs version` and `doctor`, and of the installer. Run from a source checkout, it is the checkout. A path under `versions/` is never returned |
+| No runtime pin | `pin.json` keeps the guidance revision and file hashes, `runtimeVersion` (the version the work started on, for information) and `minimumRuntime` (what its guidance declared). It has no `runtime` and no `runtimeFiles`; those fields in a pin from an earlier version are ignored |
+| Resume | Returns the installed runtime and its version and digest, with the task's saved guidance and no fetch. When the installed version differs from the one the work started on it adds `startedRuntimeVersion` and a one-line `notice`. It refuses only a changed guidance snapshot, or saved guidance whose `minimumRuntime` is newer than the installed runtime |
+| Installer | After the pointer moves, every other folder directly inside the installation's `versions/` is removed. The result gives `runtime` (the pointer), `versionId` (the folder behind it), `removedVersions`, and where they apply `keptVersions`, `repointed` and `skipped` |
+| Unbranded contracts | The neutral contract names its defaults through the pointer and is not checked against the installed file: it carries the whole design under its revision. A brand's sources are checked as before |
+
+What a caller does:
+
+- Keep the task ID, not the runtime. Call `resume` at the start of each session
+  and run `<runtime>/scripts/harness-slides.mjs` from what it returns. Show the
+  person any `notice`.
+- Do not resolve the returned path or a skill link to its target: that turns the
+  pointer back into a version folder, which the next update removes.
+- Do not compare `runtimeVersion` or `runtimeDigest` with a saved value to decide
+  whether work may continue. A floor on the version, or a capability name, is
+  the check to make.
+- Read the installer's `versionId`, or `runtimeVersion` and `contentDigest`, when
+  the name of the installed folder is needed; `runtime` no longer ends in it.
+- A long-running process that imported the helpers keeps the code it loaded.
+  Start a new process after an update rather than importing through the pointer
+  again in the same one.
+- Detect support with the `stable-runtime` capability.

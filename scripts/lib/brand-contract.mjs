@@ -1,7 +1,9 @@
 import { fileURLToPath } from 'node:url';
 import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { digest, hash } from './common.mjs';
 import { themeFor } from './scene.mjs';
+import { stableRuntime } from './runtime-address.mjs';
 const record = value => value && typeof value === 'object' && !Array.isArray(value);
 const nonempty = value => typeof value === 'string' && value.trim() && value.length < 20000;
 const hex = value => /^#[a-f0-9]{6}$/i.test(value ?? '');
@@ -40,9 +42,13 @@ export function validateBrandContract(contract, { medium } = {}) {
   if (contract.revision !== contractRevision(contract)) throw new Error('Brand contract changed; resolve a fresh handoff');
   return contract;
 }
+// The neutral defaults ship inside the installed runtime, which an update replaces: the file a neutral contract names may
+// be gone, or newer, by the time the deck is next built. Nothing is read from the installation to trust such a contract.
+// It carries the whole design and its revision guards every value, so a deck keeps the neutral look it was made with.
+const shippedDefaults=(contract,source)=>contract.identity.id==='unbranded'&&source.kind==='neutral design defaults'&&contract.design.nativeTemplate?.path!==source.path;
 export async function checkBrandSources(contract) {
   validateBrandContract(contract);
-  for(const source of contract.sources) if(hash(await readFile(source.path))!==source.sha256) throw new Error(`Brand authority changed (${source.kind ?? 'source'}); resolve a fresh contract`);
+  for(const source of contract.sources) if(!shippedDefaults(contract,source)&&hash(await readFile(source.path))!==source.sha256) throw new Error(`Brand authority changed (${source.kind ?? 'source'}); resolve a fresh contract`);
   return {revision:contract.revision,identity:contract.identity,medium:contract.medium,sources:contract.sources.length,status:'current local sources'};
 }
 export function brandTheme(contract) {
@@ -52,6 +58,8 @@ export function brandTheme(contract) {
 }
 
 export async function neutralBrandContract({delivery='reading'}={}){
-  const path=fileURLToPath(new URL('../../guidance/unbranded-design.json',import.meta.url)),bytes=await readFile(path);
+  const file=fileURLToPath(new URL('../../guidance/unbranded-design.json',import.meta.url)),bytes=await readFile(file);
+  // Named through the stable installed address, so the contract and its revision do not change with each update's folder.
+  const path=join(await stableRuntime(fileURLToPath(new URL('../../',import.meta.url))),'guidance','unbranded-design.json');
   const c={schema:1,identity:{id:'unbranded',variant:'default'},medium:{kind:'slides',delivery},sources:[{path,kind:'neutral design defaults',sha256:hash(bytes)}],design:JSON.parse(bytes),language:{organization:{toneStatus:'unspecified; follow the supplied brief'},authorVoice:{status:'unselected'}}};c.revision=contractRevision(c);return validateBrandContract(c);
 }
