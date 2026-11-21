@@ -1,6 +1,6 @@
 {
   "name": "harness-slides",
-  "version": "0.19.0",
+  "version": "1.5.1",
   "description": "Brand-neutral editable slide authoring, preservation and visual review for agent harnesses.",
   "type": "module",
   "license": "MIT",

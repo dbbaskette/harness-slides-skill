@@ -2,6 +2,7 @@
 import {readFile,mkdir,writeFile,rm,copyFile} from 'node:fs/promises';
 import {constants} from 'node:fs';
 import {resolve,dirname,join} from 'node:path';
+import {iconIndexFor} from './icon-index.mjs';
 import {compileComposition} from './compose.mjs';
 import {checkBrandSources,neutralBrandContract} from './brand-contract.mjs';
 import {requireSceneDesign} from './design-session.mjs';
@@ -48,8 +49,10 @@ export async function compileCompositionFile({file,brand,output,fonts,project,ou
   // Unknown or picture-only icons and unknown layouts are caught now, not when the deck is rendered, and alongside everything else.
   // An icon asset that did not resolve has already been reported, so its stand-in is not checked against the library.
   const native=await import('./pptx-native.mjs'),found=compiled?.structure??requested(comp),wanted={...found,icons:(found.icons??[]).filter(i=>!unresolved.has(i.id))};
-  for(const check of [native.checkIcons,native.checkLayouts])try{await check(wanted,contract);}catch(error){problems.push(...lines(error));}
-  problems.push(...await iconAssetProblems(icons,contract));
+  const getIndex=iconIndexFor(contract);
+  try{await native.checkIcons(wanted,contract,getIndex);}catch(error){problems.push(...lines(error));}
+  try{await native.checkLayouts(wanted,contract);}catch(error){problems.push(...lines(error));}
+  problems.push(...await iconAssetProblems(icons,contract,getIndex));
   // An approved sentence split across several nodes misleads a reader with no presenter, so a reading deck refuses it.
   const approvedSource=await approvedOutline(outlineFile,project),reading=(contract.medium.delivery??'reading')==='reading';
   const split=approvedSource?splitPoints(approvedSource.outline,comp):[];

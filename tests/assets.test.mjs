@@ -84,6 +84,18 @@ test('status reports each asset, and check refuses a missing or changed file wit
   const empty=join(f.base,'empty');await mkdir(empty);assert.equal((await ok(['assets','check','--project',empty])).assets,0);
 });
 
+test('each icon validation operation sees one index snapshot',async t=>{
+  const f=await place(t),{file}=await iconBrand(f.base);
+  const contract=JSON.parse(await readFile(file,'utf8'));
+  const {iconIndexFor,nativeIcon}=await import('../scripts/lib/icon-index.mjs');
+  const getIndex=iconIndexFor(contract);
+  const index=await getIndex();
+  await writeFile(index.library.index,JSON.stringify({entries:[]}));
+  assert.equal(nativeIcon(await getIndex(),'database','fi-0000aaaa-s001-l001').label,'Database');
+  const fresh=await iconIndexFor(contract)();
+  assert.throws(()=>nativeIcon(fresh,'database','fi-0000aaaa-s001-l001'),/unknown icon/);
+});
+
 test('a brand icon is recorded by its stable ID, checked against the brand icon index when a brand is given',async t=>{
   const f=await place(t),brand=await iconBrand(f.base);
   const icon=await ok(['assets','icon','fi-0000aaaa-s001-l001','--project',f.project,'--id','icon_database','--brand',brand.file]);
@@ -323,4 +335,19 @@ test('a composition places {type:icon,asset} from the manifest and records it in
   assert.deepEqual(JSON.parse(await readFile(join(direct,'compose-report.json'),'utf8')).inputs.assets,[]);
   // The pure compiler names the icon asset it cannot resolve on its own.
   await assert.rejects(compileComposition(comp({asset:'icon_database'}),brand.contract),/db_icon: icon asset icon_database resolves through the project's asset manifest/);
+});
+
+test('a repeated asset checks every expected digest and is verified anew on the next render', async t => {
+  const {verifyBuiltAssets} = await import('../scripts/lib/assets.mjs');
+  const dir = await temporary(t);
+  const path = 'repeat.png';
+  const placement = {path, object:'logo', slide:'first', sha256:sha(png)};
+  const report = assets => writeFile(join(dir,'compose-report.json'), JSON.stringify({inputs:{assets}}));
+  await writeFile(join(dir,path),png);
+  await report([placement,{...placement,slide:'second',sha256:sha(other)}]);
+  await assert.rejects(verifyBuiltAssets(dir), /changed since it was compiled/);
+  await report([placement,{...placement,slide:'second'}]);
+  await verifyBuiltAssets(dir);
+  await writeFile(join(dir,path),other);
+  await assert.rejects(verifyBuiltAssets(dir), /changed since it was compiled/);
 });

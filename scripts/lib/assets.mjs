@@ -3,6 +3,7 @@
 import {readFile,writeFile,mkdir,rename,rm,open,lstat,realpath} from 'node:fs/promises';
 import {join,resolve,relative,dirname,basename,extname,isAbsolute,sep} from 'node:path';
 import {randomUUID} from 'node:crypto';
+import {iconIndexFor,nativeIcon} from './icon-index.mjs';
 import {hash,regularInside} from './common.mjs';
 import {refuse,refuseAll} from './refusals.mjs';
 
@@ -104,7 +105,7 @@ export async function recordIcon({project,icon,id,alt,brand}){
   const base=await root(project);let found=null,provenance=null,sha256=null;
   if(brand){
     const contract=JSON.parse(await readFile(brand,'utf8')),{checkBrandSources}=await import('./brand-contract.mjs');await checkBrandSources(contract);
-    found=await libraryEntry(contract,icon,assetId);
+    found=await libraryEntry(iconIndexFor(contract),icon,assetId);
     sha256=hash(JSON.stringify(found.entry));provenance={brandRevision:contract.revision,brand:contract.identity?.id??null,label:found.entry.label??null,indexSha256:found.indexSha256};
   }
   const label=alt??found?.entry.label??null;
@@ -116,11 +117,13 @@ export async function recordIcon({project,icon,id,alt,brand}){
     return {status:put(m,entry),assetId,kind:'icon',ref:icon,alt:entry.alt,checked:!!provenance};
   });
 }
-async function libraryEntry(contract,icon,assetId){
-  const {checkIcons}=await import('./pptx-native.mjs');
-  try{await checkIcons({icons:[{id:assetId,icon}]},contract);}catch(error){throw refuse(error.message,{code:'icon-unavailable',asset:assetId});}
-  const index=contract.design.slides.icon.library.index;
-  return {entry:JSON.parse(await readFile(index,'utf8')).entries.find(e=>e.id===icon),indexSha256:contract.sources.find(s=>s.path===index).sha256};
+async function libraryEntry(getIndex,icon,assetId){
+  try {
+    const index = await getIndex();
+    return {entry:nativeIcon(index,assetId,icon),indexSha256:index.indexSha256};
+  } catch (error) {
+    throw refuse(error.message,{code:'icon-unavailable',asset:assetId});
+  }
 }
 
 // images generate and download call this once the artwork is in the project. The request ID is the asset ID.
@@ -167,11 +170,11 @@ const states={'asset-file-missing':'file-missing','asset-hash-changed':'hash-cha
 
 // An icon candidate named by library ID, checked against the brand's icon index. An ID the library lacks is unresolved;
 // one it holds only as a picture, or without a drawing, is unavailable. Each problem names the slide and the candidate.
-export async function candidateIconProblems(slides,contract){
-  const {checkIcons}=await import('./pptx-native.mjs'),problems=[];
+export async function candidateIconProblems(slides,contract,getIndex=iconIndexFor(contract)){
+  const problems=[];
   for(const s of slides)for(const c of s.asset?.candidates??[]){
     if(c.kind!=='icon'||c.refType!=='library-id')continue;
-    try{await checkIcons({icons:[{id:c.assetId,icon:c.ref}]},contract);}
+    try{nativeIcon(await getIndex(),c.assetId,c.ref);}
     catch(error){
       if(/unknown icon/.test(error.message))problems.push({code:'asset-unresolved',slide:s.id,asset:c.assetId,detail:`${s.id}: candidate ${c.assetId} names icon ${c.ref}, which is not in the brand icon library`,next:'Search the brand icon library for a current icon ID and propose it, or propose the fallback for approval'});
       else problems.push({code:'icon-unavailable',slide:s.id,asset:c.assetId,detail:`${s.id}: candidate ${c.assetId}: ${/hashed icon library/.test(error.message)?`icon ${c.ref} cannot be checked, because the brand contract names no hashed icon library and index`:error.message.replace(new RegExp(`^${c.assetId}: `),'')}`});
@@ -182,9 +185,9 @@ export async function candidateIconProblems(slides,contract){
 
 // Design candidates are matched to manifest entries by assetId. Those missing are pending; generated art also needs a provider.
 // They are read from the stored plan, so a design waiting for approval and an approved one are checked alike.
-async function candidates(base,m,designProject,env,contract){
+async function candidates(base,m,designProject,env,contract,getIndex){
   const {designPlan}=await import('./design-session.mjs'),{apiKey}=await import('./gemini-api.mjs'),plan=await designPlan(designProject);
-  const resolved=[],pending=[],problems=[],brandProblems=contract?await candidateIconProblems(plan.slides,contract):[];
+  const resolved=[],pending=[],problems=[],brandProblems=contract?await candidateIconProblems(plan.slides,contract,getIndex):[];
   for(const s of plan.slides)for(const c of s.asset?.candidates??[]){
     const entry=m.assets.find(a=>a.assetId===c.assetId),exact=c.kind==='icon'&&c.refType==='library-id',item={slide:s.id,assetId:c.assetId,kind:c.kind,concept:c.concept,...(exact?{ref:c.ref}:{})};
     if(entry&&entry.kind!==c.kind){problems.push({code:'asset-conflict',slide:s.id,asset:c.assetId,detail:`${s.id}: candidate ${c.assetId} is a ${c.kind}, but the manifest records a ${entry.kind}`,next:'Record the candidate under its own asset ID, or correct the candidate\'s kind in the proposal'});pending.push(item);continue;}
@@ -210,16 +213,17 @@ export async function assetStatus({project,'design-project':designProject},env=p
 export async function checkAssets({project,'design-project':designProject,brand},env=process.env){
   const base=await root(project),m=await readManifest(base),problems=[];
   for(const a of m.assets){const p=await problemOf(base,a);if(p)problems.push(p);}
-  let contract=null;
+  let contract=null,getIndex;
   if(brand){
     contract=JSON.parse(await readFile(brand,'utf8'));const {checkBrandSources}=await import('./brand-contract.mjs');await checkBrandSources(contract);
+    getIndex=iconIndexFor(contract);
     for(const a of m.assets.filter(a=>a.kind==='icon')){
-      let found;try{found=await libraryEntry(contract,a.ref,a.assetId);}catch(error){problems.push({...error.problem,detail:error.message});continue;}
+      let found;try{found=await libraryEntry(getIndex,a.ref,a.assetId);}catch(error){problems.push({...error.problem,detail:error.message});continue;}
       if(a.sha256&&hash(JSON.stringify(found.entry))!==a.sha256)problems.push({code:'asset-hash-changed',asset:a.assetId,detail:`Asset ${a.assetId}: icon ${a.ref} changed in the brand library since it was recorded`,next:'Look at the icon again, then record it with assets icon --brand'});
     }
   }
   let design=null;
-  if(designProject){design=await candidates(base,m,designProject,env,contract);problems.push(...design.problems);}
+  if(designProject){design=await candidates(base,m,designProject,env,contract,getIndex);problems.push(...design.problems);}
   if(problems.length)throw refuseAll(problems.length===1?problems[0].detail:`${problems.length} asset problems:\n${problems.map(p=>p.detail).join('\n')}`,problems.map(p=>({...p,detail:p.detail})));
   return {status:'ready',manifest:manifestPath,assets:m.assets.length,...(design?{candidates:{resolved:design.resolved,pending:design.pending}}:{})};
 }
@@ -263,27 +267,34 @@ export async function resolveCompositionAssets(comp,project){
 }
 // An icon placed by asset ID that was checked against the brand when recorded must still be that index entry.
 // Unknown and picture-only icons are left to the brand's icon check, which reports them for every icon alike.
-export async function iconAssetProblems(icons,contract){
+export async function iconAssetProblems(icons,contract,getIndex=iconIndexFor(contract)){
   const index=contract.design?.slides?.icon?.library?.index;if(!icons.size||!index)return [];
-  let entries;try{entries=JSON.parse(await readFile(index,'utf8')).entries??[];}catch{return [];}
+  let entries;try{({entries}=await getIndex());}catch{return [];}
   const lines=[];
-  for(const [id,use] of icons){const entry=entries.find(e=>e.id===use.ref);if(entry&&use.sha256&&hash(JSON.stringify(entry))!==use.sha256)lines.push(`${id}: asset ${use.assetId} (icon ${use.ref}) changed since it was recorded from the brand icon library; look at it, then record it again with assets icon --brand`);}
+  for(const [id,use] of icons){const entry=entries.get(use.ref);if(entry&&use.sha256&&hash(JSON.stringify(entry))!==use.sha256)lines.push(`${id}: asset ${use.assetId} (icon ${use.ref}) changed since it was recorded from the brand icon library; look at it, then record it again with assets icon --brand`);}
   return lines;
 }
 
 // The images of a compiled scene. Every local source and manifest asset is copied into
 // OUTPUT/assets and named relatively, so the build and its previews resolve it wherever the project goes.
 export async function placeImages(scene,{base,uses=new Map()}){
-  const assets=[],copies=new Map();
+  const assets=[],copies=new Map(),files=new Map();
+  async function imageFile(path) {
+    if (!files.has(path)) {
+      const bytes = await readFile(path);
+      files.set(path, { bytes, sha256: hash(bytes) });
+    }
+    return files.get(path);
+  }
   for(const s of scene.slides)for(const e of s.elements)if(e.type==='image'&&!/^https:\/\//.test(e.src)){
     const use=uses.get(e.id);
     if(!use){
-      const path=resolve(base,e.src),image=await readFile(path).catch(error=>{throw error.code==='ENOENT'?refuse(`${s.id}/${e.id}: image ${e.src} is missing (${path})`,{code:'asset-missing',slide:s.id,asset:e.id}):error;});
-      const sha256=hash(image);e.src=`assets/${sha256}${extname(path).toLowerCase()}`;copies.set(e.src,image);
+      const path=resolve(base,e.src),{bytes,sha256}=await imageFile(path).catch(error=>{throw error.code==='ENOENT'?refuse(`${s.id}/${e.id}: image ${e.src} is missing (${path})`,{code:'asset-missing',slide:s.id,asset:e.id}):error;});
+      e.src=`assets/${sha256}${extname(path).toLowerCase()}`;copies.set(e.src,bytes);
       assets.push({object:e.id,slide:s.id,path:e.src,sha256});continue;
     }
-    const bytes=await readFile(use.path).catch(error=>{throw error.code==='ENOENT'?refuse(`${s.id}/${e.id}: asset ${use.assetId} file ${use.source} is missing from the project`,{code:'asset-file-missing',slide:s.id,asset:use.assetId}):error;});
-    if(hash(bytes)!==use.sha256)throw refuse(`${s.id}/${e.id}: asset ${use.assetId} file ${use.source} changed since it was recorded`,{code:'asset-hash-changed',slide:s.id,asset:use.assetId});
+    const {bytes,sha256}=await imageFile(use.path).catch(error=>{throw error.code==='ENOENT'?refuse(`${s.id}/${e.id}: asset ${use.assetId} file ${use.source} is missing from the project`,{code:'asset-file-missing',slide:s.id,asset:use.assetId}):error;});
+    if(sha256!==use.sha256)throw refuse(`${s.id}/${e.id}: asset ${use.assetId} file ${use.source} changed since it was recorded`,{code:'asset-hash-changed',slide:s.id,asset:use.assetId});
     e.src=`assets/${fileName(use.assetId)}${extname(use.source).toLowerCase()}`;copies.set(e.src,bytes);
     assets.push({object:e.id,slide:s.id,asset:use.assetId,kind:use.kind,path:e.src,source:use.source,sha256:use.sha256});
   }
@@ -292,11 +303,17 @@ export async function placeImages(scene,{base,uses=new Map()}){
 // Before a compiled folder is rendered: each copied asset is still the file that was compiled.
 export async function verifyBuiltAssets(dir){
   let report;try{report=JSON.parse(await readFile(join(dir,'compose-report.json'),'utf8'));}catch(error){if(error.code==='ENOENT')return;throw error;}
+  const digests = new Map();
   for(const a of report.inputs?.assets??[]){
     // An icon is drawn from the brand library at render, so the build holds no copy of it.
     if(a.kind==='icon')continue;
-    const slide=a.slide??null;let bytes;
-    try{bytes=await readFile(await regularInside(dir,a.path));}catch(error){throw error.code==='ENOENT'?refuse(`${a.object}: asset ${a.asset} copy ${a.path} is missing from the build`,{code:'asset-file-missing',slide,asset:a.asset,next:'Compile the composition again'}):error;}
-    if(hash(bytes)!==a.sha256)throw refuse(`${a.object}: asset ${a.asset} copy ${a.path} changed since it was compiled`,{code:'asset-hash-changed',slide,asset:a.asset,next:'Compile the composition again'});
+    const slide=a.slide??null;
+    try {
+      if (!digests.has(a.path)) {
+        const path = await regularInside(dir,a.path);
+        digests.set(a.path, hash(await readFile(path)));
+      }
+    } catch(error){throw error.code==='ENOENT'?refuse(`${a.object}: asset ${a.asset} copy ${a.path} is missing from the build`,{code:'asset-file-missing',slide,asset:a.asset,next:'Compile the composition again'}):error;}
+    if(digests.get(a.path)!==a.sha256)throw refuse(`${a.object}: asset ${a.asset} copy ${a.path} changed since it was compiled`,{code:'asset-hash-changed',slide,asset:a.asset,next:'Compile the composition again'});
   }
 }
