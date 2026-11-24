@@ -1,6 +1,8 @@
 # Draft the deck before building it
 
-For a new deck or a full rework. Settle what the deck says on a draft the user
+For a new deck or a full rework. Not for
+[recreating a source](compositions.md#recreating-a-source): a diagram the source
+draws would be lost. Settle what the deck says on a draft the user
 can see, then build it. A round of changes to a draft takes about a minute; a
 round of changes to built slides takes minutes a slide.
 
