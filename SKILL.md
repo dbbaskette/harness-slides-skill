@@ -46,6 +46,7 @@ this engine. Apply its selected contract and assets; do not mix identities.
 | --- | --- |
 | New deck or full rework | First [draft](references/draft.md) it, get the story approved, then take the look from the brand add-on's choice step when it supplies directions, or reuse settled choices and compare content samples for an open visual choice, as the [walkthrough](references/design-walkthrough.md) says. A studio runner hosts these checkpoints and never skips one. Then, to build: [design](references/design.md) and [compositions](references/compositions.md) |
 | Redesign that keeps the content | [Design](references/design.md) and [walkthrough](references/design-walkthrough.md), then [compositions](references/compositions.md) |
+| Recreate a poster, PDF or another tool's deck in a brand, keeping its look | [Intake](references/intake.md)'s Recreate freedom, then [recreating a source](references/compositions.md#recreating-a-source). No draft outline and no look samples: the source is the proposal. Build one slide, show it beside its source page, then build the rest |
 | More than about ten content slides, in a harness that runs subagents | Also [parallel build](references/parallel-build.md), once the walkthrough is approved |
 | A deck that compositions cannot express, or a chart linked to Google Sheets | [Other methods](references/authoring.md); load only the one chosen |
 | Polish, content-preserving patch or selected-slide edit | [PPTX editing](references/editing.md) or [Google operations](references/google-slides.md), matching the destination |

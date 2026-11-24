@@ -8,11 +8,21 @@ For an existing presentation, offer these editing freedoms:
 
 - **Brand only:** apply the selected brand's approved fonts, colors and identity;
   retain slide count/order, content and composition. Do not add decorative icons.
+- **Recreate:** rebuild a source that cannot be patched in place (a PDF, a poster,
+  an image, a deck from another tool), or a deck the user wants in a brand but
+  looking the same, as native slides. Retain the wording, the source's own
+  numbering and slide count, and every diagram as drawn: the same nodes, the same
+  arrows and where they run, the same groups and bands, and what each legend color
+  means. Change only fonts, colors, identity, spacing and alignment. Add a cover or
+  split a page only when the user agrees. Follow
+  [recreating a source](compositions.md#recreating-a-source).
 - **Polish:** improve spacing, alignment, typography and visual consistency;
   retain slide structure, wording and native objects where practical.
 - **Redesign, retain content:** redesign chosen slides while retaining claims,
   qualifications, notes and slide count/order. Meaningful icons and diagrams are
-  welcome where they communicate existing content.
+  welcome where they communicate existing content. A diagram the source already
+  draws is content: keep its nodes and arrows unless the user asks for a different
+  one.
 - **Full rework:** edit wording, narrative, diagrams and structure within the
   user's goals. Keep evidence, distinguish proposed claims and flag material gaps.
 - **Selected changes:** target named slides or elements, with one of the freedoms
@@ -22,7 +32,9 @@ Useful missing information: intended audience and decision/CTA, live talk versus
 reading deck, duration/approximate length, target slides, content that must remain
 verbatim (including legal statements), brand/template, output format, style
 references and deadline. Ask about accessibility/localization needs when relevant.
-Do not require every field or invent an audience from a product name.
+Do not require every field or invent an audience from a product name. For a
+recreation, settle the slide count against the source's own pages or numbered
+sections, and whether smaller type is acceptable on a dense page.
 
 For a new deck, accept a content file with required sections or raw source
 documents plus a goal. Offer source-only versus additional research if factual

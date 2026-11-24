@@ -36,7 +36,9 @@ what the chosen method asks for.
   space between two things.
 - White space frames the main element. A small diagram stranded in a corner
   is unfinished.
-- Text is never shrunk to fit. Cut words, split the slide or restructure.
+- Text is never shrunk to fit. Cut words, split the slide or restructure. The
+  exception is a recreation whose user has agreed to smaller type: see
+  [recreating a source](compositions.md#recreating-a-source).
 - Diagrams and labels are native, editable objects. Chart data stays editable;
   label units, periods and sources, and start bars at zero.
 

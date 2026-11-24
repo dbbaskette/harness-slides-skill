@@ -88,7 +88,7 @@ from four containers and a handful of leaves:
 | --- | --- |
 | `stack` (row or column) | Things read in order, or side by side |
 | `grid` | Peers of equal weight |
-| `free` | A map, an overlap, anything placed by position (fractions of the area) |
+| `free` | A map, an overlap, [a source's diagram](#recreating-a-source), anything placed by position (fractions of the area) |
 | `ring` | Three to eight things around a circle, in order, with an optional `hub` at the center |
 | `box` | A shape with text inside, or a card holding other nodes |
 | `text`, `icon`, `image` | Words, an approved icon by ID, supplied or generated artwork |
@@ -274,6 +274,36 @@ fill it. Left unfilled the slot renders as an empty panel, so without a
 picture choose a layout with `pictures: 0`. Content slides stay on the default
 layout.
 
+## Recreating a source
+
+When the task is to recreate a source ([intake](intake.md)'s Recreate), its page is
+the design. Do not write an outline or choose a relation: an outline holds no
+layout, and a flow rebuilt from its points comes back as a row of cards.
+
+1. **List what each page draws** before composing: every node with its words;
+   every arrow with where it starts and ends, its style (solid or dashed) and its
+   label; every group or band and what sits in it; what each legend color means.
+2. **Place it as drawn.** Use a `free` container and give each node the position
+   and size it has on the page, as fractions. Join every listed arrow with
+   `connect`: `route: elbow` where several arrows meet one node, `style: dashed`
+   where the source's line is dashed. A container holds at most 12 children; put a
+   row or a band in a nested `stack` or `box` when a page has more.
+3. **Add nothing.** No card around a node that had none, and no icon, heading or
+   padding the source lacks. Give each legend color one brand role and keep it on
+   every slide.
+4. **Check against the list.** Render each slide beside its source page and count:
+   every listed node and arrow is there, running the same way.
+
+Words that belong to no numbered page (a poster's heading, legend, tagline or
+footnote) are kept too: on the slide they describe, or on a cover or closing the
+user agrees to. A panel drawn around a whole page is the slide itself; do not
+redraw it.
+
+A dense page stays one slide. Export the contract for reading delivery. Where its
+words still do not fit and the user has agreed to smaller type, set a node's text
+in the brand's `label` or `caption` role before splitting the page, and say in the
+report which slides use it.
+
 ## Brand roles, not values
 
 Colours and type sizes are the brand contract's role names. The contract text
@@ -282,7 +312,8 @@ lists them; raw colours and font sizes are refused.
 Text with no `textRole` takes the body size the brand sets for how this deck is
 delivered: larger for a live talk, smaller for reading. Keep it. Do not step
 down to a smaller role to make content fit; cut words, split the slide or
-restructure. The smaller roles are for what they name: `caption` for a caveat
+restructure. The exception is a recreation whose user has agreed to smaller type:
+see [recreating a source](#recreating-a-source). The smaller roles are for what they name: `caption` for a caveat
 or a source, `label` for a heading. A live deck whose slides are set in the
 reading size is a defect, and `preview` reports it. Search the brand's icon
 library for icon IDs. An icon recorded in the asset manifest is placed by its

@@ -6,6 +6,7 @@
 | Typed components or scenes | Render each changed slide | This page, plus [font screening and critique](quality.md) |
 | Native template tools | Render each changed slide | This page, plus [native critique](native-critique.md) |
 | Scoped edits to an existing deck | Render each changed slide | This page; compare with the source |
+| [Recreation of a source](compositions.md#recreating-a-source) | Render each slide beside its source page | Compare every slide with its source page; count nodes and arrows |
 
 Inspect each built/changed slide while its design context is fresh. A reviewer
 must actually view the rendered pixels; rendering alone is not an inspection.
